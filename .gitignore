@@ -1,0 +1,6 @@
+node_modules
+.env
+dist
+
+# Ignorar los correos generados localmente
+/sent_emails/
