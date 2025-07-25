@@ -21,10 +21,15 @@ const client = new MercadoPagoConfig({ accessToken });
 const courseTitles = {};
 app.set('courseTitles', courseTitles);
 
-// Middlewares
-app.use(cors({
+const corsOptions = {
     origin: process.env.CORS_ORIGIN,
-}));
+    AccessControlAllowOrigin: process.env.CORS_ORIGIN,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
+    credentials: true,
+    optionsSuccessStatus: 200
+}
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Rutas principales
