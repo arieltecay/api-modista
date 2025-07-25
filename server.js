@@ -23,14 +23,7 @@ app.set('courseTitles', courseTitles);
 
 // Middlewares
 app.use(cors({
-    origin: (origin, callback) => {
-        const allowedDomains = [/\.vercel\.app$/, /localhost:\d{4}$/]; // Permite cualquier subdominio de vercel.app y localhost
-        if (!origin || allowedDomains.some(domain => domain.test(origin))) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    }
+    origin: process.env.CORS_ORIGIN,
 }));
 app.use(express.json());
 
