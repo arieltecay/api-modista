@@ -22,8 +22,13 @@ const courseTitles = {};
 app.set('courseTitles', courseTitles);
 
 // Middlewares
+const corsOrigin = process.env.CORS_ORIGIN;
+if (!corsOrigin) {
+    console.error('Error: La variable de entorno CORS_ORIGIN no está configurada.');
+    process.exit(1);
+}
 app.use(cors({
-    origin: 'https://modista-app-gamma.vercel.app'
+    origin: corsOrigin
 }));
 app.use(express.json());
 
