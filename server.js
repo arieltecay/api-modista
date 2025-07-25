@@ -22,7 +22,9 @@ const courseTitles = {};
 app.set('courseTitles', courseTitles);
 
 // Middlewares
-app.use(cors());
+app.use(cors({
+    origin: 'https://modista-app-gamma.vercel.app'
+}));
 app.use(express.json());
 
 // Rutas principales
