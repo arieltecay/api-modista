@@ -36,7 +36,7 @@ app.use(express.json());
 app.use('/api', routes); // Usamos las rutas consolidadas bajo /api
 
 // Nueva ruta para crear preferencias de pago (integrada desde /api-mp)
-app.post('/api/create-preference', async (req, res) => {
+app.post('/api/payment/create-preference', async (req, res) => {
     try {
         const { id, title, price, external_reference } = req.body;
 
