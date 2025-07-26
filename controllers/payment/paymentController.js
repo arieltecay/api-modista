@@ -33,7 +33,7 @@ export const createPreference = async (req, res) => {
     const pref = new Preference(client);
     const response = await pref.create({ body: preference });
     console.log('Mercado Pago API Response:', response); // Nuevo log
-    res.json({ preferenceId: response.body.id });
+    res.json({ preferenceId: response.id });
   } catch (error) {
     console.error('Error creating preference:', error);
     console.error('Error details:', error); // Nuevo log
