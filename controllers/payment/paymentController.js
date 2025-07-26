@@ -28,6 +28,7 @@ export const createPreference = async (req, res) => {
         pending: `${process.env.CORS_ORIGIN}/payment/pending`,
       },
       auto_return: 'approved',
+      metadata: { courseTitle: title }, // Almacenar el título del curso en los metadatos
     };
 
     const pref = new Preference(client);
