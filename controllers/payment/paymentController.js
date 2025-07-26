@@ -23,9 +23,9 @@ export const createPreference = async (req, res) => {
       ],
       external_reference: external_reference,
       back_urls: {
-        success: `${process.env.URL_LOCAL}/payment-success`,
-        failure: `${process.env.URL_LOCAL}/payment-failure`,
-        pending: `${process.env.URL_LOCAL}/payment-pending`,
+        success: `${process.env.VITE_API_URL}/api/payment/success`,
+        failure: `${process.env.CORS_ORIGIN}/payment/failure`,
+        pending: `${process.env.CORS_ORIGIN}/payment/pending`,
       },
       auto_return: 'approved',
     };
