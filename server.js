@@ -22,8 +22,7 @@ const courseTitles = {};
 app.set('courseTitles', courseTitles);
 
 const corsOptions = {
-    origin: process.env.CORS_ORIGIN,
-    AccessControlAllowOrigin: process.env.CORS_ORIGIN,
+    origin: [process.env.CORS_ORIGIN, process.env.URL_LOCAL],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
     credentials: true,
@@ -36,7 +35,7 @@ app.use(express.json());
 app.use('/api', routes); // Usamos las rutas consolidadas bajo /api
 
 // Nueva ruta para crear preferencias de pago (integrada desde /api-mp)
-app.post('/api/payment/create-preference', async (req, res) => {
+/* app.post('/api/payment/create-preference', async (req, res) => {
     try {
         const { id, title, price, external_reference } = req.body;
 
@@ -71,7 +70,7 @@ app.post('/api/payment/create-preference', async (req, res) => {
         const statusCode = error.status || 500;
         res.status(statusCode).json({ error: errorMessage });
     }
-});
+}); */
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
