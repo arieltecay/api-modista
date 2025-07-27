@@ -1,4 +1,6 @@
 import nodemailer from 'nodemailer';
+import dotenv from 'dotenv';
+dotenv.config();
 import fs from 'fs/promises';
 import path from 'path';
 import { renderTemplate } from './fsTemplate.js';
@@ -42,6 +44,10 @@ export const sendEmail = async ({ to, subject, templateName, data }) => {
     await fs.writeFile(filePath, htmlContent);
     console.log(`📧 Correo simulado para ${to} guardado en: ${filePath}`);
   } else {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      throw new Error('Faltan las credenciales de EMAIL_USER o EMAIL_PASS en las variables de entorno.\n' +
+        'Si usas Gmail, asegúrate de usar una App Password y que el archivo .env esté presente y cargado.');
+    }
     // MODO PRODUCCIÓN: Enviar el correo usando Nodemailer
     const mailOptions = {
       from: `"Modista App" <${process.env.EMAIL_USER}>`,
@@ -49,8 +55,13 @@ export const sendEmail = async ({ to, subject, templateName, data }) => {
       subject: subject,
       html: htmlContent,
     };
-    await transporter.sendMail(mailOptions);
-    console.log(`📧 Correo de confirmación enviado a ${to} via SMTP.`);
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`📧 Correo de confirmación enviado a ${to} via SMTP.`);
+    } catch (error) {
+      console.error('Error al enviar el correo:', error);
+      throw new Error('Error interno del servidor al enviar correo de prueba.');
+    }
   }
 };
   
