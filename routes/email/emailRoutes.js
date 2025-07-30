@@ -8,7 +8,7 @@ router.post('/send-test-email', async (req, res) => {
     const { to, subject, templateName, data } = req.body;
 
     // Validar que los datos necesarios estén presentes
-    if (!to || !subject || !templateName || !data || !data.name || !data.courseTitle) {
+    if (!to || !subject || !templateName || !data || !data.name) {
       return res.status(400).json({ error: 'Faltan datos necesarios para enviar el correo.' });
     }
 
