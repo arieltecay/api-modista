@@ -1,6 +1,17 @@
-import coursesData from './courses_data.js';
+import coursesData, { testimonials } from './courses_data.js';
+
+export const getTestimonials = async (req, res) => {
+    try {
+        res.status(200).json(testimonials);
+    } catch (error) {
+        console.error("Error al obtener los testimonios:", error);
+        res.status(500).json({ message: "Error al obtener los testimonios" });
+    }
+};
 
 export const getCourses = async (req, res) => {
+
+
     try {
         // Aquí puedes agregar lógica para leer de una base de datos si es necesario
         // Por ahora, simplemente devolvemos los datos del archivo
