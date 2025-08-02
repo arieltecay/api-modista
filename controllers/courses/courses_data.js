@@ -5,6 +5,7 @@ const courses = [
         "shortDescription": "Aprende los fundamentos de la costura desde cero.",
         "longDescription": "En este curso completo, te guiaremos a través de las técnicas esenciales de corte y confección. Desde cómo usar una máquina de coser hasta la creación de tus primeras prendas. No se requiere experiencia previa.\n\nPARA LA MOLDERÍA: vas a necesitar papel de molde, lápiz, centímetro y regla o escuadra de modista y curva francesa (no es estrictamente necesario tener reglas de modista pero te facilitarán mucho el trabajo).\n\nPARA LA CONFECCIÓN: los materiales necesarios serán centímetros, tijera, tiza sastre, moldes en papel, hilo, tela, alfileres, un cierre de 18 o 20cm y entretela (mejor si es adhesiva). Usaremos máquina recta y overlock pero se puede hacer\n\n¡Únete y desata tu creatividad!",
         "imageUrl": "/images/moda.jpg",
+        "deeplink":"api/courses",
         "videoUrl": "https://www.youtube.com/watch?v=Cegy0tKjVsM",
         "price": "00.10"
     },
