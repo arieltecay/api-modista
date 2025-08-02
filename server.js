@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { MercadoPagoConfig, Preference } from 'mercadopago'; // Importa Mercado Pago
 import routes from './routes/index.js'; // Importa las rutas consolidadas
+import cookieParser from 'cookie-parser';
 
 // Cargar variables de entorno
 dotenv.config();
@@ -30,6 +31,7 @@ const corsOptions = {
 }
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(cookieParser());
 
 // Rutas principales
 app.use('/api', routes); // Usamos las rutas consolidadas bajo /api
