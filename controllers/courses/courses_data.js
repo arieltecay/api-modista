@@ -22,8 +22,16 @@ const courses = [
         "title": "Moda Sostenible: Upcycling y Reparación",
         "shortDescription": "Crea moda consciente y reduce el desperdicio textil.",
         "longDescription": "Aprende a transformar prendas viejas en piezas de diseño únicas. Cubriremos técnicas de upcycling, reparación creativa (visible mending) y te daremos las herramientas para desarrollar un armario más sostenible y personal. ¡La moda del futuro es circular!",
-        "imageUrl": "/images/costuraMujer.jpeg",
+        "imageUrl": "/images/persona.jpeg",
         "price": "00.10"
+    },
+    {
+        "id": "4",
+        "title": "Moda Sostenible: Upcycling y Reparación",
+        "shortDescription": "Crea moda consciente y reduce el desperdicio textil.",
+        "longDescription": "Aprende a transformar prendas viejas en piezas de diseño únicas. Cubriremos técnicas de upcycling, reparación creativa (visible mending) y te daremos las herramientas para desarrollar un armario más sostenible y personal. ¡La moda del futuro es circular!",
+        "imageUrl": "/images/costuraMujer.jpeg",
+        "price": 0
     }
 ];
 
