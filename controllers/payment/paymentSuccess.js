@@ -13,11 +13,14 @@ export const paymentSuccess = (req, res) => {
     return res.status(400).send('Falta la referencia externa');
   }
 
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // SOLUCIÓN DEFINITIVA: Configura la cookie para producción (Vercel)
   res.cookie('payment_ref', external_reference, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'Lax',
-    path: '/api', // SOLUCIÓN: Path más general para la cookie
+    secure: isProduction, // Requerido para SameSite=None
+    sameSite: isProduction ? 'None' : 'Lax', // 'None' para cross-site, 'Lax' para local
+    path: '/api', // Path general para la API
     maxAge: 300000, // 5 minutos
   });
 
@@ -26,7 +29,7 @@ export const paymentSuccess = (req, res) => {
 
 export const getVerifiedPaymentData = async (req, res) => {
   console.log('--- Iniciando verificación de pago ---');
-  console.log('Cookies recibidas:', req.cookies); // LOG: Muestra todas las cookies
+  console.log('Cookies recibidas:', req.cookies);
 
   const { payment_ref } = req.cookies;
 
@@ -37,8 +40,13 @@ export const getVerifiedPaymentData = async (req, res) => {
 
   console.log('Referencia de pago encontrada:', payment_ref);
 
-  // Definir la ruta de la cookie para poder limpiarla correctamente
-  const cookieOptions = { path: '/api' };
+  const isProduction = process.env.NODE_ENV === 'production';
+  const cookieOptions = {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'None' : 'Lax',
+    path: '/api',
+  };
 
   try {
     console.log('Buscando pago en Mercado Pago...');
@@ -50,7 +58,7 @@ export const getVerifiedPaymentData = async (req, res) => {
       },
     });
 
-    console.log('Respuesta de Mercado Pago:', JSON.stringify(searchResult, null, 2)); // LOG: Muestra la respuesta completa de MP
+    console.log('Respuesta de Mercado Pago:', JSON.stringify(searchResult, null, 2));
 
     const paymentResult = searchResult.results?.[0];
 
