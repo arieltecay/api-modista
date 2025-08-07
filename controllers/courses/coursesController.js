@@ -1,5 +1,6 @@
 import { logError } from '../../services/logger.js';
-import coursesData, { testimonials } from './courses_data.js';
+import Course from '../../models/Course.js';
+import { testimonials } from './courses_data.js';
 
 export const getTestimonials = async (req, res) => {
     try {
@@ -11,22 +12,8 @@ export const getTestimonials = async (req, res) => {
 };
 
 export const getCourses = async (req, res) => {
-
-
     try {
-        // Aquí puedes agregar lógica para leer de una base de datos si es necesario
-        // Por ahora, simplemente devolvemos los datos del archivo
-        const courses = coursesData.map(course => ({
-            id: course.id,
-            title: course.title,
-            shortDescription: course.shortDescription,
-            longDescription: course.longDescription,
-            imageUrl: course.imageUrl,
-            // Condicionalmente incluir videoUrl si existe
-            ...(course.videoUrl && { videoUrl: course.videoUrl }),
-            price: course.price,
-        }));
-
+        const courses = await Course.find();
         res.status(200).json(courses);
     } catch (error) {
         logError("getCourses", error);

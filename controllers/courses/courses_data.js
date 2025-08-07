@@ -1,10 +1,11 @@
-const courses = [
+/* export const courses = [
     {
         "id": "1",
         "title": "Molderia femenina desde cero",
         "shortDescription": "Aprende a crear moldes personalizados con técnicas profesionales de moldería gemenina, ideal para mostas y personas que quieran hacer sus propias prendas.",
         "longDescription": "En este curso completo, te guiaremos a través de las técnicas esenciales de corte y confección. Desde cómo usar una máquina de coser hasta la creación de tus primeras prendas. No se requiere experiencia previa.\n\nPARA LA MOLDERÍA: vas a necesitar papel de molde, lápiz, centímetro y regla o escuadra de modista y curva francesa (no es estrictamente necesario tener reglas de modista pero te facilitarán mucho el trabajo).\n\nPARA LA CONFECCIÓN: los materiales necesarios serán centímetros, tijera, tiza sastre, moldes en papel, hilo, tela, alfileres, un cierre de 18 o 20cm y entretela (mejor si es adhesiva). Usaremos máquina recta y overlock pero se puede hacer\n\n¡Únete y desata tu creatividad!",
         "imageUrl": "/images/molde.jpeg",
+        "category": "all",
         "deeplink": "api/courses",
         "videoUrl": "https://www.youtube.com/watch?v=Cegy0tKjVsM",
         "price": "00.10"
@@ -15,6 +16,7 @@ const courses = [
         "shortDescription": "Domina el arte de crear patrones a medida.",
         "longDescription": "Lleva tus habilidades de diseño al siguiente nivel. Este curso se enfoca en técnicas avanzadas de patronaje, incluyendo transformaciones complejas, drapeado y escalado de tallas. Ideal para quienes ya tienen una base en confección y quieren especializarse en diseño.",
         "imageUrl": "/images/chica.jpeg",
+        "category": "all",
         "price": "00.10"
     },
     {
@@ -23,6 +25,7 @@ const courses = [
         "shortDescription": "Crea moda consciente y reduce el desperdicio textil.",
         "longDescription": "Aprende a transformar prendas viejas en piezas de diseño únicas. Cubriremos técnicas de upcycling, reparación creativa (visible mending) y te daremos las herramientas para desarrollar un armario más sostenible y personal. ¡La moda del futuro es circular!",
         "imageUrl": "/images/persona.jpeg",
+        "category": "all",
         "price": "00.10"
     },
     {
@@ -31,9 +34,10 @@ const courses = [
         "shortDescription": "Crea moda consciente y reduce el desperdicio textil.",
         "longDescription": "Aprende a transformar prendas viejas en piezas de diseño únicas. Cubriremos técnicas de upcycling, reparación creativa (visible mending) y te daremos las herramientas para desarrollar un armario más sostenible y personal. ¡La moda del futuro es circular!",
         "imageUrl": "/images/costuraMujer.jpeg",
+        "category": "all",
         "price": 0
     }
-];
+]; */
 
 export const testimonials = [
     {
@@ -57,5 +61,3 @@ export const testimonials = [
         description: "La verdad super clara para explicar, se nota que te gusta enseñar, muy cálida y predispuesta a sacarnos todas las dudas. Estaré atenta para hacer más cursos con vos."
     }
 ];
-
-export default courses;

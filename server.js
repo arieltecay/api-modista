@@ -6,9 +6,11 @@ import routes from './routes/index.js'; // Importa las rutas consolidadas
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet'; // Importa Helmet
 import { logger } from './services/logger.js'; // Importa el logger
+import connectDB from './config/db.js'; // Importa la función de conexión a la BD
 
-// Cargar variables de entorno
 dotenv.config();
+
+connectDB();
 
 const app = express();
 
