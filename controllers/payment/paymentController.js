@@ -1,5 +1,6 @@
 
 import dotenv from 'dotenv';
+import { logError } from '../../services/logger.js';
 dotenv.config();
 
 import { MercadoPagoConfig, Preference } from 'mercadopago';
@@ -36,8 +37,7 @@ export const createPreference = async (req, res) => {
     console.log('Mercado Pago API Response:', response); // Nuevo log
     res.json({ preferenceId: response.id });
   } catch (error) {
-    console.error('Error creating preference:', error);
-    console.error('Error details:', error); // Nuevo log
+    logError("createPreference", error);
     res.status(500).json({ error: 'Failed to create preference' });
   }
 };

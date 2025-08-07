@@ -1,10 +1,11 @@
+import { logError } from '../../services/logger.js';
 import coursesData, { testimonials } from './courses_data.js';
 
 export const getTestimonials = async (req, res) => {
     try {
         res.status(200).json(testimonials);
     } catch (error) {
-        console.error("Error al obtener los testimonios:", error);
+        logError("getTestimonials", error);
         res.status(500).json({ message: "Error al obtener los testimonios" });
     }
 };
@@ -28,7 +29,7 @@ export const getCourses = async (req, res) => {
 
         res.status(200).json(courses);
     } catch (error) {
-        console.error("Error al obtener los cursos:", error);
+        logError("getCourses", error);
         res.status(500).json({ message: "Error al obtener los cursos" });
     }
 };
