@@ -3,6 +3,7 @@ import notificationRoutes from './notification/index.js';
 import paymentRoutes from './payment/paymentRoutes.js';
 import coursesRoutes from './courses/coursesRoutes.js';
 import emailRoutes from './email/emailRoutes.js'; // Importar las rutas de email
+import inscriptionsRoutes from './inscriptions/inscriptionsRoutes.js';
 
 const router = express.Router();
 
@@ -15,5 +16,8 @@ router.use('/payment', paymentRoutes);
 router.use('/courses', coursesRoutes);
 
 router.use('/email', emailRoutes); // Usar las rutas de email
+
+// Use inscriptions routes
+router.use('/inscriptions', inscriptionsRoutes);
 
 export default router;
