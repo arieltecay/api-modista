@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import mongoosePaginate from 'mongoose-paginate-v2';
 
 const InscriptionSchema = new mongoose.Schema({
   nombre: {
@@ -31,5 +32,7 @@ const InscriptionSchema = new mongoose.Schema({
     default: Date.now,
   },
 });
+
+InscriptionSchema.plugin(mongoosePaginate);
 
 export default mongoose.model('Inscription', InscriptionSchema);

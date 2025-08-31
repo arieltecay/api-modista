@@ -1,5 +1,6 @@
 import Inscription from '../../models/Inscription.js';
 import xlsx from 'xlsx';
+import { logError } from '../../services/logger.js';
 
 // @desc    Crear una nueva inscripción
 // @route   POST /api/inscriptions
@@ -30,32 +31,54 @@ export const createInscription = async (req, res, next) => {
 // @desc    Obtener todas las inscripciones con paginación
 // @route   GET /api/inscriptions
 // @access  Private (Protected by secret key)
-export const getInscriptions = async (req, res, next) => {
-    // Simple secret key auth
-    if (req.query.secret !== process.env.ADMIN_SECRET_KEY) {
-        return res.status(401).json({ success: false, message: 'No autorizado' });
+export const getInscriptions = async (req, res) => {
+    const { page = 1, limit = 10, secret, search, sortBy, sortOrder } = req.query;
+
+    if (secret !== process.env.ADMIN_SECRET_KEY) {
+        logError('getAllInscriptions', new Error('Intento de acceso no autorizado a inscripciones'));
+        return res.status(403).json({ message: 'Acceso denegado.' });
     }
 
     try {
-        const page = parseInt(req.query.page, 10) || 1;
-        const limit = parseInt(req.query.limit, 10) || 10;
-        const skip = (page - 1) * limit;
+        // 1. Construir el filtro de búsqueda
+        let queryFilter = {};
+        if (search) {
+            const searchRegex = { $regex: search, $options: 'i' };
+            queryFilter = {
+                $or: [
+                    { nombre: searchRegex },
+                    { apellido: searchRegex },
+                    { email: searchRegex }
+                ]
+            };
+        }
 
-        const inscriptions = await Inscription.find().skip(skip).limit(limit).sort({ fechaInscripcion: -1 });
-        const total = await Inscription.countDocuments();
+        // 2. Construir las opciones de paginación y ordenamiento
+        const sortOptions = {};
+        if (sortBy) {
+            sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
+        } else {
+            sortOptions.fechaInscripcion = -1; // Orden por defecto
+        }
+
+        const options = {
+            page: parseInt(page, 10),
+            limit: parseInt(limit, 10),
+            sort: sortOptions
+        };
+
+        // 3. Ejecutar la consulta con paginación, filtro y ordenamiento
+        const result = await Inscription.paginate(queryFilter, options);
 
         res.status(200).json({
-            success: true,
-            count: inscriptions.length,
-            total,
-            pagination: {
-                totalPages: Math.ceil(total / limit),
-                currentPage: page,
-            },
-            data: inscriptions,
+            data: result.docs,
+            total: result.totalDocs,
+            totalPages: result.totalPages,
+            currentPage: result.page,
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error del servidor', error: error.message });
+        logError('getAllInscriptions', error);
+        res.status(500).json({ message: 'Error al obtener las inscripciones.' });
     }
 };
 
