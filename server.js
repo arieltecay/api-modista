@@ -31,7 +31,7 @@ app.set('courseTitles', courseTitles);
 
 const corsOptions = {
     origin: [process.env.CORS_ORIGIN, process.env.URL_LOCAL],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
     credentials: true,
     optionsSuccessStatus: 200

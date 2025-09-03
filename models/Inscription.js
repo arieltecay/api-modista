@@ -27,6 +27,28 @@ const InscriptionSchema = new mongoose.Schema({
     required: [true, 'El número de celular es obligatorio'],
     trim: true,
   },
+  courseId: {
+    type: String,
+    required: [true, 'El ID del curso es obligatorio'],
+    trim: true,
+  },
+  courseTitle: {
+    type: String,
+    required: [true, 'El título del curso es obligatorio'],
+    trim: true,
+  },
+  coursePrice: {
+    type: Number,
+    required: [true, 'El precio del curso es obligatorio'],
+  },
+  paymentStatus: {
+    type: String,
+    enum: ['pending', 'paid'],
+    default: 'pending',
+  },
+  paymentDate: {
+    type: Date,
+  },
   fechaInscripcion: {
     type: Date,
     default: Date.now,

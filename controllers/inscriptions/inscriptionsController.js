@@ -7,10 +7,10 @@ import { logError } from '../../services/logger.js';
 // @access  Public
 export const createInscription = async (req, res, next) => {
   try {
-    const { nombre, apellido, email, celular } = req.body;
+    const { nombre, apellido, email, celular, courseId, courseTitle, coursePrice } = req.body;
 
     // Validación básica
-    if (!nombre || !apellido || !email || !celular) {
+    if (!nombre || !apellido || !email || !celular || !courseId || !courseTitle || coursePrice == null) {
       return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios' });
     }
 
@@ -95,6 +95,9 @@ export const exportInscriptions = async (req, res, next) => {
       Apellido: inscription.apellido,
       Email: inscription.email,
       Celular: inscription.celular,
+      Curso: inscription.courseTitle,
+      Precio: inscription.coursePrice,
+      'Estado de Pago': inscription.paymentStatus === 'paid' ? 'Pagado' : 'Pendiente',
       'Fecha de Inscripción': inscription.fechaInscripcion.toLocaleDateString('es-AR'),
     }));
 
@@ -112,5 +115,48 @@ export const exportInscriptions = async (req, res, next) => {
 
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error al exportar los datos', error: error.message });
+  }
+};
+
+// @desc    Actualizar estado de pago de una inscripción
+// @route   PATCH /api/inscriptions/:id/payment-status
+// @access  Private (Protected by secret key)
+export const updatePaymentStatus = async (req, res) => {
+  const { id } = req.params;
+  const { paymentStatus, secret } = req.body;
+
+  // Validar acceso admin
+  if (secret !== process.env.ADMIN_SECRET_KEY) {
+    logError('updatePaymentStatus', new Error('Intento de acceso no autorizado'));
+    return res.status(403).json({ message: 'Acceso denegado.' });
+  }
+
+  // Validar estado de pago
+  if (!['pending', 'paid'].includes(paymentStatus)) {
+    return res.status(400).json({ message: 'Estado de pago inválido.' });
+  }
+
+  try {
+    const inscription = await Inscription.findByIdAndUpdate(
+      id,
+      { 
+        paymentStatus,
+        paymentDate: paymentStatus === 'paid' ? new Date() : null 
+      },
+      { new: true }
+    );
+
+    if (!inscription) {
+      return res.status(404).json({ message: 'Inscripción no encontrada.' });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: inscription,
+      message: `Estado actualizado a ${paymentStatus === 'paid' ? 'pagado' : 'pendiente'}`
+    });
+  } catch (error) {
+    logError('updatePaymentStatus', error);
+    res.status(500).json({ message: 'Error al actualizar estado de pago.' });
   }
 };
