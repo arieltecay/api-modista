@@ -1,19 +1,64 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 40px; background-color: #f4f4f4; }
-    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-    h1 { color: #8a2be2; font-size: 24px; }
-    p { line-height: 1.6; color: #333; }
-    strong { color: #555; }
-    .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #777; }
-    .button-container { text-align: center; margin: 30px 0; }
-    .button { background-color: #8a2be2; color: #ffffff; padding: 15px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 40px;
+      background-color: #f4f4f4;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      color: #8a2be2;
+      font-size: 24px;
+    }
+
+    p {
+      line-height: 1.6;
+      color: #333;
+    }
+
+    strong {
+      color: #555;
+    }
+
+    .footer {
+      margin-top: 30px;
+      text-align: center;
+      font-size: 12px;
+      color: #777;
+    }
+
+    .button-container {
+      text-align: center;
+      margin: 30px 0;
+    }
+
+    .button {
+      background-color: #8a2be2;
+      color: #ffffff;
+      padding: 15px 25px;
+      text-decoration: none;
+      border-radius: 5px;
+      font-weight: bold;
+      display: inline-block;
+    }
   </style>
 </head>
+
 <body>
   <div class="container">
     <h1>¡Gracias por tu inscripción, {{name}}!</h1>
@@ -25,15 +70,21 @@
       <strong>"{{courseTitle}}"</strong> - <em>{{shortDescription}}</em>.
     </p>
     <p>
-      El valor del curso es de <strong>${{price}}</strong>.
+      Valor del Curso Completo: $60.000.- (único pago), abonando hasta el 10/9 le quedaría a
+      <strong>${{price}}</strong>.-
     </p>
-    
-    <div class="button-container">
-      <a href="{{deeplink}}" class="button">Acceder al Curso</a>
-    </div>
-
     <p>
-      En breve nos pondremos en contacto contigo con más detalles.
+      Para realizar el pago debes hacer la transferencia a MercadoPago, lo datos quedan adjuntos abajo
+    </p>
+    <p>
+      <b>Titular</b> Ariel Raul Tecay<br />
+      <b>CUIT/CUIL:</b> 20-32821000-3<br />
+      <b>CVU:</b> 0000003100086441622535<br />
+      <b>Alias:</b> ariel.tecay
+    </p>
+    <p>Enviar el comprobante de pago a <strong>modistaapp@gmail.com</strong></p>
+    <p>
+      En breve nos pondremos en contacto contigo con más detalles.<br />
       ¡Prepárate para desatar tu creatividad!
     </p>
     <div class="footer">
@@ -41,4 +92,5 @@
     </div>
   </div>
 </body>
+
 </html>

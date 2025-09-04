@@ -58,7 +58,7 @@ export const sendEmail = async ({ to, subject, templateName, data }) => {
     };
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`📧 Correo de confirmación enviado a ${to} via SMTP.`);
+      // console.log(`📧 Correo de confirmación enviado a ${to} via SMTP.`);
     } catch (error) {
       console.error('Error al enviar el correo:', error);
       throw new Error('Error interno del servidor al enviar correo de prueba.');
