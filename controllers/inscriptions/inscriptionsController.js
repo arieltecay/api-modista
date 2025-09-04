@@ -14,6 +14,14 @@ export const createInscription = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios' });
     }
 
+    // **NUEVA VALIDACIÓN: Evitar duplicados**
+    const existingInscription = await Inscription.findOne({ email: email, courseId: courseId });
+
+    if (existingInscription) {
+      return res.status(409).json({ success: false, message: 'Ya te encuentras inscripto en este curso.' });
+    }
+
+    // Si no existe, se crea la inscripción
     const inscription = await Inscription.create(req.body);
     res.status(201).json({
       success: true,
