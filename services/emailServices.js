@@ -35,7 +35,8 @@ export const sendEmail = async ({ to, subject, templateName, data }) => {
   // 1. Renderizar el contenido HTML usando el servicio de plantillas
   const htmlContent = await renderTemplate(templateName, data);
 
-  const emailMode = process.env.EMAIL_MODE || 'file';
+  const isProduction = process.env.NODE_ENV === 'production';
+  const emailMode = process.env.EMAIL_MODE || (isProduction ? 'smtp' : 'file');
 
   if (emailMode === 'file') {
     // MODO LOCAL: Guardar el correo como un archivo HTML para depuración
@@ -45,7 +46,7 @@ export const sendEmail = async ({ to, subject, templateName, data }) => {
     console.log(`📧 Correo simulado para ${to} guardado en: ${filePath}`);
   } else {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      throw new Error('Faltan las credenciales de EMAIL_USER o EMAIL_PASS en las variables de entorno.\n' +
+      throw new Error('Faltan las credenciales de EMAIL_USER o EMAIL_PASS en las variables de entorno.\n' + 
         'Si usas Gmail, asegúrate de usar una App Password y que el archivo .env esté presente y cargado.');
     }
     // MODO PRODUCCIÓN: Enviar el correo usando Nodemailer
