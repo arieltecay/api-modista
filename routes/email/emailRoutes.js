@@ -3,7 +3,7 @@ import { sendEmail } from '../../services/emailServices.js';
 
 const router = express.Router();
 
-router.post('/send-test-email', async (req, res) => {
+router.post('/send-email', async (req, res) => {
   try {
     const { to, subject, templateName, data } = req.body;
 
