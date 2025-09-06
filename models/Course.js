@@ -8,7 +8,7 @@ const courseSchema = new mongoose.Schema({
   category: { type: String, required: true },
   deeplink: { type: String },
   videoUrl: { type: String },
-  price: { type: mongoose.Schema.Types.Mixed, required: true },
+  price: { type: Number, required: true },
 });
 
 const Course = mongoose.model('Course', courseSchema);
