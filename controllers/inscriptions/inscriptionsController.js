@@ -1,4 +1,4 @@
-import Inscription from '../../models/Inscription.js';
+import Inscription from '../../models/Inscription.ts';
 import xlsx from 'xlsx';
 import { logError } from '../../services/logger.js';
 

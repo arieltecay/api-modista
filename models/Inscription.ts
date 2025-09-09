@@ -1,7 +1,24 @@
-import mongoose from 'mongoose';
+import { Schema, model, Document, PaginateModel } from 'mongoose';
 import mongoosePaginate from 'mongoose-paginate-v2';
 
-const InscriptionSchema = new mongoose.Schema({
+// Interface para tipar el documento de inscripción
+export interface IInscription extends Document {
+  nombre: string;
+  apellido: string;
+  email: string;
+  celular: string;
+  courseId: string;
+  courseTitle: string;
+  coursePrice: number;
+  paymentStatus: 'pending' | 'paid';
+  paymentDate?: Date;
+  fechaInscripcion: Date;
+}
+
+// Interface para el modelo con paginación
+interface IInscriptionModel extends PaginateModel<IInscription> {}
+
+const InscriptionSchema = new Schema<IInscription>({
   nombre: {
     type: String,
     required: [true, 'El nombre es obligatorio'],
@@ -57,4 +74,6 @@ const InscriptionSchema = new mongoose.Schema({
 
 InscriptionSchema.plugin(mongoosePaginate);
 
-export default mongoose.model('Inscription', InscriptionSchema);
+const Inscription = model<IInscription, IInscriptionModel>('Inscription', InscriptionSchema);
+
+export default Inscription;

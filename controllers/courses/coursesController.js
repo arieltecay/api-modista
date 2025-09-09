@@ -1,5 +1,5 @@
 import { logError } from '../../services/logger.js';
-import Course from '../../models/Course.js';
+import Course from '../../models/Course.ts';
 import { testimonials } from './courses_data.js';
 
 export const getTestimonials = async (req, res) => {
