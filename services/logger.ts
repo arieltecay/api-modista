@@ -11,7 +11,7 @@ export const logger = winston.createLogger({
   ]
 });
 
-export const logError = (controllerName, error) => {
+export const logError = (controllerName: string, error: Error) => {
     logger.error({
         controller: controllerName,
         message: error.message,

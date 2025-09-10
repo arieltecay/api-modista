@@ -1,7 +1,22 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { renderTemplate } from './fsTemplate.js';
 
 const WHATSAPP_API_URL = `https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+
+interface WhatsAppMessageOptions {
+  to: string;
+  templateName: string;
+  data: Record<string, string>;
+}
+
+interface WhatsAppErrorResponse {
+    error: {
+        message: string;
+        type: string;
+        code: number;
+        fbtrace_id: string;
+    };
+}
 
 /**
  * Envía un mensaje de WhatsApp usando una plantilla de mensaje.
@@ -15,7 +30,7 @@ const WHATSAPP_API_URL = `https://graph.facebook.com/v19.0/${process.env.WHATSAP
  *
  * Esta función utiliza la API de la Nube de WhatsApp.
  */
-export const sendWhatsAppMessage = async ({ to, templateName, data }) => {
+export const sendWhatsAppMessage = async ({ to, templateName, data }: WhatsAppMessageOptions): Promise<void> => {
     try {
         // 1. Renderizar el contenido de los parámetros de la plantilla usando el servicio de plantillas.
         //    Asumimos que la plantilla de WhatsApp se maneja como un string con placeholders en templateService.
@@ -37,7 +52,9 @@ export const sendWhatsAppMessage = async ({ to, templateName, data }) => {
         await axios.post(WHATSAPP_API_URL, requestBody, { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, "Content-Type": "application/json" } });
         console.log(`✅ Mensaje de WhatsApp enviado a ${to} usando la plantilla "${templateName}".`);
     } catch (error) {
-        console.error(`❌ Error al enviar mensaje de WhatsApp a ${to} con plantilla "${templateName}":`, error.response?.data || error.message);
-        throw new Error(`No se pudo enviar el mensaje de WhatsApp: ${error.response?.data?.error?.message || error.message}`);
+        // Simplificamos el manejo de errores para lanzar un único error.
+        const errorMessage = `No se pudo enviar el mensaje de WhatsApp a ${to} con plantilla "${templateName}".`;
+        console.error(`❌ ${errorMessage}`, error); // Logueamos el error original para depuración.
+        throw new Error(errorMessage);
     }
 };

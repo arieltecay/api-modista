@@ -21,6 +21,13 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+interface EmailOptions {
+  to: string;
+  subject: string;
+  templateName: string;
+  data: Record<string, string>;
+}
+
 /**
  * Envía un correo electrónico basado en una plantilla.
  * Dependiendo de la variable de entorno EMAIL_MODE, lo enviará realmente
@@ -31,7 +38,7 @@ const transporter = nodemailer.createTransport({
  * @param {string} options.templateName - El nombre del archivo de la plantilla (sin .html).
  * @param {object} options.data - Un objeto con los datos para rellenar la plantilla.
  */
-export const sendEmail = async ({ to, subject, templateName, data }) => {
+export const sendEmail = async ({ to, subject, templateName, data }: EmailOptions): Promise<void> => {
   // 1. Renderizar el contenido HTML usando el servicio de plantillas
   const htmlContent = await renderTemplate(templateName, data);
 
@@ -65,4 +72,3 @@ export const sendEmail = async ({ to, subject, templateName, data }) => {
     }
   }
 };
-  
