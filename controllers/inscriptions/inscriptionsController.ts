@@ -1,54 +1,83 @@
+import { Request, Response, NextFunction } from 'express';
 import Inscription from '../../models/Inscription.js';
 import xlsx from 'xlsx';
 import { logError } from '../../services/logger.js';
+import { IInscription } from '../../models/Inscription.js'; // Importamos la interfaz
+
+// --- Interfaces para tipado ---
+
+interface CreateInscriptionBody {
+  nombre: string;
+  apellido: string;
+  email: string;
+  celular: string;
+  courseId: string;
+  courseTitle: string;
+  coursePrice: number;
+}
+
+interface GetInscriptionsQuery {
+  page?: string;
+  limit?: string;
+  secret?: string;
+  search?: string;
+  sortBy?: keyof IInscription;
+  sortOrder?: 'asc' | 'desc';
+}
+
+interface UpdatePaymentStatusBody {
+    paymentStatus: 'pending' | 'paid';
+    secret: string;
+}
+
+// --- Controlador ---
 
 // @desc    Crear una nueva inscripción
 // @route   POST /api/inscriptions
 // @access  Public
-export const createInscription = async (req, res, next) => {
+export const createInscription = async (req: Request<{}, {}, CreateInscriptionBody>, res: Response) => {
   try {
     const { nombre, apellido, email, celular, courseId, courseTitle, coursePrice } = req.body;
 
-    // Validación básica
+    // Validación básica (TypeScript ya ayuda a asegurar los tipos)
     if (!nombre || !apellido || !email || !celular || !courseId || !courseTitle || coursePrice == null) {
       return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios' });
     }
 
-    // **NUEVA VALIDACIÓN: Evitar duplicados**
     const existingInscription = await Inscription.findOne({ email: email, courseId: courseId });
 
     if (existingInscription) {
       return res.status(409).json({ success: false, message: 'Ya te encuentras inscripto en este curso.' });
     }
 
-    // Si no existe, se crea la inscripción
     const inscription = await Inscription.create(req.body);
     res.status(201).json({
       success: true,
       data: inscription,
     });
   } catch (error) {
-    // Manejo de error de duplicado de email
-    if (error.code === 11000) {
-      return res.status(400).json({ success: false, message: 'Este email ya ha sido registrado.' });
+    // Manejo de error de duplicado de email (código 11000 de MongoDB)
+    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
+        return res.status(400).json({ success: false, message: 'Este email ya ha sido registrado.' });
     }
-    res.status(500).json({ success: false, message: 'Error del servidor', error: error.message });
+    
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido del servidor';
+    res.status(500).json({ success: false, message: 'Error del servidor', error: errorMessage });
   }
 };
 
 // @desc    Obtener todas las inscripciones con paginación
 // @route   GET /api/inscriptions
 // @access  Private (Protected by secret key)
-export const getInscriptions = async (req, res) => {
-  const { page = 1, limit = 10, secret, search, sortBy, sortOrder } = req.query;
+export const getInscriptions = async (req: Request<{}, {}, {}, GetInscriptionsQuery>, res: Response) => {
+  const { page = '1', limit = '10', secret, search, sortBy, sortOrder } = req.query;
 
   if (secret !== process.env.ADMIN_SECRET_KEY) {
-    logError('getAllInscriptions', new Error('Intento de acceso no autorizado a inscripciones'));
+    logError('getInscriptions', new Error('Intento de acceso no autorizado a inscripciones'));
     return res.status(403).json({ message: 'Acceso denegado.' });
   }
 
   try {
-    // 1. Construir el filtro de búsqueda
     let queryFilter = {};
     if (search) {
       const searchRegex = { $regex: search, $options: 'i' };
@@ -61,12 +90,11 @@ export const getInscriptions = async (req, res) => {
       };
     }
 
-    // 2. Construir las opciones de paginación y ordenamiento
-    const sortOptions = {};
+    const sortOptions: { [key: string]: 1 | -1 } = {};
     if (sortBy) {
       sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
     } else {
-      sortOptions.fechaInscripcion = -1; // Orden por defecto
+      sortOptions.fechaInscripcion = -1;
     }
 
     const options = {
@@ -75,8 +103,8 @@ export const getInscriptions = async (req, res) => {
       sort: sortOptions
     };
 
-    // 3. Ejecutar la consulta con paginación, filtro y ordenamiento
-    const result = await Inscription.paginate(queryFilter, options);
+    // Asumimos que el modelo Inscription tiene el método paginate de mongoose-paginate-v2
+    const result = await (Inscription as any).paginate(queryFilter, options);
 
     res.status(200).json({
       data: result.docs,
@@ -85,7 +113,7 @@ export const getInscriptions = async (req, res) => {
       currentPage: result.page,
     });
   } catch (error) {
-    logError('getAllInscriptions', error);
+    logError('getInscriptions', error instanceof Error ? error : new Error(String(error)));
     res.status(500).json({ message: 'Error al obtener las inscripciones.' });
   }
 };
@@ -93,8 +121,8 @@ export const getInscriptions = async (req, res) => {
 
 // @desc    Exportar inscripciones a XLS
 // @route   GET /api/inscriptions/export
-// @access  Public (or could be protected)
-export const exportInscriptions = async (req, res, next) => {
+// @access  Public
+export const exportInscriptions = async (req: Request, res: Response) => {
   try {
     const inscriptions = await Inscription.find().sort({ fechaInscripcion: -1 });
 
@@ -113,33 +141,30 @@ export const exportInscriptions = async (req, res, next) => {
     const workbook = xlsx.utils.book_new();
     xlsx.utils.book_append_sheet(workbook, worksheet, 'Inscripciones');
 
-    // Set headers to trigger download
     res.setHeader('Content-Disposition', 'attachment; filename="inscripciones.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 
     const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-
     res.send(buffer);
 
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error al exportar los datos', error: error.message });
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido al exportar';
+    res.status(500).json({ success: false, message: 'Error al exportar los datos', error: errorMessage });
   }
 };
 
 // @desc    Actualizar estado de pago de una inscripción
 // @route   PATCH /api/inscriptions/:id/payment-status
-// @access  Private (Protected by secret key)
-export const updatePaymentStatus = async (req, res) => {
+// @access  Private
+export const updatePaymentStatus = async (req: Request<{ id: string }, {}, UpdatePaymentStatusBody>, res: Response) => {
   const { id } = req.params;
   const { paymentStatus, secret } = req.body;
 
-  // Validar acceso admin
   if (secret !== process.env.ADMIN_SECRET_KEY) {
     logError('updatePaymentStatus', new Error('Intento de acceso no autorizado'));
     return res.status(403).json({ message: 'Acceso denegado.' });
   }
 
-  // Validar estado de pago
   if (!['pending', 'paid'].includes(paymentStatus)) {
     return res.status(400).json({ message: 'Estado de pago inválido.' });
   }
@@ -161,10 +186,10 @@ export const updatePaymentStatus = async (req, res) => {
     res.status(200).json({
       success: true,
       data: inscription,
-      message: `Estado actualizado a ${paymentStatus === 'paid' ? 'pagado' : 'pendiente'}`
+      message: `Estado actualizado a ${paymentStatus}`
     });
   } catch (error) {
-    logError('updatePaymentStatus', error);
+    logError('updatePaymentStatus', error instanceof Error ? error : new Error(String(error)));
     res.status(500).json({ message: 'Error al actualizar estado de pago.' });
   }
 };
@@ -172,7 +197,7 @@ export const updatePaymentStatus = async (req, res) => {
 // @desc    Contar todas las inscripciones
 // @route   GET /api/inscriptions/count
 // @access  Public
-export const countInscriptions = async (req, res) => {
+export const countInscriptions = async (req: Request, res: Response) => {
   try {
     const total = await Inscription.countDocuments();
     const paid = await Inscription.countDocuments({ paymentStatus: 'paid' });
@@ -180,14 +205,10 @@ export const countInscriptions = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: {
-        total,
-        paid,
-        pending,
-      },
+      data: { total, paid, pending },
     });
   } catch (error) {
-    logError('countInscriptions', error);
+    logError('countInscriptions', error instanceof Error ? error : new Error(String(error)));
     res.status(500).json({ message: 'Error al contar las inscripciones.' });
   }
 };
