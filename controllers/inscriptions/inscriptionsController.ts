@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import Inscription from '../../models/Inscription.js';
-import xlsx from 'xlsx';
 import { logError } from '../../services/logger.js';
 import { IInscription } from '../../models/Inscription.js'; // Importamos la interfaz
+import ExcelJS from 'exceljs';
 
 // --- Interfaces para tipado ---
 
@@ -126,26 +126,45 @@ export const exportInscriptions = async (req: Request, res: Response) => {
   try {
     const inscriptions = await Inscription.find().sort({ fechaInscripcion: -1 });
 
-    const data = inscriptions.map(inscription => ({
-      Nombre: inscription.nombre,
-      Apellido: inscription.apellido,
-      Email: inscription.email,
-      Celular: inscription.celular,
-      Curso: inscription.courseTitle,
-      Precio: inscription.coursePrice,
-      'Estado de Pago': inscription.paymentStatus === 'paid' ? 'Pagado' : 'Pendiente',
-      'Fecha de Inscripción': inscription.fechaInscripcion.toLocaleDateString('es-AR'),
-    }));
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Inscripciones');
 
-    const worksheet = xlsx.utils.json_to_sheet(data);
-    const workbook = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(workbook, worksheet, 'Inscripciones');
+    // Definir las columnas y cabeceras
+    worksheet.columns = [
+      { header: 'Nombre', key: 'nombre', width: 20 },
+      { header: 'Apellido', key: 'apellido', width: 20 },
+      { header: 'Email', key: 'email', width: 30 },
+      { header: 'Celular', key: 'celular', width: 15 },
+      { header: 'Curso', key: 'courseTitle', width: 30 },
+      { header: 'Precio', key: 'coursePrice', width: 10 },
+      { header: 'Estado de Pago', key: 'paymentStatus', width: 15 },
+      { header: 'Fecha de Inscripción', key: 'fechaInscripcion', width: 20 },
+    ];
 
-    res.setHeader('Content-Disposition', 'attachment; filename="inscripciones.xlsx"');
+    // Estilizar la fila de cabeceras
+    worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF203040' },
+    };
+
+    // Añadir los datos
+    inscriptions.forEach(inscription => {
+      worksheet.addRow({
+        ...inscription.toObject(),
+        paymentStatus: inscription.paymentStatus === 'paid' ? 'Pagado' : 'Pendiente',
+        fechaInscripcion: inscription.fechaInscripcion.toLocaleDateString('es-AR'),
+      });
+    });
+
+    // Configurar la respuesta para la descarga del archivo
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="inscripciones.xlsx"');
 
-    const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-    res.send(buffer);
+    // Escribir el buffer en la respuesta
+    await workbook.xlsx.write(res);
+    res.end();
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido al exportar';
