@@ -6,13 +6,16 @@ import routes from './routes/index.js'; // Importa las rutas consolidadas
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet'; // Importa Helmet
 import { logger } from './services/logger.js'; // Importa el logger
-import connectDB from './config/db.js'; // Importa la función de conexión a la BD
+import connectDB from './config/db.ts'; // Importa la función de conexión a la BD
 
 dotenv.config();
 
 connectDB();
 
 const app = express();
+
+// Middleware para manejar solicitudes de favicon (cualquier extensión)
+app.get(/^\/favicon\.(ico|png)$/, (req, res) => res.status(204).send());
 
 // Usar Helmet para mejorar la seguridad de las cabeceras HTTP
 app.use(helmet());
