@@ -26,7 +26,6 @@ if (!accessToken) {
     logger.error('Error: El Access Token de Mercado Pago no está configurado.');
     process.exit(1);
 }
-const client = new MercadoPagoConfig({ accessToken });
 
 // Almacenamiento temporal para títulos de cursos (simula una sesión)
 const courseTitles = {};
