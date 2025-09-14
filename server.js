@@ -14,6 +14,11 @@ connectDB();
 
 const app = express();
 
+// Middleware para manejar la ruta raíz
+app.get('/', (req, res) => {
+  res.status(200).json({ message: 'API de Modista App funcionando correctamente' });
+});
+
 // Middleware para manejar solicitudes de favicon (cualquier extensión)
 app.get(/^\/favicon\.(ico|png)$/, (req, res) => res.status(204).send());
 
