@@ -1,7 +1,16 @@
+
+import { Request, Response } from 'express';
 import { sendEmail } from '../../services/emailServices.js';
 import { sendWhatsAppMessage } from '../../services/whatsAppService.js';
 
-export const sendPurchaseNotification = async (req, res) => {
+interface PurchaseNotificationBody {
+  name: string;
+  email: string;
+  phone: string;
+  courseTitle: string;
+}
+
+export const sendPurchaseNotification = async (req: Request<{}, {}, PurchaseNotificationBody>, res: Response) => {
   const { name, email, phone, courseTitle } = req.body;
 
   if (!name || !email || !phone || !courseTitle) {
@@ -13,16 +22,24 @@ export const sendPurchaseNotification = async (req, res) => {
     await sendEmail({
       to: email,
       subject: `¡Confirmación de tu compra: ${courseTitle}!`,
-      templateName: 'purchaseConfirmation', // Nombre de la plantilla sin .html
-      data: { // Objeto con todos los datos para la plantilla
+      templateName: 'paymentSuccess',
+      data: {
         name: name,
         courseTitle: courseTitle,
-        phone: phone
+        phone: phone,
+        email: email
       }
     });
 
     // 2. Enviar WhatsApp de confirmación
-    await sendWhatsAppMessage({ to: phone, name: name, courseTitle: courseTitle });
+    await sendWhatsAppMessage({
+      to: phone,
+      templateName: 'compra_exitosa', // Asumiendo que esta es la plantilla correcta
+      data: {
+        name: name,
+        courseTitle: courseTitle
+      }
+    });
 
     res.status(200).json({ message: 'Notificaciones enviadas exitosamente.' });
 
