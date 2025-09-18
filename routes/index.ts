@@ -4,6 +4,7 @@ import paymentRoutes from './payment/paymentRoutes.js';
 import coursesRoutes from './courses/coursesRoutes.js';
 import emailRoutes from './email/emailRoutes.js';
 import inscriptionsRoutes from './inscriptions/inscriptionsRoutes.js';
+import authRoutes from './auth/authRoutes.js';
 
 const router: Router = express.Router();
 
@@ -19,5 +20,8 @@ router.use('/email', emailRoutes); // Usar las rutas de email
 
 // Use inscriptions routes
 router.use('/inscriptions', inscriptionsRoutes);
+
+// Use auth routes
+router.use('/auth', authRoutes);
 
 export default router;
