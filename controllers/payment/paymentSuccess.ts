@@ -1,16 +1,27 @@
+import { Request, Response } from 'express';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const client = new MercadoPagoConfig({ accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN });
+const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+if (!accessToken) {
+    throw new Error('MERCADO_PAGO_ACCESS_TOKEN is not defined');
+}
+const client = new MercadoPagoConfig({ accessToken });
 const payment = new Payment(client);
 
-export const paymentSuccess = (req, res) => {
+// Interface para query de paymentSuccess
+interface PaymentSuccessQuery {
+  external_reference: string;
+}
+
+export const paymentSuccess = (req: Request<{}, {}, {}, PaymentSuccessQuery>, res: Response): void => {
   const { external_reference } = req.query;
 
   if (!external_reference) {
-    return res.status(400).send('Falta la referencia externa');
+    res.status(400).send('Falta la referencia externa');
+    return;
   }
 
   const isProduction = process.env.NODE_ENV === 'production';
@@ -19,7 +30,7 @@ export const paymentSuccess = (req, res) => {
   res.cookie('payment_ref', external_reference, {
     httpOnly: true,
     secure: isProduction, // Requerido para SameSite=None
-    sameSite: isProduction ? 'None' : 'Lax', // 'None' para cross-site, 'Lax' para local
+    sameSite: isProduction ? 'none' : 'lax', // 'none' para cross-site, 'lax' para local
     path: '/api', // Path general para la API
     maxAge: 300000, // 5 minutos
   });
@@ -27,7 +38,7 @@ export const paymentSuccess = (req, res) => {
   res.redirect(`${process.env.CORS_ORIGIN}/payment/success`);
 };
 
-export const getVerifiedPaymentData = async (req, res) => {
+export const getVerifiedPaymentData = async (req: Request, res: Response): Promise<void> => {
   console.log('--- Iniciando verificación de pago ---');
   console.log('Cookies recibidas:', req.cookies);
 
@@ -35,7 +46,8 @@ export const getVerifiedPaymentData = async (req, res) => {
 
   if (!payment_ref) {
     console.error('Error: No se encontró la cookie `payment_ref`.');
-    return res.status(401).json({ message: 'No autorizado: Referencia de pago no encontrada.' });
+    res.status(401).json({ message: 'No autorizado: Referencia de pago no encontrada.' });
+    return;
   }
 
   console.log('Referencia de pago encontrada:', payment_ref);
@@ -44,7 +56,7 @@ export const getVerifiedPaymentData = async (req, res) => {
   const cookieOptions = {
     httpOnly: true,
     secure: isProduction,
-    sameSite: isProduction ? 'None' : 'Lax',
+    sameSite: (isProduction ? 'none' : 'lax') as 'none' | 'lax',
     path: '/api',
   };
 
@@ -65,7 +77,8 @@ export const getVerifiedPaymentData = async (req, res) => {
     if (!paymentResult || paymentResult.status !== 'approved') {
       console.warn('Advertencia: Pago no encontrado o no aprobado. Estado:', paymentResult?.status);
       res.clearCookie('payment_ref', cookieOptions);
-      return res.status(404).json({ message: 'Pago no encontrado o no aprobado.' });
+      res.status(404).json({ message: 'Pago no encontrado o no aprobado.' });
+      return;
     }
 
     console.log('Pago aprobado encontrado. ID:', paymentResult.id);

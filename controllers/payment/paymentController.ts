@@ -1,13 +1,28 @@
 
+import { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import { logError } from '../../services/logger.js';
 dotenv.config();
 
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 
-const client = new MercadoPagoConfig({ accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN });
+const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+if (!accessToken) {
+    throw new Error('MERCADO_PAGO_ACCESS_TOKEN is not defined');
+}
+const client = new MercadoPagoConfig({ accessToken });
 
-export const createPreference = async (req, res) => {
+// Interface para el body de createPreference
+interface CreatePreferenceBody {
+  course: {
+    title: string;
+    price: string | number;
+    shortDescription: string;
+  };
+  external_reference: string;
+}
+
+export const createPreference = async (req: Request<{}, {}, CreatePreferenceBody>, res: Response): Promise<void> => {
   const { course, external_reference } = req.body;
   const { title, price, shortDescription } = course;
 
@@ -15,9 +30,10 @@ export const createPreference = async (req, res) => {
     const preference = {
       items: [
         {
+          id: title, // Add id as required by MercadoPago
           title,
           unit_price: Number(price),
-          shortDescription,
+          description: shortDescription,
           quantity: 1,
           currency_id: 'ARS',
         },
@@ -37,7 +53,7 @@ export const createPreference = async (req, res) => {
     console.log('Mercado Pago API Response:', response); // Nuevo log
     res.json({ preferenceId: response.id });
   } catch (error) {
-    logError("createPreference", error);
+    logError("createPreference", error instanceof Error ? error : new Error(String(error)));
     res.status(500).json({ error: 'Failed to create preference' });
   }
 };

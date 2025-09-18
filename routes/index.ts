@@ -1,11 +1,11 @@
-import express from 'express';
+import express, { Router } from 'express';
 import notificationRoutes from './notification/index.js';
 import paymentRoutes from './payment/paymentRoutes.js';
 import coursesRoutes from './courses/coursesRoutes.js';
-import emailRoutes from './email/emailRoutes.js'; // Importar las rutas de email
+import emailRoutes from './email/emailRoutes.js';
 import inscriptionsRoutes from './inscriptions/inscriptionsRoutes.js';
 
-const router = express.Router();
+const router: Router = express.Router();
 
 // Use notification routes
 router.use('/notifications', notificationRoutes);

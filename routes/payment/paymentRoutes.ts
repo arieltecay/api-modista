@@ -1,8 +1,8 @@
-import express from 'express';
+import express, { Router } from 'express';
 import { paymentSuccess, getVerifiedPaymentData } from '../../controllers/payment/paymentSuccess.js';
 import { createPreference } from '../../controllers/payment/paymentController.js';
 
-const router = express.Router();
+const router: Router = express.Router();
 
 // Ruta a la que Mercado Pago redirige tras un pago exitoso
 router.get('/success', paymentSuccess);

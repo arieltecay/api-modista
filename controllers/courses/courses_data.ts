@@ -39,7 +39,13 @@
     }
 ]; */
 
-export const testimonials = [
+export interface Testimonial {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export const testimonials: Testimonial[] = [
     {
         id: "1",
         name: "Vanessa",

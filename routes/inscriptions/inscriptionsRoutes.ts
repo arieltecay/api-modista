@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Router } from 'express';
 import {
   createInscription,
   getInscriptions,
@@ -7,7 +7,7 @@ import {
   countInscriptions,
 } from '../../controllers/inscriptions/inscriptionsController.js';
 
-const router = express.Router();
+const router: Router = express.Router();
 
 router.post('/', createInscription);
 router.get('/', getInscriptions);
