@@ -19,7 +19,6 @@ interface CreateInscriptionBody {
 interface GetInscriptionsQuery {
   page?: string;
   limit?: string;
-  secret?: string;
   search?: string;
   sortBy?: keyof IInscription;
   sortOrder?: 'asc' | 'desc';
@@ -27,7 +26,6 @@ interface GetInscriptionsQuery {
 
 interface UpdatePaymentStatusBody {
     paymentStatus: 'pending' | 'paid';
-    secret: string;
 }
 
 // --- Controlador ---
@@ -68,14 +66,9 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
 
 // @desc    Obtener todas las inscripciones con paginación
 // @route   GET /api/inscriptions
-// @access  Private (Protected by secret key)
+// @access  Private (Protected by JWT + Admin role)
 export const getInscriptions = async (req: Request<{}, {}, {}, GetInscriptionsQuery>, res: Response) => {
-  const { page = '1', limit = '10', secret, search, sortBy, sortOrder } = req.query;
-
-  if (secret !== process.env.ADMIN_SECRET_KEY) {
-    logError('getInscriptions', new Error('Intento de acceso no autorizado a inscripciones'));
-    return res.status(403).json({ message: 'Acceso denegado.' });
-  }
+  const { page = '1', limit = '10', search, sortBy, sortOrder } = req.query;
 
   try {
     let queryFilter = {};
@@ -174,15 +167,10 @@ export const exportInscriptions = async (req: Request, res: Response) => {
 
 // @desc    Actualizar estado de pago de una inscripción
 // @route   PATCH /api/inscriptions/:id/payment-status
-// @access  Private
+// @access  Private (JWT + Admin role)
 export const updatePaymentStatus = async (req: Request<{ id: string }, {}, UpdatePaymentStatusBody>, res: Response) => {
   const { id } = req.params;
-  const { paymentStatus, secret } = req.body;
-
-  if (secret !== process.env.ADMIN_SECRET_KEY) {
-    logError('updatePaymentStatus', new Error('Intento de acceso no autorizado'));
-    return res.status(403).json({ message: 'Acceso denegado.' });
-  }
+  const { paymentStatus } = req.body;
 
   if (!['pending', 'paid'].includes(paymentStatus)) {
     return res.status(400).json({ message: 'Estado de pago inválido.' });
