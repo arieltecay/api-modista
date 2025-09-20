@@ -1,4 +1,5 @@
-import { Schema, model, Document } from 'mongoose';
+import { Schema, model, Document, PaginateModel } from 'mongoose';
+import mongoosePaginate from 'mongoose-paginate-v2';
 
 // Interface para tipar el documento de curso
 export interface ICourse extends Document {
@@ -12,6 +13,9 @@ export interface ICourse extends Document {
   price: number;
 }
 
+// Interface para el modelo con paginación
+interface ICourseModel extends PaginateModel<ICourse> {}
+
 const courseSchema = new Schema<ICourse>({
   title: { type: String, required: true },
   shortDescription: { type: String, required: true },
@@ -23,6 +27,9 @@ const courseSchema = new Schema<ICourse>({
   price: { type: Number, required: true },
 });
 
-const Course = model<ICourse>('Course', courseSchema);
+// Agregar plugin de paginación
+courseSchema.plugin(mongoosePaginate);
+
+const Course = model<ICourse, ICourseModel>('Course', courseSchema);
 
 export default Course;
