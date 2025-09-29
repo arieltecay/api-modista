@@ -11,6 +11,8 @@ export interface ICourse extends Document {
   deeplink?: string;
   videoUrl?: string;
   price: number;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 // Interface para el modelo con paginación
@@ -25,6 +27,8 @@ const courseSchema = new Schema<ICourse>({
   deeplink: { type: String },
   videoUrl: { type: String },
   price: { type: Number, required: true },
+}, {
+  timestamps: true  // Agrega createdAt y updatedAt automáticamente
 });
 
 // Agregar plugin de paginación
