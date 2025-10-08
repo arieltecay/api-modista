@@ -72,6 +72,10 @@ const InscriptionSchema = new Schema<IInscription>({
   },
 });
 
+// Índices para optimizar consultas
+InscriptionSchema.index({ paymentStatus: 1, fechaInscripcion: -1 });
+InscriptionSchema.index({ nombre: 1, apellido: 1, email: 1 });
+
 InscriptionSchema.plugin(mongoosePaginate);
 
 const Inscription = model<IInscription, IInscriptionModel>('Inscription', InscriptionSchema);

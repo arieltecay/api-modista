@@ -22,10 +22,15 @@ interface GetInscriptionsQuery {
   search?: string;
   sortBy?: keyof IInscription;
   sortOrder?: 'asc' | 'desc';
+  paymentStatusFilter: 'all' | 'paid' | 'pending';
 }
 
 interface UpdatePaymentStatusBody {
-    paymentStatus: 'pending' | 'paid';
+  paymentStatus: 'pending' | 'paid';
+}
+
+interface ExportInscriptionsQuery {
+  paymentStatusFilter: 'all' | 'paid' | 'pending';
 }
 
 // --- Controlador ---
@@ -56,9 +61,9 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
   } catch (error) {
     // Manejo de error de duplicado de email (código 11000 de MongoDB)
     if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
-        return res.status(400).json({ success: false, message: 'Este email ya ha sido registrado.' });
+      return res.status(400).json({ success: false, message: 'Este email ya ha sido registrado.' });
     }
-    
+
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido del servidor';
     res.status(500).json({ success: false, message: 'Error del servidor', error: errorMessage });
   }
@@ -68,10 +73,15 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
 // @route   GET /api/inscriptions
 // @access  Private (Protected by JWT + Admin role)
 export const getInscriptions = async (req: Request<{}, {}, {}, GetInscriptionsQuery>, res: Response) => {
-  const { page = '1', limit = '10', search, sortBy, sortOrder } = req.query;
+  const { page = '1', limit = '10', search, sortBy, sortOrder, paymentStatusFilter = 'all' } = req.query;
+  // Validar filtro de paymentStatus
+  const validFilters = ['all', 'paid', 'pending'];
+  if (!validFilters.includes(paymentStatusFilter)) {
+    return res.status(400).json({ message: 'Filtro de estado de pago inválido. Use: all, paid, o pending.' });
+  }
 
   try {
-    let queryFilter = {};
+    let queryFilter: any = {};
     if (search) {
       const searchRegex = { $regex: search, $options: 'i' };
       queryFilter = {
@@ -81,6 +91,11 @@ export const getInscriptions = async (req: Request<{}, {}, {}, GetInscriptionsQu
           { email: searchRegex }
         ]
       };
+    }
+
+    // Agregar filtro por paymentStatus
+    if (paymentStatusFilter !== 'all') {
+      queryFilter.paymentStatus = paymentStatusFilter;
     }
 
     const sortOptions: { [key: string]: 1 | -1 } = {};
@@ -114,10 +129,25 @@ export const getInscriptions = async (req: Request<{}, {}, {}, GetInscriptionsQu
 
 // @desc    Exportar inscripciones a XLS
 // @route   GET /api/inscriptions/export
-// @access  Public
-export const exportInscriptions = async (req: Request, res: Response) => {
+// @access  Private (JWT + Admin role)
+export const exportInscriptions = async (req: Request<{}, {}, {}, ExportInscriptionsQuery>, res: Response) => {
+  const { paymentStatusFilter = 'all' } = req.query;
+
+  // Validar filtro de paymentStatus
+  const validFilters = ['all', 'paid', 'pending'];
+  if (!validFilters.includes(paymentStatusFilter)) {
+    return res.status(400).json({ message: 'Filtro de estado de pago inválido. Use: all, paid, o pending.' });
+  }
+
   try {
-    const inscriptions = await Inscription.find().sort({ fechaInscripcion: -1 });
+    let queryFilter: any = {};
+
+    // Aplicar filtro por paymentStatus igual que en getInscriptions
+    if (paymentStatusFilter !== 'all') {
+      queryFilter.paymentStatus = paymentStatusFilter;
+    }
+
+    const inscriptions = await Inscription.find(queryFilter).sort({ fechaInscripcion: -1 });
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Inscripciones');
