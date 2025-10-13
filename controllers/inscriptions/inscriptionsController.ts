@@ -22,7 +22,8 @@ interface GetInscriptionsQuery {
   search?: string;
   sortBy?: keyof IInscription;
   sortOrder?: 'asc' | 'desc';
-  paymentStatusFilter: 'all' | 'paid' | 'pending';
+  paymentStatusFilter?: 'all' | 'paid' | 'pending';
+  courseFilter?: string;
 }
 
 interface UpdatePaymentStatusBody {
@@ -30,7 +31,9 @@ interface UpdatePaymentStatusBody {
 }
 
 interface ExportInscriptionsQuery {
-  paymentStatusFilter: 'all' | 'paid' | 'pending';
+  paymentStatusFilter?: 'all' | 'paid' | 'pending';
+  search?: string;
+  courseFilter?: string;
 }
 
 // --- Controlador ---
@@ -73,7 +76,7 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
 // @route   GET /api/inscriptions
 // @access  Private (Protected by JWT + Admin role)
 export const getInscriptions = async (req: Request<{}, {}, {}, GetInscriptionsQuery>, res: Response) => {
-  const { page = '1', limit = '10', search, sortBy, sortOrder, paymentStatusFilter = 'all' } = req.query;
+  const { page = '1', limit = '10', search, sortBy, sortOrder, paymentStatusFilter = 'all', courseFilter } = req.query;
   // Validar filtro de paymentStatus
   const validFilters = ['all', 'paid', 'pending'];
   if (!validFilters.includes(paymentStatusFilter)) {
@@ -96,6 +99,11 @@ export const getInscriptions = async (req: Request<{}, {}, {}, GetInscriptionsQu
     // Agregar filtro por paymentStatus
     if (paymentStatusFilter !== 'all') {
       queryFilter.paymentStatus = paymentStatusFilter;
+    }
+
+    // Agregar filtro por curso
+    if (courseFilter) {
+      queryFilter.courseTitle = { $regex: courseFilter, $options: 'i' };
     }
 
     const sortOptions: { [key: string]: 1 | -1 } = {};
@@ -131,7 +139,7 @@ export const getInscriptions = async (req: Request<{}, {}, {}, GetInscriptionsQu
 // @route   GET /api/inscriptions/export
 // @access  Private (JWT + Admin role)
 export const exportInscriptions = async (req: Request<{}, {}, {}, ExportInscriptionsQuery>, res: Response) => {
-  const { paymentStatusFilter = 'all' } = req.query;
+  const { paymentStatusFilter = 'all', search, courseFilter } = req.query;
 
   // Validar filtro de paymentStatus
   const validFilters = ['all', 'paid', 'pending'];
@@ -141,6 +149,23 @@ export const exportInscriptions = async (req: Request<{}, {}, {}, ExportInscript
 
   try {
     let queryFilter: any = {};
+
+    // Aplicar filtro de búsqueda igual que en getInscriptions
+    if (search) {
+      const searchRegex = { $regex: search, $options: 'i' };
+      queryFilter = {
+        $or: [
+          { nombre: searchRegex },
+          { apellido: searchRegex },
+          { email: searchRegex }
+        ]
+      };
+    }
+
+    // Aplicar filtro por curso
+    if (courseFilter) {
+      queryFilter.courseTitle = { $regex: courseFilter, $options: 'i' };
+    }
 
     // Aplicar filtro por paymentStatus igual que en getInscriptions
     if (paymentStatusFilter !== 'all') {
