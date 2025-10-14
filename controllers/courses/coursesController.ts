@@ -159,9 +159,17 @@ export const updateCourse = async (req: Request<{ id: string }, {}, UpdateCourse
       return;
     }
 
+    // Filtrar campos opcionales que vienen como undefined para eliminarlos de la BD
+    const filteredUpdateData: any = { ...updateData };
+    ['deeplink', 'videoUrl', 'coursePaid'].forEach(field => {
+      if (filteredUpdateData[field] === undefined) {
+        filteredUpdateData[field] = null; // Usar null para que MongoDB elimine el campo
+      }
+    });
+
     const course = await Course.findByIdAndUpdate(
       id,
-      updateData,
+      filteredUpdateData,
       { new: true, runValidators: true }
     );
 
