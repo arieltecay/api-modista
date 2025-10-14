@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import { logError } from '../../services/logger.js';
 import Course, { ICourse } from '../../models/Course.js';
 import { testimonials } from './courses_data.js';
-import test from 'node:test';
 
 // Interface para testimonial
 interface Testimonial {
@@ -26,6 +25,7 @@ interface CreateCourseBody {
   price: number;
   deeplink?: string;
   videoUrl?: string;
+  coursePaid?: string;
 }
 
 interface UpdateCourseBody extends Partial<CreateCourseBody> { }
@@ -50,7 +50,8 @@ export const getTestimonials = async (req: Request, res: Response): Promise<void
 export const getCourses = async (req: Request, res: Response): Promise<void> => {
   try {
     // Determinar si estamos en desarrollo
-    const isDevelopment = process.env.NODE_ENV === 'development';
+    // const isDevelopment = process.env.NODE_ENV === 'development';
+    const isDevelopment = process.env.URL_LOCAL === 'http://localhost:5173';
 
     // Construir query: excluir cursos de test en producción
     const query = isDevelopment ? {} : { category: { $ne: 'test' } };
@@ -247,5 +248,46 @@ export const getCoursesAdmin = async (req: Request<{}, {}, {}, GetCoursesQuery>,
   } catch (error) {
     logError('getCoursesAdmin', error instanceof Error ? error : new Error(String(error)));
     res.status(500).json({ message: 'Error al obtener los cursos.' });
+  }
+};
+
+// @desc    Obtener el link del curso pagado por título del curso
+// @route   GET /api/courses/course-paid/:courseTitle
+// @access  Private (Protected by JWT + Admin role)
+export const getCoursePaidLink = async (req: Request<{ courseTitle: string }>, res: Response): Promise<void> => {
+  try {
+    const { courseTitle } = req.params;
+
+    // Buscar el curso por título (decodificar URL si es necesario)
+    const decodedCourseTitle = decodeURIComponent(courseTitle);
+
+    // Determinar si estamos en desarrollo para saber cómo buscar
+    const isDevelopment = process.env.URL_LOCAL === 'http://localhost:5173';
+    const query = isDevelopment ? { title: decodedCourseTitle } : { title: decodedCourseTitle, category: { $ne: 'test' } };
+
+    const course = await Course.findOne(query);
+
+    if (!course) {
+      res.status(404).json({ success: false, message: 'Curso no encontrado' });
+      return;
+    }
+
+    // Verificar que tenga coursePaid configurado
+    if (!course.coursePaid) {
+      res.status(404).json({ success: false, message: 'Este curso no tiene un link de acceso configurado' });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        courseId: (course._id as any).toString(),
+        courseTitle: course.title,
+        coursePaid: course.coursePaid
+      }
+    });
+  } catch (error) {
+    logError('getCoursePaidLink', error instanceof Error ? error : new Error(String(error)));
+    res.status(500).json({ success: false, message: 'Error al obtener el link del curso' });
   }
 };

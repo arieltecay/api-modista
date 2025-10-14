@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 40px;
+      background-color: #f4f4f4;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      color: #8a2be2;
+      font-size: 24px;
+    }
+
+    p {
+      line-height: 1.6;
+      color: #333;
+    }
+
+    strong {
+      color: #555;
+    }
+
+    .course-link {
+      display: inline-block;
+      background-color: #8a2be2;
+      color: white;
+      padding: 12px 24px;
+      text-decoration: none;
+      border-radius: 6px;
+      margin: 20px 0;
+      font-weight: bold;
+    }
+
+    .course-link:hover {
+      background-color: #7a1fb2;
+    }
+
+    .footer {
+      margin-top: 30px;
+      text-align: center;
+      font-size: 12px;
+      color: #777;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>¡Hola {{name}}!</h1>
+    <p>
+      ¡Felicitaciones! Hemos recibido tu pago y aquí tienes el acceso al curso que adquiriste.
+    </p>
+    <p>
+      <strong>Curso:</strong> {{courseTitle}}
+    </p>
+    <p>
+      Haz clic en el siguiente enlace para acceder a tu curso:
+    </p>
+    <a href="{{coursePaid}}" class="course-link" target="_blank">Acceder al Curso</a>
+    <p>
+      Si tienes alguna pregunta o necesitas ayuda, no dudes en contactarnos.
+    </p>
+    <p>
+      ¡Disfruta aprendiendo!
+    </p>
+    <div class="footer">
+      &copy; {{year}} Modista App
+    </div>
+  </div>
+</body>
+
+</html>

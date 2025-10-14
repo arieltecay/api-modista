@@ -11,6 +11,7 @@ export interface ICourse extends Document {
   deeplink?: string;
   videoUrl?: string;
   price: number;
+  coursePaid?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -27,6 +28,7 @@ const courseSchema = new Schema<ICourse>({
   deeplink: { type: String },
   videoUrl: { type: String },
   price: { type: Number, required: true },
+  coursePaid: { type: String },
 }, {
   timestamps: true  // Agrega createdAt y updatedAt automáticamente
 });

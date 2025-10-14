@@ -5,7 +5,8 @@ import {
   createCourse,
   updateCourse,
   deleteCourse,
-  getCoursesAdmin
+  getCoursesAdmin,
+  getCoursePaidLink
 } from '../../controllers/courses/coursesController.js';
 import { authenticateToken, requireAdmin } from '../../middleware/authMiddleware.js';
 
@@ -20,5 +21,6 @@ router.post('/', authenticateToken, requireAdmin, createCourse);
 router.put('/:id', authenticateToken, requireAdmin, updateCourse);
 router.delete('/:id', authenticateToken, requireAdmin, deleteCourse);
 router.get('/admin', authenticateToken, requireAdmin, getCoursesAdmin);
+router.get('/course-paid/:courseTitle', authenticateToken, requireAdmin, getCoursePaidLink);
 
 export default router;
