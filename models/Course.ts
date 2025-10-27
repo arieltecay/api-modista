@@ -33,8 +33,7 @@ const courseSchema = new Schema<ICourse>({
   uuid: {
     type: String,
     required: true,
-    unique: true,
-    default: () => require('crypto').randomUUID()
+    unique: true
   },
 }, {
   timestamps: true  // Agrega createdAt y updatedAt automáticamente

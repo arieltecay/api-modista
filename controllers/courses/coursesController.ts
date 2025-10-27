@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { logError } from '../../services/logger.js';
 import Course, { ICourse } from '../../models/Course.js';
 import { testimonials } from './courses_data.js';
+import { randomUUID } from 'crypto';
 
 // Interface para testimonial
 interface Testimonial {
@@ -37,6 +38,28 @@ interface GetCoursesQuery {
   sortBy?: keyof ICourse;
   sortOrder?: 'asc' | 'desc';
 }
+
+// Función helper para generar UUID único verificando unicidad en BD
+const generateUniqueUUID = async (): Promise<string> => {
+  let uuid: string;
+  let attempts = 0;
+  const maxAttempts = 10; // Límite de intentos para evitar bucles infinitos
+
+  do {
+    uuid = randomUUID();
+    attempts++;
+
+    // Verificar si el UUID ya existe en la BD
+    const existingCourse = await Course.findOne({ uuid });
+
+    if (!existingCourse) {
+      return uuid; // UUID único encontrado
+    }
+  } while (attempts < maxAttempts);
+
+  // Si después de varios intentos no encontramos un UUID único, lanzamos error
+  throw new Error('No se pudo generar un UUID único después de varios intentos');
+};
 
 export const getTestimonials = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -139,7 +162,16 @@ export const createCourse = async (req: Request<{}, {}, CreateCourseBody>, res: 
       return;
     }
 
-    const course = await Course.create(req.body);
+    // Generar UUID único verificando unicidad en BD
+    const uniqueUUID = await generateUniqueUUID();
+
+    // Crear el curso con el UUID generado
+    const courseData = {
+      ...req.body,
+      uuid: uniqueUUID
+    };
+
+    const course = await Course.create(courseData);
     res.status(201).json({
       success: true,
       data: {
