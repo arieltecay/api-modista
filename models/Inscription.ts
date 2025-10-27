@@ -33,7 +33,7 @@ const InscriptionSchema = new Schema<IInscription>({
     type: String,
     required: [true, 'El email es obligatorio'],
     trim: true,
-    unique: true,
+    unique: false,
     match: [
       /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
       'Por favor, introduce un email válido',
@@ -75,6 +75,8 @@ const InscriptionSchema = new Schema<IInscription>({
 // Índices para optimizar consultas
 InscriptionSchema.index({ paymentStatus: 1, fechaInscripcion: -1 });
 InscriptionSchema.index({ nombre: 1, apellido: 1, email: 1 });
+
+InscriptionSchema.index({ email: 1, courseId: 1 }, { unique: true });
 
 InscriptionSchema.plugin(mongoosePaginate);
 

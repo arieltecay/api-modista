@@ -58,10 +58,13 @@ export const getCourses = async (req: Request, res: Response): Promise<void> => 
 
     // Ordenar por fecha de creación descendente, luego por fecha de actualización descendente
     const courses = await Course.find(query).sort({ createdAt: -1, updatedAt: -1 });
-    // Agregar un campo 'id' que sea la posición (1-indexed) para compatibilidad
+    // Usar UUID como id principal, mantener compatibilidad backward
     const coursesWithId: any[] = courses.map((course, index) => ({
       ...course.toObject(),
-      id: (index + 1).toString() // Convertir a string para consistencia
+      id: course.uuid, // UUID único como id principal
+      courseId: (course._id as any).toString(), // _id de MongoDB como respaldo
+      // Mantener posición como campo adicional para compatibilidad
+      position: (index + 1).toString()
     }));
     res.status(200).json(coursesWithId);
   } catch (error) {
@@ -71,48 +74,51 @@ export const getCourses = async (req: Request, res: Response): Promise<void> => 
 };
 
 export const getCourseById = async (req: Request<{ id: string }>, res: Response): Promise<void> => {
-     try {
-         const { id } = req.params;
-         // Determinar si estamos en desarrollo
-         const isDevelopment = process.env.NODE_ENV === 'development';
+  try {
+    const { id } = req.params;
+    // Determinar si estamos en desarrollo
+    const isDevelopment = process.env.NODE_ENV === 'development';
 
-         // Construir query: excluir cursos de test en producción
-         const query = isDevelopment ? {} : { category: { $ne: 'test' } };
+    // Construir query: excluir cursos de test en producción
+    const query = isDevelopment ? {} : { category: { $ne: 'test' } };
 
-         // Mantener el mismo orden que getCourses para consistencia
-         // Ordenar por fecha de creación descendente, luego por fecha de actualización descendente
-         const courses = await Course.find(query).sort({ createdAt: -1, updatedAt: -1 });
+    // Buscar por UUID primero (nuevo sistema)
+    let course = await Course.findOne({ uuid: id, ...query });
 
-     // Si el ID es numérico, buscar por posición (1-indexed)
-     const numericId = parseInt(id);
-     if (!isNaN(numericId) && numericId > 0 && numericId <= courses.length) {
-       const course = courses[numericId - 1]; // Array es 0-indexed
-       res.status(200).json({
-         ...course.toObject(),
-         id: numericId.toString()
-       });
-     } else {
-       // Si no es numérico o está fuera de rango, buscar por _id de MongoDB
-       const course = await Course.findById(id);
-       if (!course) {
-         res.status(404).json({ message: "Curso no encontrado" });
-         return;
-       }
-       // Verificar que el curso no sea de test en producción
-       if (!isDevelopment && course.category === 'test') {
-         res.status(404).json({ message: "Curso no encontrado" });
-         return;
-       }
-       res.status(200).json({
-         ...course.toObject(),
-         id: id
-       });
-     }
-   } catch (error) {
-     logError("getCourseById", error instanceof Error ? error : new Error(String(error)));
-     res.status(500).json({ message: "Error al obtener el curso" });
-   }
- };
+    if (!course) {
+      // Compatibilidad backward: buscar por _id de MongoDB
+      course = await Course.findById(id);
+      if (course && !isDevelopment && course.category === 'test') {
+        course = null; // Excluir cursos de test en producción
+      }
+    }
+
+    if (!course) {
+      // Última compatibilidad: buscar por posición numérica (legacy)
+      const numericId = parseInt(id);
+      if (!isNaN(numericId) && numericId > 0) {
+        const courses = await Course.find(query).sort({ createdAt: -1, updatedAt: -1 });
+        if (numericId <= courses.length) {
+          course = courses[numericId - 1]; // Array es 0-indexed
+        }
+      }
+    }
+
+    if (!course) {
+      res.status(404).json({ message: "Curso no encontrado" });
+      return;
+    }
+
+    res.status(200).json({
+      ...course.toObject(),
+      id: course.uuid, // UUID como id principal
+      courseId: (course._id as any).toString(), // _id como respaldo
+    });
+  } catch (error) {
+    logError("getCourseById", error instanceof Error ? error : new Error(String(error)));
+    res.status(500).json({ message: "Error al obtener el curso" });
+  }
+};
 
 // @desc    Crear un nuevo curso
 // @route   POST /api/courses
@@ -136,7 +142,11 @@ export const createCourse = async (req: Request<{}, {}, CreateCourseBody>, res: 
     const course = await Course.create(req.body);
     res.status(201).json({
       success: true,
-      data: course,
+      data: {
+        ...course.toObject(),
+        id: course.uuid, // UUID como id principal
+        courseId: (course._id as any).toString(), // _id como respaldo
+      },
       message: 'Curso creado exitosamente'
     });
   } catch (error) {

@@ -12,6 +12,7 @@ export interface ICourse extends Document {
   videoUrl?: string;
   price: number;
   coursePaid?: string;
+  uuid?: string; // UUID único para reemplazar IDs posicionales (opcional durante migración)
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -29,6 +30,12 @@ const courseSchema = new Schema<ICourse>({
   videoUrl: { type: String },
   price: { type: Number, required: true },
   coursePaid: { type: String },
+  uuid: {
+    type: String,
+    required: true,
+    unique: true,
+    default: () => require('crypto').randomUUID()
+  },
 }, {
   timestamps: true  // Agrega createdAt y updatedAt automáticamente
 });

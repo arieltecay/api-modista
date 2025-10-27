@@ -50,10 +50,17 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
       return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios' });
     }
 
-    const existingInscription = await Inscription.findOne({ email: email, courseId: courseId });
+    // Validación: verificar si ya existe una inscripción para este email + courseId específico
+    const existingInscription = await Inscription.findOne({
+      email: email,
+      courseId: courseId
+    });
 
     if (existingInscription) {
-      return res.status(409).json({ success: false, message: 'Ya te encuentras inscripto en este curso.' });
+      return res.status(409).json({
+        success: false,
+        message: 'Ya te encuentras inscripto en este curso con este email.'
+      });
     }
 
     const inscription = await Inscription.create(req.body);
@@ -62,9 +69,18 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
       data: inscription,
     });
   } catch (error) {
-    // Manejo de error de duplicado de email (código 11000 de MongoDB)
     if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
-      return res.status(400).json({ success: false, message: 'Este email ya ha sido registrado.' });
+      const errorMessage = ('message' in error && typeof error.message === 'string') ? error.message : '';
+      if (errorMessage.includes('email') && errorMessage.includes('courseId')) {
+        return res.status(409).json({
+          success: false,
+          message: 'Ya te encuentras inscripto en este curso con este email.'
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: 'Ya existe una inscripción con estos datos.'
+      });
     }
 
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido del servidor';
