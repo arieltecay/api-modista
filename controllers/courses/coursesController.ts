@@ -1,74 +1,8 @@
 import { Request, Response } from 'express';
 import { logError } from '../../services/logger.js';
-import Course, { ICourse } from '../../models/Course.js';
-import { testimonials } from './courses_data.js';
-import { randomUUID } from 'crypto';
-
-// Interface para testimonial
-interface Testimonial {
-  id: string;
-  name: string;
-  description: string;
-}
-
-// Interface para curso con id agregado
-interface CourseWithId extends ICourse {
-  id: string;
-}
-
-// Interfaces para las nuevas funciones CRUD
-interface CreateCourseBody {
-  title: string;
-  shortDescription: string;
-  longDescription: string;
-  imageUrl: string;
-  category: string;
-  price: number;
-  deeplink?: string;
-  videoUrl?: string;
-  coursePaid?: string;
-}
-
-interface UpdateCourseBody extends Partial<CreateCourseBody> { }
-
-interface GetCoursesQuery {
-  page?: string;
-  limit?: string;
-  search?: string;
-  sortBy?: keyof ICourse;
-  sortOrder?: 'asc' | 'desc';
-}
-
-// Función helper para generar UUID único verificando unicidad en BD
-const generateUniqueUUID = async (): Promise<string> => {
-  let uuid: string;
-  let attempts = 0;
-  const maxAttempts = 10; // Límite de intentos para evitar bucles infinitos
-
-  do {
-    uuid = randomUUID();
-    attempts++;
-
-    // Verificar si el UUID ya existe en la BD
-    const existingCourse = await Course.findOne({ uuid });
-
-    if (!existingCourse) {
-      return uuid; // UUID único encontrado
-    }
-  } while (attempts < maxAttempts);
-
-  // Si después de varios intentos no encontramos un UUID único, lanzamos error
-  throw new Error('No se pudo generar un UUID único después de varios intentos');
-};
-
-export const getTestimonials = async (req: Request, res: Response): Promise<void> => {
-  try {
-    res.status(200).json(testimonials);
-  } catch (error) {
-    logError("getTestimonials", error instanceof Error ? error : new Error(String(error)));
-    res.status(500).json({ message: "Error al obtener los testimonios" });
-  }
-};
+import Course from '../../models/Course.js'; 
+import { generateUniqueUUID } from './helper.js';
+import { CreateCourseBody, GetCoursesQuery, UpdateCourseBody } from './types.js';
 
 export const getCourses = async (req: Request, res: Response): Promise<void> => {
   try {

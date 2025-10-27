@@ -1,7 +1,6 @@
 import express, { Router } from 'express';
 import {
   getCourses,
-  getTestimonials,
   createCourse,
   updateCourse,
   deleteCourse,
@@ -14,7 +13,6 @@ const router: Router = express.Router();
 
 // Rutas públicas
 router.get('/', getCourses);
-router.get('/testimonials', getTestimonials);
 
 // Rutas protegidas - requieren autenticación JWT + rol admin
 router.post('/', authenticateToken, requireAdmin, createCourse);
