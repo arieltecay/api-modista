@@ -1,40 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import Inscription from '../../models/Inscription.js';
 import { logError } from '../../services/logger.js';
-import { IInscription } from '../../models/Inscription.js'; // Importamos la interfaz
 import ExcelJS from 'exceljs';
-
-// --- Interfaces para tipado ---
-
-interface CreateInscriptionBody {
-  nombre: string;
-  apellido: string;
-  email: string;
-  celular: string;
-  courseId: string;
-  courseTitle: string;
-  coursePrice: number;
-}
-
-interface GetInscriptionsQuery {
-  page?: string;
-  limit?: string;
-  search?: string;
-  sortBy?: keyof IInscription;
-  sortOrder?: 'asc' | 'desc';
-  paymentStatusFilter?: 'all' | 'paid' | 'pending';
-  courseFilter?: string;
-}
-
-interface UpdatePaymentStatusBody {
-  paymentStatus: 'pending' | 'paid';
-}
-
-interface ExportInscriptionsQuery {
-  paymentStatusFilter?: 'all' | 'paid' | 'pending';
-  search?: string;
-  courseFilter?: string;
-}
+import { CreateInscriptionBody, ExportInscriptionsQuery, GetInscriptionsQuery, UpdatePaymentStatusBody } from './types.js';
 
 // --- Controlador ---
 
