@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { logError } from '../../services/logger.js';
-import Course from '../../models/Course.js'; 
+import Course from '../../models/Course.js';
 import { generateUniqueUUID } from './helper.js';
 import { CreateCourseBody, GetCoursesQuery, UpdateCourseBody } from './types.js';
 
@@ -143,11 +143,13 @@ export const updateCourse = async (req: Request<{ id: string }, {}, UpdateCourse
       }
     });
 
-    const course = await Course.findByIdAndUpdate(
-      id,
-      filteredUpdateData,
-      { new: true, runValidators: true }
-    );
+    // Resolver UUID a ObjectId si es necesario
+    let course;
+    if (id && id.includes('-')) {
+      course = await Course.findOneAndUpdate({ uuid: id }, filteredUpdateData, { new: true, runValidators: true });
+    } else {
+      course = await Course.findByIdAndUpdate(id, filteredUpdateData, { new: true, runValidators: true });
+    }
 
     if (!course) {
       res.status(404).json({ success: false, message: 'Curso no encontrado' });
@@ -172,7 +174,12 @@ export const deleteCourse = async (req: Request<{ id: string }>, res: Response):
   try {
     const { id } = req.params;
 
-    const course = await Course.findByIdAndDelete(id);
+    let course;
+    if (id && id.includes('-')) {
+      course = await Course.findOneAndDelete({ uuid: id });
+    } else {
+      course = await Course.findByIdAndDelete(id);
+    }
 
     if (!course) {
       res.status(404).json({ success: false, message: 'Curso no encontrado' });
@@ -223,8 +230,15 @@ export const getCoursesAdmin = async (req: Request<{}, {}, {}, GetCoursesQuery>,
 
     const result = await (Course as any).paginate(queryFilter, options);
 
+    // Mapear UUID como id para consistencia con el frontend público
+    const coursesWithId = result.docs.map((course: any) => ({
+      ...course.toObject(),
+      id: course.uuid,
+      courseId: course._id.toString()
+    }));
+
     res.status(200).json({
-      data: result.docs,
+      data: coursesWithId,
       total: result.totalDocs,
       totalPages: result.totalPages,
       currentPage: result.page,

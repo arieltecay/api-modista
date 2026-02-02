@@ -4,6 +4,7 @@ dotenv.config();
 import fs from 'fs/promises';
 import path from 'path';
 import { renderTemplate } from './fsTemplate.js';
+import { logger } from './logger.js';
 
 const sentEmailsDir = path.join(process.cwd(), 'sent_emails');
 
@@ -50,10 +51,10 @@ export const sendEmail = async ({ to, subject, templateName, data }: EmailOption
     await fs.mkdir(sentEmailsDir, { recursive: true });
     const filePath = path.join(sentEmailsDir, `${Date.now()}-${to}.html`);
     await fs.writeFile(filePath, htmlContent);
-    console.log(`📧 Correo simulado para ${to} guardado en: ${filePath}`);
+    logger.info(`📧 Correo simulado para ${to} guardado en: ${filePath}`);
   } else {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      throw new Error('Faltan las credenciales de EMAIL_USER o EMAIL_PASS en las variables de entorno.\n' + 
+      throw new Error('Faltan las credenciales de EMAIL_USER o EMAIL_PASS en las variables de entorno.\n' +
         'Si usas Gmail, asegúrate de usar una App Password y que el archivo .env esté presente y cargado.');
     }
     // MODO PRODUCCIÓN: Enviar el correo usando Nodemailer
@@ -67,8 +68,33 @@ export const sendEmail = async ({ to, subject, templateName, data }: EmailOption
       await transporter.sendMail(mailOptions);
       // console.log(`📧 Correo de confirmación enviado a ${to} via SMTP.`);
     } catch (error) {
-      console.error('Error al enviar el correo:', error);
-      throw new Error('Error interno del servidor al enviar correo de prueba.');
+      logger.error('Error al enviar el correo:', error);
+      throw new Error('Error al enviar correo: ' + (error instanceof Error ? error.message : String(error)));
     }
   }
+};
+
+/**
+ * Envía un correo de confirmación de seña.
+ */
+export const sendDepositEmail = async (inscription: any): Promise<void> => {
+  const horario = inscription.turnoId && typeof inscription.turnoId === 'object'
+    ? `${inscription.turnoId.diaSemana} - ${inscription.turnoId.horaInicio} hs`
+    : 'A coordinar';
+
+  const data = {
+    nombre: inscription.nombre,
+    apellido: inscription.apellido,
+    courseTitle: inscription.courseTitle,
+    horario: horario,
+    monto: inscription.depositAmount.toString(),
+    fecha: new Date().toLocaleDateString('es-AR')
+  };
+
+  await sendEmail({
+    to: inscription.email,
+    subject: `Reserva confirmada: ${inscription.courseTitle}`,
+    templateName: 'depositConfirmation',
+    data
+  });
 };

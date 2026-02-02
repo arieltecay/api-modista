@@ -1,4 +1,4 @@
-import { Schema, model, Document, PaginateModel } from 'mongoose';
+import { Schema, model, Document, PaginateModel, Types } from 'mongoose';
 import mongoosePaginate from 'mongoose-paginate-v2';
 
 // Interface para tipar el documento de inscripción
@@ -12,11 +12,15 @@ export interface IInscription extends Document {
   coursePrice: number;
   paymentStatus: 'pending' | 'paid';
   paymentDate?: Date;
+  turnoId?: Types.ObjectId;
+  depositAmount?: number;
+  depositDate?: Date;
+  isReserved?: boolean;
   fechaInscripcion: Date;
 }
 
 // Interface para el modelo con paginación
-interface IInscriptionModel extends PaginateModel<IInscription> {}
+interface IInscriptionModel extends PaginateModel<IInscription> { }
 
 const InscriptionSchema = new Schema<IInscription>({
   nombre: {
@@ -65,6 +69,22 @@ const InscriptionSchema = new Schema<IInscription>({
   },
   paymentDate: {
     type: Date,
+  },
+  turnoId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Turno',
+    required: false,
+  },
+  depositAmount: {
+    type: Number,
+    default: 0,
+  },
+  depositDate: {
+    type: Date,
+  },
+  isReserved: {
+    type: Boolean,
+    default: false,
   },
   fechaInscripcion: {
     type: Date,

@@ -10,16 +10,22 @@ export interface CreateInscriptionBody {
   courseId: string;
   courseTitle: string;
   coursePrice: number;
+  turnoId?: string;
 }
 
 export interface GetInscriptionsQuery {
   page?: string;
   limit?: string;
   search?: string;
-  sortBy?: keyof IInscription;
-  sortOrder?: 'asc' | 'desc';
-  paymentStatusFilter?: 'all' | 'paid' | 'pending';
+  sortBy?: string;
+  sortOrder?: string;
+  paymentStatusFilter?: string;
   courseFilter?: string;
+  excludeWorkshops?: string; // 'true' | 'false'
+}
+
+export interface UpdateDepositBody {
+  depositAmount: number;
 }
 
 export interface UpdatePaymentStatusBody {
@@ -30,4 +36,5 @@ export interface ExportInscriptionsQuery {
   paymentStatusFilter?: 'all' | 'paid' | 'pending';
   search?: string;
   courseFilter?: string;
+  excludeWorkshops?: string; // 'true' | 'false'
 }

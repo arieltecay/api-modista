@@ -13,12 +13,14 @@ export interface ICourse extends Document {
   price: number;
   coursePaid?: string;
   uuid?: string; // UUID único para reemplazar IDs posicionales (opcional durante migración)
+  isPresencial?: boolean;
+  status?: 'active' | 'inactive';
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 // Interface para el modelo con paginación
-interface ICourseModel extends PaginateModel<ICourse> {}
+interface ICourseModel extends PaginateModel<ICourse> { }
 
 const courseSchema = new Schema<ICourse>({
   title: { type: String, required: true },
@@ -34,6 +36,15 @@ const courseSchema = new Schema<ICourse>({
     type: String,
     required: true,
     unique: true
+  },
+  isPresencial: {
+    type: Boolean,
+    default: false
+  },
+  status: {
+    type: String,
+    enum: ['active', 'inactive'],
+    default: 'active'
   },
 }, {
   timestamps: true  // Agrega createdAt y updatedAt automáticamente

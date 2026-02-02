@@ -6,6 +6,7 @@ import emailRoutes from './email/emailRoutes.js';
 import inscriptionsRoutes from './inscriptions/inscriptionsRoutes.js';
 import testimonialsRoute from './testimonials/testimonialsRoute.js';
 import authRoutes from './auth/authRoutes.js';
+import turnosRoutes from './turnos/turnosRoutes.js';
 
 const router: Router = express.Router();
 
@@ -26,5 +27,8 @@ router.use('/inscriptions', inscriptionsRoutes);
 
 // Use auth routes
 router.use('/auth', authRoutes);
+
+// Use turnos routes
+router.use('/turnos', turnosRoutes);
 
 export default router;

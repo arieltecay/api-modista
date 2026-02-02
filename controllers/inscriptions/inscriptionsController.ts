@@ -1,8 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import Inscription from '../../models/Inscription.js';
+import Turno from '../../models/Turno.js';
+import Course from '../../models/Course.js';
 import { logError } from '../../services/logger.js';
+import { sendDepositEmail } from '../../services/emailServices.js';
 import ExcelJS from 'exceljs';
-import { CreateInscriptionBody, ExportInscriptionsQuery, GetInscriptionsQuery, UpdatePaymentStatusBody } from './types.js';
+import { CreateInscriptionBody, ExportInscriptionsQuery, GetInscriptionsQuery, UpdateDepositBody, UpdatePaymentStatusBody } from './types.js';
 
 // --- Controlador ---
 
@@ -11,11 +14,26 @@ import { CreateInscriptionBody, ExportInscriptionsQuery, GetInscriptionsQuery, U
 // @access  Public
 export const createInscription = async (req: Request<{}, {}, CreateInscriptionBody>, res: Response) => {
   try {
-    const { nombre, apellido, email, celular, courseId, courseTitle, coursePrice } = req.body;
+    const { nombre, apellido, email, celular, courseId, courseTitle, coursePrice, turnoId } = req.body;
 
-    // Validación básica (TypeScript ya ayuda a asegurar los tipos)
+    // Validación básica
     if (!nombre || !apellido || !email || !celular || !courseId || !courseTitle || coursePrice == null) {
       return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios' });
+    }
+
+    // Validación de Turno (si se proporciona)
+    let turnoData = null;
+    if (turnoId) {
+      turnoData = await Turno.findById(turnoId);
+      if (!turnoData) {
+        return res.status(404).json({ success: false, message: 'El turno seleccionado no existe' });
+      }
+      if (turnoData.isBlocked || !turnoData.isActive) {
+        return res.status(400).json({ success: false, message: 'El turno seleccionado no está disponible' });
+      }
+      if (turnoData.cuposInscriptos >= turnoData.cupoMaximo) {
+        return res.status(400).json({ success: false, message: 'El turno seleccionado ya no tiene cupos disponibles' });
+      }
     }
 
     // Validación: verificar si ya existe una inscripción para este email + courseId específico
@@ -60,7 +78,7 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
 // @route   GET /api/inscriptions
 // @access  Private (Protected by JWT + Admin role)
 export const getInscriptions = async (req: Request<{}, {}, {}, GetInscriptionsQuery>, res: Response) => {
-  const { page = '1', limit = '10', search, sortBy, sortOrder, paymentStatusFilter = 'all', courseFilter } = req.query;
+  const { page = '1', limit = '10', search, sortBy, sortOrder, paymentStatusFilter = 'all', courseFilter, excludeWorkshops = 'false' } = req.query;
   // Validar filtro de paymentStatus
   const validFilters = ['all', 'paid', 'pending'];
   if (!validFilters.includes(paymentStatusFilter)) {
@@ -85,9 +103,25 @@ export const getInscriptions = async (req: Request<{}, {}, {}, GetInscriptionsQu
       queryFilter.paymentStatus = paymentStatusFilter;
     }
 
-    // Agregar filtro por curso
+    // Agregar filtro por curso (soporta título con regex o UUID exacto)
     if (courseFilter) {
-      queryFilter.courseTitle = { $regex: courseFilter, $options: 'i' };
+      // Si el filtro parece un UUID (contiene guiones), filtrar por courseId exacto
+      if (courseFilter.includes('-')) {
+        queryFilter.courseId = courseFilter;
+      } else {
+        // De lo contrario, filtrar por título con regex
+        queryFilter.courseTitle = { $regex: courseFilter, $options: 'i' };
+      }
+    }
+
+    // CONDICIONAL: Solo excluir talleres si se solicita explícitamente
+    if (excludeWorkshops === 'true') {
+      const workshopCourses = await Course.find({ isPresencial: true }).select('uuid');
+      const workshopCourseIds = workshopCourses.map(c => c.uuid).filter(Boolean);
+
+      if (workshopCourseIds.length > 0) {
+        queryFilter.courseId = { $nin: workshopCourseIds };
+      }
     }
 
     const sortOptions: { [key: string]: 1 | -1 } = {};
@@ -104,7 +138,10 @@ export const getInscriptions = async (req: Request<{}, {}, {}, GetInscriptionsQu
     };
 
     // Asumimos que el modelo Inscription tiene el método paginate de mongoose-paginate-v2
-    const result = await (Inscription as any).paginate(queryFilter, options);
+    const result = await (Inscription as any).paginate(queryFilter, {
+      ...options,
+      populate: 'turnoId'
+    });
 
     res.status(200).json({
       data: result.docs,
@@ -123,7 +160,7 @@ export const getInscriptions = async (req: Request<{}, {}, {}, GetInscriptionsQu
 // @route   GET /api/inscriptions/export
 // @access  Private (JWT + Admin role)
 export const exportInscriptions = async (req: Request<{}, {}, {}, ExportInscriptionsQuery>, res: Response) => {
-  const { paymentStatusFilter = 'all', search, courseFilter } = req.query;
+  const { paymentStatusFilter = 'all', search, courseFilter, excludeWorkshops = 'false' } = req.query;
 
   // Validar filtro de paymentStatus
   const validFilters = ['all', 'paid', 'pending'];
@@ -146,14 +183,30 @@ export const exportInscriptions = async (req: Request<{}, {}, {}, ExportInscript
       };
     }
 
-    // Aplicar filtro por curso
+    // Aplicar filtro por curso (soporta título con regex o UUID exacto)
     if (courseFilter) {
-      queryFilter.courseTitle = { $regex: courseFilter, $options: 'i' };
+      // Si el filtro parece un UUID (contiene guiones), filtrar por courseId exacto
+      if (courseFilter.includes('-')) {
+        queryFilter.courseId = courseFilter;
+      } else {
+        // De lo contrario, filtrar por título con regex
+        queryFilter.courseTitle = { $regex: courseFilter, $options: 'i' };
+      }
     }
 
     // Aplicar filtro por paymentStatus igual que en getInscriptions
     if (paymentStatusFilter !== 'all') {
       queryFilter.paymentStatus = paymentStatusFilter;
+    }
+
+    // CONDICIONAL: Solo excluir talleres si se solicita explícitamente
+    if (excludeWorkshops === 'true') {
+      const workshopCourses = await Course.find({ isPresencial: true }).select('uuid');
+      const workshopCourseIds = workshopCourses.map(c => c.uuid).filter(Boolean);
+
+      if (workshopCourseIds.length > 0) {
+        queryFilter.courseId = { $nin: workshopCourseIds };
+      }
     }
 
     const inscriptions = await Inscription.find(queryFilter).sort({ fechaInscripcion: -1 });
@@ -216,18 +269,42 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
   }
 
   try {
-    const inscription = await Inscription.findByIdAndUpdate(
-      id,
-      {
-        paymentStatus,
-        paymentDate: paymentStatus === 'paid' ? new Date() : null
-      },
-      { new: true }
-    );
+    const inscription = await Inscription.findById(id);
 
     if (!inscription) {
       return res.status(404).json({ message: 'Inscripción no encontrada.' });
     }
+
+    // Solo actuar si hay un cambio de estado
+    if (inscription.paymentStatus !== paymentStatus) {
+      if (paymentStatus === 'paid') {
+        // Manejo de Cupos al pagar
+        if (inscription.turnoId && !inscription.isReserved) {
+          const turno = await Turno.findById(inscription.turnoId);
+          if (turno) {
+            if (turno.cuposInscriptos >= turno.cupoMaximo) {
+              return res.status(400).json({
+                success: false,
+                message: 'No se puede marcar como pagado: El turno ya ha alcanzado su cupo máximo.'
+              });
+            }
+            // Incrementar cupo
+            await Turno.findByIdAndUpdate(inscription.turnoId, { $inc: { cuposInscriptos: 1 } });
+            inscription.isReserved = true;
+          }
+        }
+      } else if (paymentStatus === 'pending' && inscription.paymentStatus === 'paid') {
+        // Liberar cupo si vuelve a pendiente
+        if (inscription.turnoId && inscription.isReserved) {
+          await Turno.findByIdAndUpdate(inscription.turnoId, { $inc: { cuposInscriptos: -1 } });
+          inscription.isReserved = false;
+        }
+      }
+    }
+
+    inscription.paymentStatus = paymentStatus;
+    inscription.paymentDate = paymentStatus === 'paid' ? new Date() : undefined;
+    await inscription.save();
 
     res.status(200).json({
       success: true,
@@ -240,14 +317,88 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
   }
 };
 
+// @desc    Actualizar seña de una inscripción
+// @route   PATCH /api/inscriptions/:id/deposit
+// @access  Private (JWT + Admin role)
+export const updateDeposit = async (req: Request<{ id: string }, {}, UpdateDepositBody>, res: Response) => {
+  const { id } = req.params;
+  const { depositAmount } = req.body;
+
+  if (depositAmount <= 0) {
+    return res.status(400).json({ success: false, message: 'La seña debe ser mayor a cero.' });
+  }
+
+  try {
+    const inscription = await Inscription.findById(id).populate('turnoId');
+
+    if (!inscription) {
+      return res.status(404).json({ success: false, message: 'Inscripción no encontrada.' });
+    }
+
+    if (depositAmount >= inscription.coursePrice) {
+      return res.status(400).json({ success: false, message: 'La seña no puede ser igual o mayor al total del curso.' });
+    }
+
+    // Si no está reservado, descontar un cupo
+    if (!inscription.isReserved && inscription.turnoId) {
+      const turno = await Turno.findById(inscription.turnoId);
+      if (turno) {
+        if (turno.cuposInscriptos >= turno.cupoMaximo) {
+          return res.status(400).json({
+            success: false,
+            message: 'No se puede registrar la seña: El turno ya ha alcanzado su cupo máximo.'
+          });
+        }
+        await Turno.findByIdAndUpdate(inscription.turnoId, { $inc: { cuposInscriptos: 1 } });
+        inscription.isReserved = true;
+      }
+    }
+
+    inscription.depositAmount = depositAmount;
+    inscription.depositDate = new Date();
+    await inscription.save();
+
+    // Enviar correo de confirmación de seña
+    try {
+      await sendDepositEmail(inscription);
+    } catch (err) {
+      logError('sendDepositEmail', err instanceof Error ? err : new Error(String(err)));
+      // No devolvemos error 500 para que la seña quede registrada aunque falle el mail
+    }
+
+    res.status(200).json({
+      success: true,
+      data: inscription,
+      message: 'Seña registrada correctamente.'
+    });
+  } catch (error) {
+    logError('updateDeposit', error instanceof Error ? error : new Error(String(error)));
+    res.status(500).json({ success: false, message: 'Error al actualizar la seña.' });
+  }
+};
+
 // @desc    Contar todas las inscripciones
 // @route   GET /api/inscriptions/count
 // @access  Public
 export const countInscriptions = async (req: Request, res: Response) => {
   try {
-    const total = await Inscription.countDocuments();
-    const paid = await Inscription.countDocuments({ paymentStatus: 'paid' });
-    const pending = await Inscription.countDocuments({ paymentStatus: 'pending' });
+    const { excludeWorkshops = 'false' } = req.query as { excludeWorkshops?: string };
+
+    let excludeFilter: any = {};
+
+    // CONDICIONAL: Solo excluir talleres si se solicita explícitamente
+    if (excludeWorkshops === 'true') {
+      const workshopCourses = await Course.find({ isPresencial: true }).select('uuid');
+      const workshopCourseIds = workshopCourses.map(c => c.uuid).filter(Boolean);
+
+      if (workshopCourseIds.length > 0) {
+        excludeFilter.courseId = { $nin: workshopCourseIds };
+      }
+    }
+
+    const total = await Inscription.countDocuments(excludeFilter);
+    const paid = await Inscription.countDocuments({ ...excludeFilter, paymentStatus: 'paid' });
+    const pending = await Inscription.countDocuments({ ...excludeFilter, paymentStatus: 'pending' });
 
     res.status(200).json({
       success: true,
