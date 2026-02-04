@@ -21,6 +21,7 @@ export interface GetInscriptionsQuery {
   sortOrder?: string;
   paymentStatusFilter?: string;
   courseFilter?: string;
+  turnoFilter?: string;
   excludeWorkshops?: string; // 'true' | 'false'
 }
 
@@ -36,5 +37,6 @@ export interface ExportInscriptionsQuery {
   paymentStatusFilter?: 'all' | 'paid' | 'pending';
   search?: string;
   courseFilter?: string;
+  turnoFilter?: string;
   excludeWorkshops?: string; // 'true' | 'false'
 }

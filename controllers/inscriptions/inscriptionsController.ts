@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
 import Inscription from '../../models/Inscription.js';
 import Turno from '../../models/Turno.js';
 import Course from '../../models/Course.js';
@@ -78,7 +79,7 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
 // @route   GET /api/inscriptions
 // @access  Private (Protected by JWT + Admin role)
 export const getInscriptions = async (req: Request<{}, {}, {}, GetInscriptionsQuery>, res: Response) => {
-  const { page = '1', limit = '10', search, sortBy, sortOrder, paymentStatusFilter = 'all', courseFilter, excludeWorkshops = 'false' } = req.query;
+  const { page = '1', limit = '10', search, sortBy, sortOrder, paymentStatusFilter = 'all', courseFilter, turnoFilter, excludeWorkshops = 'false' } = req.query;
   // Validar filtro de paymentStatus
   const validFilters = ['all', 'paid', 'pending'];
   if (!validFilters.includes(paymentStatusFilter)) {
@@ -112,6 +113,11 @@ export const getInscriptions = async (req: Request<{}, {}, {}, GetInscriptionsQu
         // De lo contrario, filtrar por título con regex
         queryFilter.courseTitle = { $regex: courseFilter, $options: 'i' };
       }
+    }
+
+    // Filtro por Turno (ID específico)
+    if (turnoFilter) {
+      queryFilter.turnoId = turnoFilter;
     }
 
     // CONDICIONAL: Solo excluir talleres si se solicita explícitamente
@@ -160,7 +166,7 @@ export const getInscriptions = async (req: Request<{}, {}, {}, GetInscriptionsQu
 // @route   GET /api/inscriptions/export
 // @access  Private (JWT + Admin role)
 export const exportInscriptions = async (req: Request<{}, {}, {}, ExportInscriptionsQuery>, res: Response) => {
-  const { paymentStatusFilter = 'all', search, courseFilter, excludeWorkshops = 'false' } = req.query;
+  const { paymentStatusFilter = 'all', search, courseFilter, turnoFilter, excludeWorkshops = 'false' } = req.query;
 
   // Validar filtro de paymentStatus
   const validFilters = ['all', 'paid', 'pending'];
@@ -207,6 +213,11 @@ export const exportInscriptions = async (req: Request<{}, {}, {}, ExportInscript
       if (workshopCourseIds.length > 0) {
         queryFilter.courseId = { $nin: workshopCourseIds };
       }
+    }
+
+    // Filtro por Turno (ID específico)
+    if (turnoFilter) {
+      queryFilter.turnoId = turnoFilter;
     }
 
     const inscriptions = await Inscription.find(queryFilter).sort({ fechaInscripcion: -1 });
