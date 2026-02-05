@@ -19,15 +19,22 @@ const getCourseObjectId = async (id: string): Promise<string> => {
 export const getTurnosByCourse = async (req: Request, res: Response) => {
     try {
         let { courseId } = req.params;
+        const { admin } = req.query;
 
         // Resolver UUID a ObjectId si es necesario
         courseId = await getCourseObjectId(courseId);
 
-        const turnos = await Turno.find({
+        const query: any = {
             courseId,
-            isActive: true,
-            isBlocked: false
-        }).sort({ diaSemana: 1, horaInicio: 1 });
+            isActive: true
+        };
+
+        // Si no es admin, solo mostrar habilitados
+        if (admin !== 'true') {
+            query.isBlocked = false;
+        }
+
+        const turnos = await Turno.find(query).sort({ diaSemana: 1, horaInicio: 1 });
 
         res.status(200).json({
             success: true,
