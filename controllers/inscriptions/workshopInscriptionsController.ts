@@ -136,3 +136,100 @@ export const exportWorkshopInscriptions = async (req: Request<{ workshopId: stri
     res.status(500).json({ message: 'Error al exportar los datos del taller.' });
   }
 };
+
+/**
+ * @desc    Obtener datos detallados de un taller para la página de detalles
+ * @route   GET /api/workshop-inscriptions/:workshopId/details
+ * @access  Private (Admin)
+ * @returns Datos limpios y organizados: resúmenes, inscriptos agrupados por turno
+ */
+export const getWorkshopDetails = async (req: Request<{ workshopId: string }>, res: Response) => {
+  const { workshopId } = req.params;
+
+  try {
+    const inscriptions = await Inscription.find({
+      courseId: workshopId,
+      isReserved: true,
+      depositAmount: { $gt: 0 }
+    }).populate('turnoId').sort({ fechaInscripcion: -1 });
+
+    if (inscriptions.length === 0) {
+      return res.status(200).json({
+        workshopTitle: 'Sin inscripciones',
+        workshopPrice: 0,
+        summary: { totalPaidCount: 0, depositPaidCount: 0, totalInscriptions: 0 },
+        turnoGroups: []
+      });
+    }
+
+    const workshopTitle = inscriptions[0].courseTitle;
+    const workshopPrice = inscriptions[0].coursePrice;
+
+    const totalPaidCount = inscriptions.filter(
+      (insc) => (insc.depositAmount ?? 0) >= workshopPrice
+    ).length;
+
+    const depositPaidCount = inscriptions.filter(
+      (insc) => (insc.depositAmount ?? 0) > 0 && (insc.depositAmount ?? 0) < workshopPrice
+    ).length;
+
+    const turnoMap = new Map<string, {
+      turnoId: string;
+      turnoLabel: string;
+      capacity: number;
+      inscriptions: Array<{
+        _id: string;
+        nombre: string;
+        apellido: string;
+        depositAmount: number;
+        isFullPayment: boolean;
+      }>;
+    }>();
+
+    inscriptions.forEach((insc) => {
+      const turno: any = insc.turnoId;
+      const turnoId = turno?._id?.toString() || 'sin-turno';
+      const turnoLabel = turno
+        ? `${turno.diaSemana} ${turno.horaInicio} - ${turno.horaFin}`
+        : 'Sin turno asignado';
+      const capacity = turno?.cupoMaximo || 0;
+      const depositAmount = insc.depositAmount ?? 0;
+
+      if (!turnoMap.has(turnoId)) {
+        turnoMap.set(turnoId, {
+          turnoId,
+          turnoLabel,
+          capacity,
+          inscriptions: []
+        });
+      }
+
+      turnoMap.get(turnoId)!.inscriptions.push({
+        _id: String(insc._id),
+        nombre: insc.nombre,
+        apellido: insc.apellido,
+        depositAmount,
+        isFullPayment: depositAmount >= workshopPrice
+      });
+    });
+
+    const turnoGroups = Array.from(turnoMap.values()).map((group) => ({
+      ...group,
+      enrolled: group.inscriptions.length
+    }));
+
+    res.status(200).json({
+      workshopTitle,
+      workshopPrice,
+      summary: {
+        totalPaidCount,
+        depositPaidCount,
+        totalInscriptions: inscriptions.length
+      },
+      turnoGroups
+    });
+  } catch (error) {
+    logError('getWorkshopDetails', error instanceof Error ? error : new Error(String(error)));
+    res.status(500).json({ message: 'Error al obtener los detalles del taller.' });
+  }
+};
