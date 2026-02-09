@@ -2,7 +2,9 @@ import { Router } from 'express';
 import {
   getWorkshopInscriptions,
   exportWorkshopInscriptions,
-  getWorkshopDetails
+  getWorkshopDetails,
+  getAvailableTurnosForReschedule,
+  updateInscriptionSchedule
 } from '../../controllers/inscriptions/workshopInscriptionsController.js';
 import { authenticateToken, requireAdmin } from '../../middleware/authMiddleware.js';
 
@@ -28,5 +30,19 @@ router.get('/:workshopId/details', authenticateToken, requireAdmin, getWorkshopD
  * @access  Private (Admin)
  */
 router.get('/:workshopId/export', authenticateToken, requireAdmin, exportWorkshopInscriptions);
+
+/**
+ * @route   GET /api/workshop-inscriptions/inscription/:inscriptionId/available-turnos
+ * @desc    Obtener turnos disponibles para reagendar (valida cupos en servidor)
+ * @access  Private (Admin)
+ */
+router.get('/inscription/:inscriptionId/available-turnos', authenticateToken, requireAdmin, getAvailableTurnosForReschedule);
+
+/**
+ * @route   PUT /api/workshop-inscriptions/:inscriptionId/schedule
+ * @desc    Actualizar el turno de una inscripción
+ * @access  Private (Admin)
+ */
+router.put('/:inscriptionId/schedule', authenticateToken, requireAdmin, updateInscriptionSchedule);
 
 export default router;
