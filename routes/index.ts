@@ -4,10 +4,11 @@ import paymentRoutes from './payment/paymentRoutes.js';
 import coursesRoutes from './courses/coursesRoutes.js';
 import emailRoutes from './email/emailRoutes.js';
 import inscriptionsRoutes from './inscriptions/inscriptionsRoutes.js';
+import workshopInscriptionsRoutes from './inscriptions/workshopInscriptionsRoutes.js';
 import testimonialsRoute from './testimonials/testimonialsRoute.js';
 import authRoutes from './auth/authRoutes.js';
 import turnosRoutes from './turnos/turnosRoutes.js';
-import workshopInscriptionsRoutes from './inscriptions/workshopInscriptionsRoutes.js';
+import tariffRoutes from './tariff/tariffRoutes.js';
 
 const router: Router = express.Router();
 
@@ -32,5 +33,8 @@ router.use('/auth', authRoutes);
 
 // Use turnos routes
 router.use('/turnos', turnosRoutes);
+
+// Use tariff routes
+router.use('/tariffs', tariffRoutes);
 
 export default router;
