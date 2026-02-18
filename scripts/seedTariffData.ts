@@ -23,8 +23,8 @@ const seedTariffData = async () => {
       return;
     }
 
-    await Tariff.deleteMany({});
-    logger.info('Datos de tarifas existentes eliminados.');
+    // await Tariff.deleteMany({}); // Comentado para evitar borrar todos los tarifarios
+    // logger.info('Datos de tarifas existentes eliminados.'); // Comentado
 
     for (const fileName of jsonFiles) {
       const filePath = path.join(tariffDataDir, fileName);
@@ -44,60 +44,47 @@ const seedTariffData = async () => {
       }
       const type = typeMatch[1];
 
-      if (!tariffJson.periodo || !tariffJson.periodo.inicio || !tariffJson.periodo.fin || !tariffJson.titulo || !tariffJson.organizacion || !tariffJson.descripcion || !tariffJson.moneda || !tariffJson.nota_precios || !tariffJson.nota_adicional || !tariffJson.contacto || !tariffJson.contacto.email || !tariffJson.contacto.nota) {
+      if (!tariffJson.metadata || !tariffJson.metadata.periodo || !tariffJson.metadata.periodo.inicio || !tariffJson.metadata.periodo.fin || !tariffJson.metadata.titulo || !tariffJson.metadata.organizacion || !tariffJson.metadata.descripcion || !tariffJson.metadata.moneda || !tariffJson.metadata.nota_precios || !tariffJson.metadata.nota_adicional || !tariffJson.metadata.contacto || !tariffJson.metadata.contacto.email || !tariffJson.metadata.contacto.nota) {
         logger.error(`Error en el archivo '${fileName}': Falta información esencial en la estructura "tarifario".`);
         logger.error(`Contenido problemático: ${JSON.stringify(tariffJson, null, 2)}`);
         continue;
       }
 
-      const periodIdentifier = `${tariffJson.periodo.inicio} a ${tariffJson.periodo.fin}`;
+      const periodIdentifier = `${tariffJson.metadata.periodo.inicio} a ${tariffJson.metadata.periodo.fin}`;
 
       let startDate: Date;
       try {
-        const [monthName, year] = tariffJson.periodo.inicio.split(' ');
+        const [monthName, year] = tariffJson.metadata.periodo.inicio.split(' ');
         startDate = new Date(`${monthName} 1, ${year}`);
         if (isNaN(startDate.getTime())) {
             throw new Error('Invalid date');
         }
       } catch (dateError) {
-          logger.error(`Error en el archivo '${fileName}': No se pudo parsear la fecha de inicio '${tariffJson.periodo.inicio}'.`);
+          logger.error(`Error en el archivo '${fileName}': No se pudo parsear la fecha de inicio '${tariffJson.metadata.periodo.inicio}'.`);
           continue;
       }
 
 
-      const {
-        titulo, organizacion, periodo, descripcion, nota_precios, nota_adicional, moneda, contacto,
-        nota_actualizacion, nota_final,
-        ...content
-      } = tariffJson;
+      const { titulo, organizacion, periodo, descripcion, nota_precios, nota_adicional, moneda, contacto, ultimaActualizacion, version, notas } = tariffJson.metadata;
+      const content = tariffJson.content;
 
-      const notesArray = [descripcion, nota_precios, nota_adicional, nota_actualizacion, nota_final].filter(Boolean); // Consolidar todas las notas
+      const notesArray = [descripcion, nota_precios, nota_adicional, ...(notas || [])].filter(Boolean); // Consolidar todas las notas
 
 
-      const newTariff = new Tariff({
+      const tariffUpdateData = {
         type: type,
         periodIdentifier: periodIdentifier,
         startDate: startDate,
-        metadata: {
-          titulo: titulo,
-          organizacion: organizacion,
-          periodo: {
-            inicio: periodo.inicio,
-            fin: periodo.fin,
-          },
-          descripcion: descripcion,
-          nota_precios: nota_precios,
-          nota_adicional: nota_adicional,
-          moneda: moneda,
-          contacto: contacto,
-          ultimaActualizacion: new Date().toISOString().split('T')[0],
-          version: '1.0',
-          notas: notesArray,
-        },
+        metadata: tariffJson.metadata,
         content: content,
-      });
+      };
 
-      await newTariff.save();
+      await Tariff.findOneAndUpdate(
+        { type: type, periodIdentifier: periodIdentifier }, // Criterio de búsqueda
+        tariffUpdateData,                                  // Datos a actualizar/insertar
+        { upsert: true, new: true, setDefaultsOnInsert: true } // Opciones: si no existe, créalo; devuelve el documento nuevo; aplica defaults al insertar
+      );
+
       logger.info(`Tarifario '${type}' para el período '${periodIdentifier}' cargado exitosamente.`);
     }
 
