@@ -29,8 +29,10 @@ export const getTurnosByCourse = async (req: Request, res: Response) => {
             isActive: true
         };
 
-        // Si no es admin, solo mostrar habilitados
-        if (admin !== 'true') {
+        // Solo los administradores autenticados pueden ver turnos bloqueados
+        const canSeeBlocked = req.user?.role === 'admin' && admin === 'true';
+
+        if (!canSeeBlocked) {
             query.isBlocked = false;
         }
 
