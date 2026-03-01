@@ -104,15 +104,24 @@ export const getInscriptions = async (req: Request<{}, {}, {}, GetInscriptionsQu
       queryFilter.paymentStatus = paymentStatusFilter;
     }
 
-    // Agregar filtro por curso (soporta título con regex o UUID exacto)
+    // Agregar filtro por curso
     if (courseFilter) {
-      // Si el filtro parece un UUID (contiene guiones), filtrar por courseId exacto
-      if (courseFilter.includes('-')) {
-        queryFilter.courseId = courseFilter;
-      } else {
-        // De lo contrario, filtrar por título con regex
-        queryFilter.courseTitle = { $regex: courseFilter, $options: 'i' };
+      // Primero, busca los IDs de los cursos que coinciden con el título
+      const courses = await Course.find({ title: { $regex: courseFilter, $options: 'i' } }).select('uuid');
+      const courseIds = courses.map(c => c.uuid).filter(Boolean);
+
+      // Si no se encuentran cursos, no hay inscripciones que mostrar
+      if (courseIds.length === 0) {
+        return res.status(200).json({
+          data: [],
+          total: 0,
+          totalPages: 0,
+          currentPage: 1,
+        });
       }
+      
+      // Usa los IDs encontrados para filtrar las inscripciones
+      queryFilter.courseId = { ...(queryFilter.courseId || {}), $in: courseIds };
     }
 
     // Filtro por Turno (ID específico)
@@ -126,7 +135,8 @@ export const getInscriptions = async (req: Request<{}, {}, {}, GetInscriptionsQu
       const workshopCourseIds = workshopCourses.map(c => c.uuid).filter(Boolean);
 
       if (workshopCourseIds.length > 0) {
-        queryFilter.courseId = { $nin: workshopCourseIds };
+        // Combina el filtro $nin con los filtros existentes en courseId
+        queryFilter.courseId = { ...(queryFilter.courseId || {}), $nin: workshopCourseIds };
       }
     }
 
