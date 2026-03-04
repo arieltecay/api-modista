@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import { MongoStore } from 'wwebjs-mongo';
 import pkg from 'whatsapp-web.js';
+import chrome from 'chrome-aws-lambda';
+import fs from 'fs';
 const { Client, RemoteAuth } = pkg;
 import qrcodeTerminal from 'qrcode-terminal';
 import QRCode from 'qrcode';
@@ -80,7 +82,8 @@ class WhatsAppBotService {
         }
 
         try {
-            const store = new MongoStore({ mongoose: this._mongooseInstance! }); // Use stored instance
+            fs.mkdirSync('/tmp/.cache/puppeteer', { recursive: true });
+const store = new MongoStore({ mongoose: this._mongooseInstance! }); // Use stored instance
 
             this.client = new Client({
                 authStrategy: new RemoteAuth({
@@ -96,11 +99,20 @@ class WhatsAppBotService {
                 },
                 puppeteer: {
                     headless: true,
+                    executablePath: process.env.VERCEL ? await chrome.executablePath : undefined,
                     args: [
                         '--no-sandbox',
                         '--disable-setuid-sandbox',
-                        '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-                    ]
+                        '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                        ...(chrome.args || [])
+                    ],
+                    defaultViewport: chrome.defaultViewport,
+                    ignoreHTTPSErrors: true,
+                    // Ensure cache directory is writable in Vercel
+                    userDataDir: '/tmp/.wwebjs_auth',
+                    // Puppeteer cache directory
+                    // Note: chrome-aws-lambda handles its own cache, but set for safety
+                    // (no direct option, but we can set env variable)
                 }
             });
 
