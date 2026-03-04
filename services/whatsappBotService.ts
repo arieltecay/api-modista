@@ -36,6 +36,11 @@ class WhatsAppBotService {
         return WhatsAppBotService.instance;
     }
 
+    // New method to store mongoose instance without initializing the bot
+    public setMongoose(mongooseInstance: typeof mongoose) {
+        this._mongooseInstance = mongooseInstance;
+    }
+
     private _setupEvents() {
         this.client.on('qr', async (qr: string) => {
             logger.info('--- NUEVO CÓDIGO QR GENERADO ---');
@@ -87,81 +92,86 @@ class WhatsAppBotService {
         this.status = 'initializing';
         logger.info('Initializing WhatsApp Bot...');
 
-        // Store mongoose instance if provided (first call)
+        // Store mongoose instance if provided
         if (mongooseInstance) {
             this._mongooseInstance = mongooseInstance;
-        } else if (!this._mongooseInstance) {
+        } 
+        
+        if (!this._mongooseInstance) {
             // If no mongooseInstance provided and we don't have one, it's an error
-            logger.error('Error: Mongoose instance not provided on first initialization.');
+            logger.error('Error: Mongoose instance not provided for WhatsApp Bot initialization.');
             this.status = 'error';
-            throw new Error('Mongoose instance not provided for WhatsApp Bot initialization.');
+            return;
         }
 
-        try {
-            // fs.mkdirSync('/tmp/.cache/puppeteer', { recursive: true });
-const store = new MongoStore({ mongoose: this._mongooseInstance! }); // Use stored instance
+        // Run the heavy initialization in the background to avoid API timeouts
+        (async () => {
+            try {
+                // fs.mkdirSync('/tmp/.cache/puppeteer', { recursive: true });
+                const store = new MongoStore({ mongoose: this._mongooseInstance! }); // Use stored instance
 
-            // If client exists, destroy it first to ensure clean slate (e.g. on restart)
-            if (this.client) {
-                try {
-                    await this.client.destroy();
-                } catch (e) {
-                    logger.warn('Error destroying existing client during re-initialization:', e);
+                // If client exists, destroy it first to ensure clean slate (e.g. on restart)
+                if (this.client) {
+                    try {
+                        await this.client.destroy();
+                    } catch (e) {
+                        logger.warn('Error destroying existing client during re-initialization:', e);
+                    }
+                    this.client = null;
                 }
-                this.client = null;
+
+                // Universal configuration: Local Mac vs Vercel
+                let executablePath = '';
+                let launchArgs = [];
+
+                if (process.env.VERCEL) {
+                    // Vercel / Production environment
+                    executablePath = await chromium.executablePath();
+                    launchArgs = chromium.args;
+                } else {
+                    // Local development (macOS)
+                    // Use default Chrome path on Mac
+                    executablePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+                    launchArgs = ['--no-sandbox', '--disable-setuid-sandbox'];
+                    
+                    // Check if Chrome exists on Mac, otherwise fallback to auto-detect
+                    if (!fs.existsSync(executablePath)) {
+                        logger.warn(`Chrome not found at ${executablePath}. Fallback to automatic detection.`);
+                        executablePath = ''; 
+                    }
+                }
+
+                this.client = new Client({
+                    authStrategy: new RemoteAuth({
+                        store: store,
+                        clientId: 'modista_whatsapp_bot', // Un ID único para identificar esta sesión
+                        backupSyncIntervalMs: 60000, // Frecuencia de guardado de la sesión en MongoDB (cada 1 minuto)
+                        dataPath: '/tmp/.wwebjs_auth' // Usar un directorio temporal escribible en Vercel
+                    }),
+                    webVersion: '2.3000.1014111620',
+                    webVersionCache: {
+                        type: 'remote',
+                        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1014111620.html',
+                    },
+                    puppeteer: {
+                        headless: chromium.headless,
+                        executablePath: executablePath || undefined,
+                        args: launchArgs, // Use only the environment-appropriate args
+                        defaultViewport: chromium.defaultViewport,
+                        ignoreHTTPSErrors: true,
+                    }
+                });
+
+                // Re-setup events after client creation, as they bind to this.client
+                this._setupEvents(); // Call again to bind events to the newly created client
+
+                await this.client.initialize();
+            } catch (err) {
+                logger.error('Error al inicializar WhatsApp Bot:', err);
+                this.status = 'error';
+                this.isReady = false;
             }
-
-            // Universal configuration: Local Mac vs Vercel
-            let executablePath = '';
-            let launchArgs = [];
-
-            if (process.env.VERCEL) {
-                // Vercel / Production environment
-                executablePath = await chromium.executablePath();
-                launchArgs = chromium.args;
-            } else {
-                // Local development (macOS)
-                // Use default Chrome path on Mac
-                executablePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-                launchArgs = ['--no-sandbox', '--disable-setuid-sandbox'];
-                
-                // Check if Chrome exists on Mac, otherwise fallback to auto-detect
-                if (!fs.existsSync(executablePath)) {
-                    logger.warn(`Chrome not found at ${executablePath}. Fallback to automatic detection.`);
-                    executablePath = ''; 
-                }
-            }
-
-            this.client = new Client({
-                authStrategy: new RemoteAuth({
-                    store: store,
-                    clientId: 'modista_whatsapp_bot', // Un ID único para identificar esta sesión
-                    backupSyncIntervalMs: 60000, // Frecuencia de guardado de la sesión en MongoDB (cada 1 minuto)
-                    dataPath: '/tmp/.wwebjs_auth' // Usar un directorio temporal escribible en Vercel
-                }),
-                webVersion: '2.3000.1014111620',
-                webVersionCache: {
-                    type: 'remote',
-                    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1014111620.html',
-                },
-                puppeteer: {
-                    headless: chromium.headless,
-                    executablePath: executablePath || undefined,
-                    args: launchArgs, // Use only the environment-appropriate args
-                    defaultViewport: chromium.defaultViewport,
-                    ignoreHTTPSErrors: true,
-                }
-            });
-
-            // Re-setup events after client creation, as they bind to this.client
-            this._setupEvents(); // Call again to bind events to the newly created client
-
-            await this.client.initialize();
-        } catch (err) {
-            logger.error('Error al inicializar WhatsApp Bot:', err);
-            this.status = 'error';
-            this.isReady = false;
-        }
+        })();
     }
 
     /**

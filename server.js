@@ -18,8 +18,8 @@ dotenv.config();
 
 const mongooseInstance = await connectDB();
 
-// Inicializar WhatsApp Bot
-whatsappBot.initialize(mongooseInstance);
+// Pasar la instancia de mongoose al bot para cuando se necesite inicializar
+whatsappBot.setMongoose(mongooseInstance);
 
 const app = express();
 
