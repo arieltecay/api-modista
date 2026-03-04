@@ -113,17 +113,17 @@ const store = new MongoStore({ mongoose: this._mongooseInstance! }); // Use stor
 
             // Universal configuration: Local Mac vs Vercel
             let executablePath = '';
-            let args = [];
+            let launchArgs = [];
 
             if (process.env.VERCEL) {
                 // Vercel / Production environment
                 executablePath = await chromium.executablePath();
-                args = chromium.args;
+                launchArgs = chromium.args;
             } else {
                 // Local development (macOS)
                 // Use default Chrome path on Mac
                 executablePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-                args = ['--no-sandbox', '--disable-setuid-sandbox'];
+                launchArgs = ['--no-sandbox', '--disable-setuid-sandbox'];
                 
                 // Check if Chrome exists on Mac, otherwise fallback to auto-detect
                 if (!fs.existsSync(executablePath)) {
@@ -146,15 +146,10 @@ const store = new MongoStore({ mongoose: this._mongooseInstance! }); // Use stor
                 },
                 puppeteer: {
                     // @ts-ignore
-                    puppeteer: puppeteer, // Force use of our puppeteer-core module
+                    puppeteer: puppeteer, // Inyectamos el módulo puppeteer-core
                     headless: chromium.headless,
                     executablePath: executablePath || undefined,
-                    args: [
-                        ...args,
-                        '--disable-gpu',
-                        '--disable-dev-shm-usage',
-                        '--no-zygote'
-                    ],
+                    args: launchArgs, // Use only the environment-appropriate args
                     defaultViewport: chromium.defaultViewport,
                     ignoreHTTPSErrors: true,
                 }
