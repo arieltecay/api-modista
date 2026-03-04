@@ -145,8 +145,6 @@ const store = new MongoStore({ mongoose: this._mongooseInstance! }); // Use stor
                     remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1014111620.html',
                 },
                 puppeteer: {
-                    // @ts-ignore
-                    puppeteer: puppeteer, // Inyectamos el módulo puppeteer-core
                     headless: chromium.headless,
                     executablePath: executablePath || undefined,
                     args: launchArgs, // Use only the environment-appropriate args
