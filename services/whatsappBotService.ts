@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { MongoStore } from 'wwebjs-mongo';
 import pkg from 'whatsapp-web.js';
-import chromium from '@sparticuz/chromium';
+import chrome from 'chrome-aws-lambda';
 import puppeteer from 'puppeteer-core';
 import fs from 'fs';
 const { Client, RemoteAuth } = pkg;
@@ -104,7 +104,7 @@ class WhatsAppBotService {
             return;
         }
 
-        // Run the heavy initialization in the background to avoid API timeouts
+                // Run the heavy initialization in the background to avoid API timeouts
         (async () => {
             try {
                 // fs.mkdirSync('/tmp/.cache/puppeteer', { recursive: true });
@@ -122,24 +122,24 @@ class WhatsAppBotService {
 
                 // Universal configuration: Local Mac vs Vercel
                 let executablePath = '';
-                let launchArgs = [];
-
                 if (process.env.VERCEL) {
-                    // Vercel / Production environment
-                    executablePath = await chromium.executablePath();
-                    launchArgs = chromium.args;
+                    executablePath = await chrome.executablePath;
                 } else {
-                    // Local development (macOS)
-                    // Use default Chrome path on Mac
-                    executablePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-                    launchArgs = ['--no-sandbox', '--disable-setuid-sandbox'];
-                    
-                    // Check if Chrome exists on Mac, otherwise fallback to auto-detect
-                    if (!fs.existsSync(executablePath)) {
-                        logger.warn(`Chrome not found at ${executablePath}. Fallback to automatic detection.`);
-                        executablePath = ''; 
+                    // Local development (macOS) - Try common Chrome paths
+                    const chromePaths = [
+                        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+                        '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome',
+                        '/usr/bin/google-chrome'
+                    ];
+                    for (const p of chromePaths) {
+                        if (fs.existsSync(p)) {
+                            executablePath = p;
+                            break;
+                        }
                     }
                 }
+
+                logger.info(`Starting Puppeteer with executablePath: ${executablePath || 'auto-detected'}`);
 
                 this.client = new Client({
                     authStrategy: new RemoteAuth({
@@ -154,10 +154,19 @@ class WhatsAppBotService {
                         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1014111620.html',
                     },
                     puppeteer: {
-                        headless: chromium.headless,
+                        // @ts-ignore
+                        puppeteer: puppeteer, // Inyectamos el módulo puppeteer-core
+                        headless: true,
                         executablePath: executablePath || undefined,
-                        args: launchArgs, // Use only the environment-appropriate args
-                        defaultViewport: chromium.defaultViewport,
+                        args: [
+                            ...chrome.args,
+                            '--no-sandbox',
+                            '--disable-setuid-sandbox',
+                            '--disable-gpu',
+                            '--disable-dev-shm-usage',
+                            '--no-zygote'
+                        ],
+                        defaultViewport: chrome.defaultViewport,
                         ignoreHTTPSErrors: true,
                     }
                 });
@@ -165,6 +174,7 @@ class WhatsAppBotService {
                 // Re-setup events after client creation, as they bind to this.client
                 this._setupEvents(); // Call again to bind events to the newly created client
 
+                logger.info('Calling client.initialize()...');
                 await this.client.initialize();
             } catch (err) {
                 logger.error('Error al inicializar WhatsApp Bot:', err);
