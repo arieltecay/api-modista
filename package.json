@@ -33,7 +33,7 @@
     "mongoose": "^8.23.0",
     "mongoose-paginate-v2": "^1.9.1",
     "nodemailer": "^7.0.5",
-    "puppeteer-core": "^24.38.0",
+    "puppeteer-core": "^10.4.0",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "whatsapp-web.js": "^1.34.6",

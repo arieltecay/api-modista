@@ -3,6 +3,23 @@ import Turno from '../../models/Turno.js';
 import Course from '../../models/Course.js'; // Importar modelo Course
 import { logError } from '../../services/logger.js';
 
+interface GetTurnosByCourseRequestParams {
+    courseId: string;
+}
+
+// Define a type for the incoming request body for Turno creation/update
+interface TurnoBody {
+    courseId?: string; // It comes as string from req.body or string[]
+    diaSemana?: string;
+    fecha?: Date;
+    horaInicio?: string;
+    horaFin?: string;
+    cupoMaximo?: number;
+    cuposInscriptos?: number;
+    isActive?: boolean;
+    isBlocked?: boolean;
+}
+
 // Helper para obtener el _id de un curso a partir de un UUID o _id
 const getCourseObjectId = async (id: string): Promise<string> => {
     // Si parece un UUID (tiene guiones), buscar el curso
@@ -16,7 +33,7 @@ const getCourseObjectId = async (id: string): Promise<string> => {
 // @desc    Obtener turnos por curso
 // @route   GET /api/turnos/course/:courseId
 // @access  Public
-export const getTurnosByCourse = async (req: Request, res: Response) => {
+export const getTurnosByCourse = async (req: Request<GetTurnosByCourseRequestParams>, res: Response) => {
     try {
         let { courseId } = req.params;
         const { admin } = req.query;
@@ -51,11 +68,15 @@ export const getTurnosByCourse = async (req: Request, res: Response) => {
 // @desc    Crear un nuevo turno
 // @route   POST /api/turnos
 // @access  Private (Admin)
-export const createTurno = async (req: Request, res: Response) => {
+export const createTurno = async (req: Request<{}, {}, TurnoBody>, res: Response) => {
     try {
         // Resolver UUID a ObjectId si es necesario en el body
         if (req.body.courseId) {
-            req.body.courseId = await getCourseObjectId(req.body.courseId);
+            if (typeof req.body.courseId === 'string') {
+                req.body.courseId = await getCourseObjectId(req.body.courseId);
+            } else {
+                return res.status(400).json({ success: false, message: 'Invalid courseId format.' });
+            }
         }
 
         const turno = await Turno.create(req.body);
@@ -72,13 +93,17 @@ export const createTurno = async (req: Request, res: Response) => {
 // @desc    Actualizar un turno
 // @route   PATCH /api/turnos/:id
 // @access  Private (Admin)
-export const updateTurno = async (req: Request, res: Response) => {
+export const updateTurno = async (req: Request<{id: string}, {}, TurnoBody>, res: Response) => {
     try {
         const { id } = req.params;
 
         // Resolver UUID a ObjectId si es necesario en el body
         if (req.body.courseId) {
-            req.body.courseId = await getCourseObjectId(req.body.courseId);
+            if (typeof req.body.courseId === 'string') {
+                req.body.courseId = await getCourseObjectId(req.body.courseId);
+            } else {
+                return res.status(400).json({ success: false, message: 'Invalid courseId format.' });
+            }
         }
 
         const turno = await Turno.findByIdAndUpdate(id, req.body, { new: true });
