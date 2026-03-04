@@ -4,7 +4,7 @@ import { logger } from '../services/logger.js';
 
 dotenv.config();
 
-const connectDB = async (): Promise<void> => {
+const connectDB = async (): Promise<typeof mongoose> => {
   try {
     const mongoUri = process.env.MONGODB_URI;
 
@@ -17,6 +17,7 @@ const connectDB = async (): Promise<void> => {
     await mongoose.connect(mongoUri);
     
     logger.info('MongoDB connected successfully.');
+    return mongoose; // Export the connected mongoose instance
   } catch (error) {
     if (error instanceof Error) {
       logger.error('Error connecting to MongoDB:', { message: error.message, stack: error.stack });

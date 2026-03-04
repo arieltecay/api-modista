@@ -16,10 +16,10 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
-connectDB();
+const mongooseInstance = await connectDB();
 
 // Inicializar WhatsApp Bot
-whatsappBot.initialize();
+whatsappBot.initialize(mongooseInstance);
 
 const app = express();
 
