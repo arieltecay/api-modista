@@ -86,7 +86,8 @@ class WhatsAppBotService {
                 authStrategy: new RemoteAuth({
                     store: store,
                     clientId: 'modista_whatsapp_bot', // Un ID único para identificar esta sesión
-                    backupSyncIntervalMs: 60000 // Frecuencia de guardado de la sesión en MongoDB (cada 1 minuto)
+                    backupSyncIntervalMs: 60000, // Frecuencia de guardado de la sesión en MongoDB (cada 1 minuto)
+                    dataPath: '/tmp/.wwebjs_auth' // Usar un directorio temporal escribible en Vercel
                 }),
                 webVersion: '2.3000.1014111620',
                 webVersionCache: {
