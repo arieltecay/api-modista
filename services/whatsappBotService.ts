@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { MongoStore } from 'wwebjs-mongo';
 import pkg from 'whatsapp-web.js';
 import chrome from 'chrome-aws-lambda';
+import puppeteer from 'puppeteer-core';
 import fs from 'fs';
 const { Client, RemoteAuth } = pkg;
 import qrcodeTerminal from 'qrcode-terminal';
@@ -123,6 +124,8 @@ const store = new MongoStore({ mongoose: this._mongooseInstance! }); // Use stor
                     remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1014111620.html',
                 },
                 puppeteer: {
+                    // @ts-ignore - Explicitly pass the puppeteer-core module to override internal import
+                    puppeteer: puppeteer, 
                     headless: true,
                     executablePath: process.env.VERCEL ? await chrome.executablePath : undefined,
                     args: [
