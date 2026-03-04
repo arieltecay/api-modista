@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { MongoStore } from 'wwebjs-mongo';
 import pkg from 'whatsapp-web.js';
-import chrome from 'chrome-aws-lambda';
+import chrome from '@sparticuz/chromium';
 import fs from 'fs';
 const { Client, RemoteAuth } = pkg;
 import qrcodeTerminal from 'qrcode-terminal';
@@ -82,7 +82,7 @@ class WhatsAppBotService {
         }
 
         try {
-            fs.mkdirSync('/tmp/.cache/puppeteer', { recursive: true });
+            // fs.mkdirSync('/tmp/.cache/puppeteer', { recursive: true }); // No longer needed with new library
 const store = new MongoStore({ mongoose: this._mongooseInstance! }); // Use stored instance
 
             this.client = new Client({
@@ -98,21 +98,14 @@ const store = new MongoStore({ mongoose: this._mongooseInstance! }); // Use stor
                     remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1014111620.html',
                 },
                 puppeteer: {
-                    headless: true,
-                    executablePath: process.env.VERCEL ? await chrome.executablePath : undefined,
                     args: [
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                        ...(chrome.args || [])
+                        ...chrome.args,
+                        '--disable-gpu', // Desactivar GPU, a menudo soluciona problemas de spawn
                     ],
                     defaultViewport: chrome.defaultViewport,
+                    executablePath: await chrome.executablePath(),
+                    headless: chrome.headless,
                     ignoreHTTPSErrors: true,
-                    // Ensure cache directory is writable in Vercel
-                    userDataDir: '/tmp/.wwebjs_auth',
-                    // Puppeteer cache directory
-                    // Note: chrome-aws-lambda handles its own cache, but set for safety
-                    // (no direct option, but we can set env variable)
                 }
             });
 
