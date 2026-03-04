@@ -7,10 +7,19 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet'; // Importa Helmet
 import { logger } from './services/logger.js'; // Importa el logger
 import connectDB from './config/db.js'; // Importa la función de conexión a la BD
+import { whatsappBot } from './services/whatsappBotService.js'; // Importa el bot
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
 connectDB();
+
+// Inicializar WhatsApp Bot
+whatsappBot.initialize();
 
 const app = express();
 
@@ -46,6 +55,9 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
+
+// Servir archivos estáticos (ruta absoluta para el código QR)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Rutas principales
 app.use('/api', routes); // Usamos las rutas consolidadas bajo /api

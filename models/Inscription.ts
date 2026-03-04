@@ -16,6 +16,8 @@ export interface IInscription extends Document {
   depositAmount?: number;
   depositDate?: Date;
   isReserved?: boolean;
+  waMessagesSent: number;
+  lastWaMessageDate?: Date;
   fechaInscripcion: Date;
 }
 
@@ -85,6 +87,13 @@ const InscriptionSchema = new Schema<IInscription>({
   isReserved: {
     type: Boolean,
     default: false,
+  },
+  waMessagesSent: {
+    type: Number,
+    default: 0,
+  },
+  lastWaMessageDate: {
+    type: Date,
   },
   fechaInscripcion: {
     type: Date,

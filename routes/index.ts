@@ -9,8 +9,28 @@ import testimonialsRoute from './testimonials/testimonialsRoute.js';
 import authRoutes from './auth/authRoutes.js';
 import turnosRoutes from './turnos/turnosRoutes.js';
 import tariffRoutes from './tariff/tariffRoutes.js';
+import pkg from 'whatsapp-web.js';
+const { MessageMedia } = pkg;
+import { whatsappBot } from '../services/whatsappBotService.js';
 
 const router: Router = express.Router();
+
+// WhatsApp Status
+router.get('/whatsapp/status', (req, res) => {
+  res.json({
+    connected: whatsappBot.isReady,
+    qr: whatsappBot.lastQr
+  });
+});
+
+router.post('/whatsapp/restart', async (req, res) => {
+  try {
+    await whatsappBot.initialize(); // Re-inicializar
+    res.json({ success: true, message: 'Reiniciando servicio de WhatsApp...' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 // Use notification routes
 router.use('/notifications', notificationRoutes);
