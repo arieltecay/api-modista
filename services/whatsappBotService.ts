@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { MongoStore } from 'wwebjs-mongo';
 import pkg from 'whatsapp-web.js';
-import chrome from '@sparticuz/chromium';
+import chrome from 'chrome-aws-lambda';
 import fs from 'fs';
 const { Client, RemoteAuth } = pkg;
 import qrcodeTerminal from 'qrcode-terminal';
@@ -19,6 +19,7 @@ class WhatsAppBotService {
     public client: any | null; // Allow null
     public isReady: boolean = false;
     public lastQr: string | null = null;
+    public status: 'disconnected' | 'initializing' | 'authenticating' | 'ready' | 'error' = 'disconnected'; // New status property
     private _mongooseInstance: typeof mongoose | null = null; // Added private property
     // private authPath: string = path.join(process.cwd(), '.wwebjs_auth'); // No longer needed with RemoteAuth
 
@@ -37,6 +38,7 @@ class WhatsAppBotService {
     private _setupEvents() {
         this.client.on('qr', async (qr: string) => {
             logger.info('--- NUEVO CÓDIGO QR GENERADO ---');
+            this.status = 'disconnected'; // Still disconnected, waiting for QR scan
             qrcodeTerminal.generate(qr, { small: true });
 
             // Convertir QR a Base64 para enviarlo directamente al front
@@ -50,27 +52,39 @@ class WhatsAppBotService {
 
         this.client.on('ready', () => {
             this.isReady = true;
+            this.status = 'ready';
             this.lastQr = null; // Limpiar QR cuando ya está listo
             logger.info('✅ WhatsApp Bot está conectado y listo!');
         });
 
         this.client.on('authenticated', () => {
             logger.info('--- WhatsApp autenticado correctamente ---');
+            this.status = 'authenticating'; // Authenticated, but waiting for ready
         });
 
         this.client.on('auth_failure', (msg: string) => {
             logger.error('--- Error de autenticación de WhatsApp:', msg);
             this.isReady = false;
+            this.status = 'error';
         });
 
         this.client.on('disconnected', (reason: string) => {
             logger.warn('--- WhatsApp desconectado:', reason);
             this.isReady = false;
+            this.status = 'disconnected';
+            // Optional: Auto-reinitialize logic could go here, but for on-demand we might want manual trigger
         });
     }
 
     public async initialize(mongooseInstance?: typeof mongoose) { // Make argument optional
-        if (this.isReady && this.client) return; // Also check if client exists
+        // Prevent concurrent initialization if already in progress or ready
+        if (this.status === 'initializing' || this.status === 'authenticating' || (this.isReady && this.client)) {
+            logger.info(`WhatsApp Bot initialization skipped. Current status: ${this.status}`);
+            return;
+        }
+
+        this.status = 'initializing';
+        logger.info('Initializing WhatsApp Bot...');
 
         // Store mongoose instance if provided (first call)
         if (mongooseInstance) {
@@ -78,12 +92,23 @@ class WhatsAppBotService {
         } else if (!this._mongooseInstance) {
             // If no mongooseInstance provided and we don't have one, it's an error
             logger.error('Error: Mongoose instance not provided on first initialization.');
+            this.status = 'error';
             throw new Error('Mongoose instance not provided for WhatsApp Bot initialization.');
         }
 
         try {
-            // fs.mkdirSync('/tmp/.cache/puppeteer', { recursive: true }); // No longer needed with new library
+            fs.mkdirSync('/tmp/.cache/puppeteer', { recursive: true });
 const store = new MongoStore({ mongoose: this._mongooseInstance! }); // Use stored instance
+
+            // If client exists, destroy it first to ensure clean slate (e.g. on restart)
+            if (this.client) {
+                try {
+                    await this.client.destroy();
+                } catch (e) {
+                    logger.warn('Error destroying existing client during re-initialization:', e);
+                }
+                this.client = null;
+            }
 
             this.client = new Client({
                 authStrategy: new RemoteAuth({
@@ -98,13 +123,17 @@ const store = new MongoStore({ mongoose: this._mongooseInstance! }); // Use stor
                     remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1014111620.html',
                 },
                 puppeteer: {
+                    headless: true,
+                    executablePath: process.env.VERCEL ? await chrome.executablePath : undefined,
                     args: [
-                        ...chrome.args,
-                        '--disable-gpu', // Desactivar GPU, a menudo soluciona problemas de spawn
+                        ...chrome.args, // Include default args from chrome-aws-lambda
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-gpu',
+                        '--disable-dev-shm-usage', // Critical for serverless environments
+                        '--no-zygote' // Helps with stability in some Linux envs
                     ],
                     defaultViewport: chrome.defaultViewport,
-                    executablePath: await chrome.executablePath(),
-                    headless: chrome.headless,
                     ignoreHTTPSErrors: true,
                 }
             });
@@ -115,6 +144,8 @@ const store = new MongoStore({ mongoose: this._mongooseInstance! }); // Use stor
             await this.client.initialize();
         } catch (err) {
             logger.error('Error al inicializar WhatsApp Bot:', err);
+            this.status = 'error';
+            this.isReady = false;
         }
     }
 

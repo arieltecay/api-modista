@@ -19,12 +19,15 @@ const router: Router = express.Router();
 router.get('/whatsapp/status', (req, res) => {
   res.json({
     connected: whatsappBot.isReady,
+    status: whatsappBot.status, // Return detailed status
     qr: whatsappBot.lastQr
   });
 });
 
 router.post('/whatsapp/restart', async (req, res) => {
   try {
+    // Force reset status to allow re-initialization
+    whatsappBot.status = 'disconnected'; 
     await whatsappBot.initialize(); // Re-inicializar
     res.json({ success: true, message: 'Reiniciando servicio de WhatsApp...' });
   } catch (err: any) {
