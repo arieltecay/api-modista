@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { MongoStore } from 'wwebjs-mongo';
 import pkg from 'whatsapp-web.js';
-import chrome from 'chrome-aws-lambda';
+import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 import fs from 'fs';
 const { Client, RemoteAuth } = pkg;
@@ -98,7 +98,7 @@ class WhatsAppBotService {
         }
 
         try {
-            fs.mkdirSync('/tmp/.cache/puppeteer', { recursive: true });
+            // fs.mkdirSync('/tmp/.cache/puppeteer', { recursive: true });
 const store = new MongoStore({ mongoose: this._mongooseInstance! }); // Use stored instance
 
             // If client exists, destroy it first to ensure clean slate (e.g. on restart)
@@ -109,6 +109,27 @@ const store = new MongoStore({ mongoose: this._mongooseInstance! }); // Use stor
                     logger.warn('Error destroying existing client during re-initialization:', e);
                 }
                 this.client = null;
+            }
+
+            // Universal configuration: Local Mac vs Vercel
+            let executablePath = '';
+            let args = [];
+
+            if (process.env.VERCEL) {
+                // Vercel / Production environment
+                executablePath = await chromium.executablePath();
+                args = chromium.args;
+            } else {
+                // Local development (macOS)
+                // Use default Chrome path on Mac
+                executablePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+                args = ['--no-sandbox', '--disable-setuid-sandbox'];
+                
+                // Check if Chrome exists on Mac, otherwise fallback to auto-detect
+                if (!fs.existsSync(executablePath)) {
+                    logger.warn(`Chrome not found at ${executablePath}. Fallback to automatic detection.`);
+                    executablePath = ''; 
+                }
             }
 
             this.client = new Client({
@@ -124,19 +145,17 @@ const store = new MongoStore({ mongoose: this._mongooseInstance! }); // Use stor
                     remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1014111620.html',
                 },
                 puppeteer: {
-                    // @ts-ignore - Explicitly pass the puppeteer-core module to override internal import
-                    puppeteer: puppeteer, 
-                    headless: true,
-                    executablePath: process.env.VERCEL ? await chrome.executablePath : undefined,
+                    // @ts-ignore
+                    puppeteer: puppeteer, // Force use of our puppeteer-core module
+                    headless: chromium.headless,
+                    executablePath: executablePath || undefined,
                     args: [
-                        ...chrome.args, // Include default args from chrome-aws-lambda
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
+                        ...args,
                         '--disable-gpu',
-                        '--disable-dev-shm-usage', // Critical for serverless environments
-                        '--no-zygote' // Helps with stability in some Linux envs
+                        '--disable-dev-shm-usage',
+                        '--no-zygote'
                     ],
-                    defaultViewport: chrome.defaultViewport,
+                    defaultViewport: chromium.defaultViewport,
                     ignoreHTTPSErrors: true,
                 }
             });
