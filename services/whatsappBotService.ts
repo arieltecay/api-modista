@@ -123,7 +123,9 @@ class WhatsAppBotService {
                 // Universal configuration: Local Mac vs Vercel
                 let executablePath = '';
                 if (process.env.VERCEL) {
-                    executablePath = await chrome.executablePath;
+                    // En Vercel, chrome-aws-lambda extrae el binario y devuelve la ruta
+                    executablePath = await (chrome as any).executablePath;
+                    logger.info(`Vercel environment detected. Resolved executablePath: ${executablePath}`);
                 } else {
                     // Local development (macOS) - Try common Chrome paths
                     const chromePaths = [
@@ -137,9 +139,12 @@ class WhatsAppBotService {
                             break;
                         }
                     }
+                    logger.info(`Local environment detected. Resolved executablePath: ${executablePath || 'auto-detected'}`);
                 }
 
-                logger.info(`Starting Puppeteer with executablePath: ${executablePath || 'auto-detected'}`);
+                if (process.env.VERCEL && !executablePath) {
+                    logger.error('CRITICAL: executablePath is empty in Vercel. Puppeteer launch will likely fail.');
+                }
 
                 this.client = new Client({
                     authStrategy: new RemoteAuth({
@@ -159,7 +164,7 @@ class WhatsAppBotService {
                         headless: true,
                         executablePath: executablePath || undefined,
                         args: [
-                            ...chrome.args,
+                            ...(chrome.args || []),
                             '--no-sandbox',
                             '--disable-setuid-sandbox',
                             '--disable-gpu',
