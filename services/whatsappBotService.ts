@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { MongoStore } from 'wwebjs-mongo';
 import pkg from 'whatsapp-web.js';
 import chrome from 'chrome-aws-lambda';
+import chromium from '@sparticuz/chromium'; // For Vercel
 import puppeteer from 'puppeteer-core';
 import fs from 'fs';
 const { Client, RemoteAuth } = pkg;
@@ -122,10 +123,13 @@ class WhatsAppBotService {
 
                 // Universal configuration: Local Mac vs Vercel
                 let executablePath = '';
+                let launchArgs = [];
+
                 if (process.env.VERCEL) {
-                    // En Vercel, chrome-aws-lambda extrae el binario y devuelve la ruta
-                    executablePath = await (chrome as any).executablePath;
-                    logger.info(`Vercel environment detected. Resolved executablePath: ${executablePath}`);
+                    // En Vercel, usamos el nuevo chromium moderno
+                    executablePath = await chromium.executablePath();
+                    launchArgs = chromium.args;
+                    logger.info('Vercel environment: using @sparticuz/chromium');
                 } else {
                     // Local development (macOS) - Try common Chrome paths
                     const chromePaths = [
@@ -139,11 +143,14 @@ class WhatsAppBotService {
                             break;
                         }
                     }
-                    logger.info(`Local environment detected. Resolved executablePath: ${executablePath || 'auto-detected'}`);
-                }
-
-                if (process.env.VERCEL && !executablePath) {
-                    logger.error('CRITICAL: executablePath is empty in Vercel. Puppeteer launch will likely fail.');
+                    launchArgs = [
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-gpu',
+                        '--disable-dev-shm-usage',
+                        '--no-zygote'
+                    ];
+                    logger.info(`Local environment: using ${executablePath || 'auto-detected chrome'}`);
                 }
 
                 this.client = new Client({
@@ -161,17 +168,10 @@ class WhatsAppBotService {
                     puppeteer: {
                         // @ts-ignore
                         puppeteer: puppeteer, // Inyectamos el módulo puppeteer-core
-                        headless: true,
+                        headless: process.env.VERCEL ? chromium.headless : true,
                         executablePath: executablePath || undefined,
-                        args: [
-                            ...(chrome.args || []),
-                            '--no-sandbox',
-                            '--disable-setuid-sandbox',
-                            '--disable-gpu',
-                            '--disable-dev-shm-usage',
-                            '--no-zygote'
-                        ],
-                        defaultViewport: chrome.defaultViewport,
+                        args: launchArgs,
+                        defaultViewport: process.env.VERCEL ? chromium.defaultViewport : undefined,
                         ignoreHTTPSErrors: true,
                     }
                 });
