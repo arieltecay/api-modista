@@ -9,31 +9,12 @@ import testimonialsRoute from './testimonials/testimonialsRoute.js';
 import authRoutes from './auth/authRoutes.js';
 import turnosRoutes from './turnos/turnosRoutes.js';
 import tariffRoutes from './tariff/tariffRoutes.js';
-import pkg from 'whatsapp-web.js';
-const { MessageMedia } = pkg;
-import { whatsappBot } from '../services/whatsappBotService.js';
+import whatsappRoutes from './whatsapp/index.js'; // Importar nuevas rutas de WhatsApp
 
 const router: Router = express.Router();
 
-// WhatsApp Status
-router.get('/whatsapp/status', (req, res) => {
-  res.json({
-    connected: whatsappBot.isReady,
-    status: whatsappBot.status, // Return detailed status
-    qr: whatsappBot.lastQr
-  });
-});
-
-router.post('/whatsapp/restart', async (req, res) => {
-  try {
-    // Force reset status to allow re-initialization
-    whatsappBot.status = 'disconnected'; 
-    await whatsappBot.initialize(); // Re-inicializar
-    res.json({ success: true, message: 'Reiniciando servicio de WhatsApp...' });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
+// Usar las nuevas rutas de WhatsApp
+router.use('/whatsapp', whatsappRoutes);
 
 // Use notification routes
 router.use('/notifications', notificationRoutes);
@@ -61,3 +42,4 @@ router.use('/turnos', turnosRoutes);
 router.use('/tariffs', tariffRoutes);
 
 export default router;
+

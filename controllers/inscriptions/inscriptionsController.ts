@@ -484,7 +484,7 @@ export const sendIndividualWaReminder = async (req: Request<{ id: string }>, res
 // @access  Private (Admin)
 export const sendBulkWaReminders = async (req: Request, res: Response) => {
   try {
-    const { courseId } = req.body; // <-- Add this line to get courseId from the request body
+    const courseId = req.body?.courseId; // Safely access courseId
 
     // 48 horas en milisegundos
     const FORTY_EIGHT_HOURS = 48 * 60 * 60 * 1000;

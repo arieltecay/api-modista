@@ -1,33 +1,25 @@
 import mongoose from 'mongoose';
 import { MongoStore } from 'wwebjs-mongo';
 import pkg from 'whatsapp-web.js';
-import chrome from 'chrome-aws-lambda';
-import chromium from '@sparticuz/chromium'; // For Vercel
+import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 import fs from 'fs';
-const { Client, RemoteAuth } = pkg;
-import qrcodeTerminal from 'qrcode-terminal';
 import QRCode from 'qrcode';
-import path from 'path';
 import { logger } from './logger.js';
+import { Socket } from 'socket.io'; // Importar Socket
 
-/**
- * WhatsAppBotService
- * Maneja la conexión con WhatsApp Web y el envío de mensajes.
- * Implementado como Singleton para mantener una única conexión activa.
- */
+const { Client, RemoteAuth } = pkg;
+
 class WhatsAppBotService {
     private static instance: WhatsAppBotService;
-    public client: any | null; // Allow null
+    public client: any | null;
     public isReady: boolean = false;
-    public lastQr: string | null = null;
-    public status: 'disconnected' | 'initializing' | 'authenticating' | 'ready' | 'error' = 'disconnected'; // New status property
-    private _mongooseInstance: typeof mongoose | null = null; // Added private property
-    // private authPath: string = path.join(process.cwd(), '.wwebjs_auth'); // No longer needed with RemoteAuth
+    public status: 'disconnected' | 'initializing' | 'authenticating' | 'ready' | 'error' = 'disconnected';
+    private socket: Socket | null = null; // Propiedad para el socket
+    private _mongooseInstance: typeof mongoose | null = null;
 
     private constructor() {
-        this.client = null; // Initialize client to null
-        // this._setupEvents(); // Moved to initialize()
+        this.client = null;
     }
 
     public static getInstance(): WhatsAppBotService {
@@ -37,161 +29,131 @@ class WhatsAppBotService {
         return WhatsAppBotService.instance;
     }
 
-    // New method to store mongoose instance without initializing the bot
     public setMongoose(mongooseInstance: typeof mongoose) {
         this._mongooseInstance = mongooseInstance;
+    }
+
+    // Nuevo método para inyectar el socket
+    public setSocket(socket: Socket) {
+        this.socket = socket;
     }
 
     private _setupEvents() {
         this.client.on('qr', async (qr: string) => {
             logger.info('--- NUEVO CÓDIGO QR GENERADO ---');
-            this.status = 'disconnected'; // Still disconnected, waiting for QR scan
-            qrcodeTerminal.generate(qr, { small: true });
-
-            // Convertir QR a Base64 para enviarlo directamente al front
+            this.status = 'authenticating'; // Esperando escaneo
+            this.socket?.emit('status_update', { status: this.status, message: 'QR generado. Por favor, escanee.' });
+            
             try {
-                this.lastQr = await QRCode.toDataURL(qr);
-                logger.info('QR convertido a Base64 y guardado en memoria');
+                const qrDataURL = await QRCode.toDataURL(qr);
+                // Enviar el QR directamente al cliente a través del socket
+                this.socket?.emit('qr_code', qrDataURL);
+                logger.info('QR enviado al cliente a través de WebSocket.');
             } catch (err) {
-                logger.error('Error al generar Base64 del QR:', err);
+                logger.error('Error al generar o enviar el QR:', err);
+                this.socket?.emit('status_update', { status: 'error', message: 'Error al generar el código QR.' });
             }
         });
 
         this.client.on('ready', () => {
             this.isReady = true;
             this.status = 'ready';
-            this.lastQr = null; // Limpiar QR cuando ya está listo
             logger.info('✅ WhatsApp Bot está conectado y listo!');
+            // Notificar al cliente que el bot está listo
+            this.socket?.emit('status_update', { status: this.status, message: 'WhatsApp conectado y listo.' });
         });
 
         this.client.on('authenticated', () => {
             logger.info('--- WhatsApp autenticado correctamente ---');
-            this.status = 'authenticating'; // Authenticated, but waiting for ready
+            this.status = 'authenticating';
+            this.socket?.emit('status_update', { status: this.status, message: 'QR escaneado, autenticando...' });
         });
-
+        
         this.client.on('auth_failure', (msg: string) => {
             logger.error('--- Error de autenticación de WhatsApp:', msg);
             this.isReady = false;
             this.status = 'error';
+            this.socket?.emit('status_update', { status: this.status, message: `Error de autenticación: ${msg}` });
         });
 
         this.client.on('disconnected', (reason: string) => {
             logger.warn('--- WhatsApp desconectado:', reason);
             this.isReady = false;
             this.status = 'disconnected';
-            // Optional: Auto-reinitialize logic could go here, but for on-demand we might want manual trigger
+            this.socket?.emit('status_update', { status: this.status, message: `WhatsApp desconectado: ${reason}` });
+            this.client = null; // Asegurarse de limpiar el cliente
         });
     }
 
-    public async initialize(mongooseInstance?: typeof mongoose) { // Make argument optional
-        // Prevent concurrent initialization if already in progress or ready
-        if (this.status === 'initializing' || this.status === 'authenticating' || (this.isReady && this.client)) {
-            logger.info(`WhatsApp Bot initialization skipped. Current status: ${this.status}`);
+    public async initialize() {
+        if (this.status === 'initializing' || this.status === 'ready') {
+            logger.info(`Inicialización de WhatsApp omitida. Estado actual: ${this.status}`);
+            this.socket?.emit('status_update', { status: this.status, message: 'El bot ya está inicializado o en proceso.' });
             return;
         }
 
         this.status = 'initializing';
         logger.info('Initializing WhatsApp Bot...');
+        this.socket?.emit('status_update', { status: this.status, message: 'Inicializando WhatsApp Bot...' });
 
-        // Store mongoose instance if provided
-        if (mongooseInstance) {
-            this._mongooseInstance = mongooseInstance;
-        } 
-        
         if (!this._mongooseInstance) {
-            // If no mongooseInstance provided and we don't have one, it's an error
-            logger.error('Error: Mongoose instance not provided for WhatsApp Bot initialization.');
+            logger.error('Error: La instancia de Mongoose no ha sido proporcionada.');
             this.status = 'error';
+            this.socket?.emit('status_update', { status: this.status, message: 'Error interno del servidor: Mongoose no configurado.' });
             return;
         }
 
-                // Run the heavy initialization in the background to avoid API timeouts
-        (async () => {
-            try {
-                // fs.mkdirSync('/tmp/.cache/puppeteer', { recursive: true });
-                const store = new MongoStore({ mongoose: this._mongooseInstance! }); // Use stored instance
+        try {
+            const store = new MongoStore({ mongoose: this._mongooseInstance! });
 
-                // If client exists, destroy it first to ensure clean slate (e.g. on restart)
-                if (this.client) {
-                    try {
-                        await this.client.destroy();
-                    } catch (e) {
-                        logger.warn('Error destroying existing client during re-initialization:', e);
-                    }
-                    this.client = null;
-                }
-
-                // Universal configuration: Local Mac vs Vercel
-                let executablePath = '';
-                let launchArgs = [];
-
-                if (process.env.VERCEL) {
-                    // En Vercel, usamos el nuevo chromium moderno
-                    executablePath = await chromium.executablePath();
-                    launchArgs = chromium.args;
-                    logger.info('Vercel environment: using @sparticuz/chromium');
-                } else {
-                    // Local development (macOS) - Try common Chrome paths
-                    const chromePaths = [
-                        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-                        '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome',
-                        '/usr/bin/google-chrome'
-                    ];
-                    for (const p of chromePaths) {
-                        if (fs.existsSync(p)) {
-                            executablePath = p;
-                            break;
-                        }
-                    }
-                    launchArgs = [
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-gpu',
-                        '--disable-dev-shm-usage',
-                        '--no-zygote'
-                    ];
-                    logger.info(`Local environment: using ${executablePath || 'auto-detected chrome'}`);
-                }
-
-                this.client = new Client({
-                    authStrategy: new RemoteAuth({
-                        store: store,
-                        clientId: 'modista_whatsapp_bot', // Un ID único para identificar esta sesión
-                        backupSyncIntervalMs: 60000, // Frecuencia de guardado de la sesión en MongoDB (cada 1 minuto)
-                        dataPath: '/tmp/.wwebjs_auth' // Usar un directorio temporal escribible en Vercel
-                    }),
-                    webVersion: '2.3000.1014111620',
-                    webVersionCache: {
-                        type: 'remote',
-                        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1014111620.html',
-                    },
-                    puppeteer: {
-                        // @ts-ignore
-                        puppeteer: puppeteer, // Inyectamos el módulo puppeteer-core
-                        headless: process.env.VERCEL ? chromium.headless : true,
-                        executablePath: executablePath || undefined,
-                        args: launchArgs,
-                        defaultViewport: process.env.VERCEL ? chromium.defaultViewport : undefined,
-                        ignoreHTTPSErrors: true,
-                    }
-                });
-
-                // Re-setup events after client creation, as they bind to this.client
-                this._setupEvents(); // Call again to bind events to the newly created client
-
-                logger.info('Calling client.initialize()...');
-                await this.client.initialize();
-            } catch (err) {
-                logger.error('Error al inicializar WhatsApp Bot:', err);
-                this.status = 'error';
-                this.isReady = false;
+            if (this.client) {
+                await this.client.destroy();
+                this.client = null;
             }
-        })();
-    }
 
-    /**
-     * Formatea el número para WhatsApp Argentina.
-     */
+            let executablePath = '';
+            if (process.env.VERCEL) {
+                executablePath = await chromium.executablePath();
+                logger.info('Entorno Vercel: usando @sparticuz/chromium');
+            } else {
+                const commonPaths = [
+                    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+                    '/usr/bin/google-chrome'
+                ];
+                executablePath = commonPaths.find(p => fs.existsSync(p)) || '';
+                logger.info(`Entorno local: usando ${executablePath || 'Chrome detectado automáticamente'}`);
+            }
+
+            this.client = new Client({
+                authStrategy: new RemoteAuth({
+                    store: store,
+                    clientId: 'modista_whatsapp_bot',
+                    backupSyncIntervalMs: 60000,
+                    dataPath: '/tmp/.wwebjs_auth'
+                }),
+                webVersionCache: {
+                    type: 'remote',
+                    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1014111620.html',
+                },
+                puppeteer: {
+                    headless: process.env.VERCEL ? chromium.headless : true,
+                    executablePath: executablePath || undefined,
+                    args: process.env.VERCEL ? chromium.args : ['--no-sandbox', '--disable-setuid-sandbox'],
+                }
+            });
+
+            this._setupEvents();
+
+            logger.info('Llamando a client.initialize()...');
+            await this.client.initialize();
+        } catch (err: any) { // Cambiado 'err' a 'err: any'
+            logger.error('Error al inicializar WhatsApp Bot:', err);
+            this.status = 'error';
+            this.isReady = false;
+            this.socket?.emit('status_update', { status: this.status, message: `Error en la inicialización: ${err.message}` });
+        }
+    }
+    
     private _formatNumber(number: string): string {
         let cleaned = number.replace(/\D/g, '');
         if (!cleaned.startsWith('54')) {
@@ -203,13 +165,31 @@ class WhatsAppBotService {
     }
 
     public async sendMessage(to: string, message: string) {
-        if (!this.isReady || !this.client) { // Check this.client here as well
-            throw new Error('El servicio de WhatsApp no está conectado. Por favor, escanea el QR en el servidor.');
+        if (!this.isReady || !this.client) {
+            this.socket?.emit('send_message_error', { message: 'El servicio de WhatsApp no está listo.' });
+            throw new Error('El servicio de WhatsApp no está conectado.');
         }
-        const formattedId = this._formatNumber(to);
-        return this.client.sendMessage(formattedId, message);
+        try {
+            const formattedId = this._formatNumber(to);
+            const result = await this.client.sendMessage(formattedId, message);
+            this.socket?.emit('send_message_success', { to, messageId: result.id.id });
+            return result;
+        } catch (error: any) { // Cambiado 'error' a 'error: any'
+            this.socket?.emit('send_message_error', { to, message: error.message });
+            throw error;
+        }
     }
 
+    public async logout() {
+        if (this.client) {
+            await this.client.logout();
+            logger.info('Sesión de WhatsApp cerrada (logout).');
+            this.status = 'disconnected';
+            this.isReady = false;
+            this.socket?.emit('status_update', { status: this.status, message: 'Sesión cerrada.' });
+        }
+    }
 }
 
 export const whatsappBot = WhatsAppBotService.getInstance();
+
