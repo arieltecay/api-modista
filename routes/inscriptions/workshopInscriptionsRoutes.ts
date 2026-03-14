@@ -4,7 +4,8 @@ import {
   exportWorkshopInscriptions,
   getWorkshopDetails,
   getAvailableTurnosForReschedule,
-  updateInscriptionSchedule
+  updateInscriptionSchedule,
+  deleteWorkshopInscription
 } from '../../controllers/inscriptions/workshopInscriptionsController.js';
 import { authenticateToken, requireAdmin } from '../../middleware/authMiddleware.js';
 
@@ -16,6 +17,13 @@ const router = Router();
  * @access  Private (Admin)
  */
 router.get('/:workshopId', authenticateToken, requireAdmin, getWorkshopInscriptions);
+
+/**
+ * @route   DELETE /api/inscriptions/workshop/:inscriptionId
+ * @desc    Eliminar una inscripción de un taller
+ * @access  Private (Admin)
+ */
+router.delete('/workshop/:inscriptionId', authenticateToken, requireAdmin, deleteWorkshopInscription);
 
 /**
  * @route   GET /api/workshop-inscriptions/:workshopId/details

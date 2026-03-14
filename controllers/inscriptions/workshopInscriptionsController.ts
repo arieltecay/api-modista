@@ -148,6 +148,16 @@ export const getWorkshopDetails = async (req: Request<{ workshopId: string }>, r
   const { workshopId } = req.params;
 
   try {
+    // Intentar encontrar el curso para obtener el precio oficial de forma segura
+    let course = null;
+    if (mongoose.Types.ObjectId.isValid(workshopId)) {
+      course = await Course.findById(workshopId);
+    }
+    
+    if (!course) {
+      course = await Course.findOne({ uuid: workshopId });
+    }
+    
     const inscriptions = await Inscription.find({
       courseId: workshopId,
       isReserved: true,
@@ -159,28 +169,30 @@ export const getWorkshopDetails = async (req: Request<{ workshopId: string }>, r
 
     if (inscriptions.length === 0) {
       return res.status(200).json({
-        workshopTitle: 'Sin inscripciones',
-        workshopPrice: 0,
+        workshopTitle: course?.title || 'Taller no encontrado',
+        workshopPrice: course?.price || 0,
         summary: { totalPaidCount: 0, depositPaidCount: 0, totalInscriptions: 0 },
         turnoGroups: []
       });
     }
 
-    const workshopTitle = inscriptions[0].courseTitle;
-    const workshopPrice = inscriptions[0].coursePrice;
+    const workshopTitle = course?.title || inscriptions[0].courseTitle;
+    const workshopPrice = course?.price || inscriptions[0].coursePrice;
 
     const totalPaidCount = inscriptions.filter(
       (insc) => insc.paymentStatus === 'paid'
     ).length;
 
+    // Solo contar como seña si NO ha pagado el total y tiene un monto de seña menor al total
     const depositPaidCount = inscriptions.filter(
-      (insc) => (insc.depositAmount ?? 0) > 0 && (insc.depositAmount ?? 0) < workshopPrice
+      (insc) => insc.paymentStatus !== 'paid' && (insc.depositAmount ?? 0) > 0 && (insc.depositAmount ?? 0) < workshopPrice
     ).length;
 
     const turnoMap = new Map<string, {
       turnoId: string;
       turnoLabel: string;
       capacity: number;
+      enrolled: number;
       inscriptions: Array<{
         _id: string;
         nombre: string;
@@ -190,24 +202,29 @@ export const getWorkshopDetails = async (req: Request<{ workshopId: string }>, r
       }>;
     }>();
 
-    inscriptions.forEach((insc) => {
+    for (const insc of inscriptions) {
       const turno: any = insc.turnoId;
       const turnoId = turno?._id?.toString() || 'sin-turno';
-      const turnoLabel = turno
-        ? `${turno.diaSemana} ${turno.horaInicio} - ${turno.horaFin}`
-        : 'Sin turno asignado';
-      const capacity = turno?.cupoMaximo || 0;
-      const depositAmount = insc.depositAmount ?? 0;
-
+      
       if (!turnoMap.has(turnoId)) {
+        const turnoData = turno ? {
+          turnoLabel: `${turno.diaSemana} ${turno.horaInicio} - ${turno.horaFin}`,
+          capacity: turno.cupoMaximo,
+          enrolled: turno.cuposInscriptos
+        } : {
+          turnoLabel: 'Sin turno asignado',
+          capacity: 0,
+          enrolled: 0
+        };
+
         turnoMap.set(turnoId, {
           turnoId,
-          turnoLabel,
-          capacity,
+          ...turnoData,
           inscriptions: []
         });
       }
-
+      
+      const depositAmount = insc.depositAmount ?? 0;
       turnoMap.get(turnoId)!.inscriptions.push({
         _id: String(insc._id),
         nombre: insc.nombre,
@@ -215,12 +232,9 @@ export const getWorkshopDetails = async (req: Request<{ workshopId: string }>, r
         depositAmount,
         isFullPayment: insc.paymentStatus === 'paid'
       });
-    });
+    }
 
-    const turnoGroups = Array.from(turnoMap.values()).map((group) => ({
-      ...group,
-      enrolled: group.inscriptions.length
-    }));
+    const turnoGroups = Array.from(turnoMap.values());
 
     res.status(200).json({
       workshopTitle,
@@ -403,5 +417,59 @@ export const getAvailableTurnosForReschedule = async (req: Request<{ inscription
   } catch (error) {
     logError('getAvailableTurnosForReschedule', error instanceof Error ? error : new Error(String(error)));
     res.status(500).json({ message: 'Error al obtener turnos disponibles.' });
+  }
+};
+
+
+/**
+ * @desc    Eliminar una inscripción de un taller
+ * @route   DELETE /api/inscriptions/workshop/:inscriptionId
+ * @access  Private (Admin)
+ */
+export const deleteWorkshopInscription = async (req: Request<{ inscriptionId: string }>, res: ExpressResponse) => {
+  const { inscriptionId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(inscriptionId)) {
+    return res.status(400).json({ message: 'ID de inscripción inválido.' });
+  }
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const inscription = await Inscription.findById(inscriptionId).session(session);
+
+    if (!inscription) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: 'Inscripción no encontrada.' });
+    }
+
+    const { turnoId } = inscription;
+
+    if (turnoId) {
+      const updateResult = await Turno.updateOne(
+        { _id: turnoId, cuposInscriptos: { $gt: 0 } },
+        { $inc: { cuposInscriptos: -1 } },
+        { session }
+      );
+
+      if (updateResult.modifiedCount === 0) {
+        logError('deleteWorkshopInscription', new Error(`No se pudo decrementar el cupo para el turno ${turnoId}. El cupo podría ser ya 0.`));
+      }
+    }
+
+    await Inscription.findByIdAndDelete(inscriptionId, { session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(200).json({ message: 'Inscripción eliminada y cupo liberado correctamente.' });
+
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    logError('deleteWorkshopInscription', error instanceof Error ? error : new Error(String(error)));
+    res.status(500).json({ message: 'Error interno del servidor al eliminar la inscripción.' });
   }
 };
