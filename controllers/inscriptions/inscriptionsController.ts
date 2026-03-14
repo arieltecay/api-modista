@@ -6,17 +6,11 @@ import Course from '../../models/Course.js';
 import { logError } from '../../services/logger.js';
 import { sendDepositEmail } from '../../services/emailServices.js';
 import ExcelJS from 'exceljs';
-import { whatsappBot } from '../../services/whatsappBotService.js';
 import { CreateInscriptionBody, ExportInscriptionsQuery, GetInscriptionsQuery, UpdateDepositBody, UpdatePaymentStatusBody } from './types.js';
 import { logger } from '../../services/logger.js';
 
 // --- Helpers ---
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const WA_TEMPLATE = (nombre: string, curso: string) => 
-  `Hola *${nombre}* 👋, vimos que te inscribiste en el curso *${curso}* pero aún no pudimos registrar tu pago.
-
-¿Necesitas ayuda con el pago o tienes alguna duda sobre el curso? Quedamos a tu disposición. 😊`;
 
 // --- Controlador ---
 
@@ -438,117 +432,5 @@ export const countInscriptions = async (req: Request, res: Response) => {
   } catch (error) {
     logError('countInscriptions', error instanceof Error ? error : new Error(String(error)));
     res.status(500).json({ message: 'Error al contar las inscripciones.' });
-  }
-};
-
-// @desc    Enviar recordatorio individual de WhatsApp
-// @route   POST /api/inscriptions/:id/send-reminder
-// @access  Private (Admin)
-export const sendIndividualWaReminder = async (req: Request<{ id: string }>, res: Response) => {
-  try {
-    const inscription = await Inscription.findById(req.params.id);
-
-    if (!inscription) {
-      return res.status(404).json({ success: false, message: 'Inscripción no encontrada' });
-    }
-
-    if (inscription.paymentStatus === 'paid') {
-      return res.status(400).json({ success: false, message: 'La inscripción ya está pagada' });
-    }
-
-    // Lógica de WhatsApp
-    const message = WA_TEMPLATE(inscription.nombre, inscription.courseTitle);
-    await whatsappBot.sendMessage(inscription.celular, message);
-
-    // Actualizar contador
-    inscription.waMessagesSent = (inscription.waMessagesSent || 0) + 1;
-    inscription.lastWaMessageDate = new Date();
-    await inscription.save();
-
-    res.status(200).json({
-      success: true,
-      message: 'Recordatorio enviado correctamente',
-      data: {
-        waMessagesSent: inscription.waMessagesSent,
-        lastWaMessageDate: inscription.lastWaMessageDate
-      }
-    });
-  } catch (error: any) {
-    logError('sendIndividualWaReminder', error);
-    res.status(500).json({ success: false, message: error.message || 'Error al enviar recordatorio' });
-  }
-};
-
-// @desc    Enviar recordatorios masivos de WhatsApp (con control de spam)
-// @route   POST /api/inscriptions/send-bulk-reminders
-// @access  Private (Admin)
-export const sendBulkWaReminders = async (req: Request, res: Response) => {
-  try {
-    const courseId = req.body?.courseId; // Safely access courseId
-
-    // 48 horas en milisegundos
-    const FORTY_EIGHT_HOURS = 48 * 60 * 60 * 1000;
-    const now = new Date();
-
-    let queryFilter: any = { // <-- Initialize queryFilter
-      paymentStatus: 'pending',
-      waMessagesSent: { $lt: 3 }, // Máximo 3 mensajes
-      $or: [
-        { lastWaMessageDate: { $exists: false } },
-        { lastWaMessageDate: { $lte: new Date(now.getTime() - FORTY_EIGHT_HOURS) } }
-      ]
-    };
-
-    if (courseId) { // <-- Add this block to filter by courseId
-      queryFilter.courseId = courseId;
-    }
-
-    // Buscar todos los pendientes que cumplen las reglas de seguridad
-    const candidates = await Inscription.find(queryFilter);
-
-    if (candidates.length === 0) {
-      return res.status(200).json({
-        success: true,
-        message: 'No hay inscripciones pendientes que cumplan las reglas de seguridad para el envío.',
-        sentCount: 0
-      });
-    }
-
-    // Responder de inmediato indicando que el proceso comenzó (proceso en background)
-    res.status(202).json({
-      success: true,
-      message: `Iniciando envío masivo para ${candidates.length} personas.`,
-      estimatedTotal: candidates.length
-    });
-
-    // Ejecutar envío en lote con delays para evitar ban
-    for (let i = 0; i < candidates.length; i++) {
-      const ins = candidates[i];
-      try {
-        const message = WA_TEMPLATE(ins.nombre, ins.courseTitle);
-        await whatsappBot.sendMessage(ins.celular, message);
-
-        // Actualizar registro
-        ins.waMessagesSent = (ins.waMessagesSent || 0) + 1;
-        ins.lastWaMessageDate = new Date();
-        await ins.save();
-
-        logger.info(`Bulk WA: Mensaje enviado a ${ins.nombre} (${i + 1}/${candidates.length})`);
-      } catch (err) {
-        logger.error(`Bulk WA: Error enviando a ${ins.nombre}:`, err);
-      }
-
-      // Delay aleatorio entre 15 y 30 segundos
-      if (i < candidates.length - 1) {
-        const delay = Math.floor(Math.random() * (30000 - 15000 + 1)) + 15000;
-        await sleep(delay);
-      }
-    }
-
-  } catch (error: any) {
-    logError('sendBulkWaReminders', error);
-    if (!res.headersSent) {
-      res.status(500).json({ success: false, message: 'Error al procesar envío masivo' });
-    }
   }
 };

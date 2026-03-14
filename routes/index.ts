@@ -9,12 +9,8 @@ import testimonialsRoute from './testimonials/testimonialsRoute.js';
 import authRoutes from './auth/authRoutes.js';
 import turnosRoutes from './turnos/turnosRoutes.js';
 import tariffRoutes from './tariff/tariffRoutes.js';
-import whatsappRoutes from './whatsapp/index.js'; // Importar nuevas rutas de WhatsApp
 
 const router: Router = express.Router();
-
-// Usar las nuevas rutas de WhatsApp
-router.use('/whatsapp', whatsappRoutes);
 
 // Use notification routes
 router.use('/notifications', notificationRoutes);

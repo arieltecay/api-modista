@@ -1,7 +1,6 @@
 
 import { Request, Response } from 'express';
 import { sendEmail } from '../../services/emailServices.js';
-import { sendWhatsAppMessage } from '../../services/whatsAppService.js';
 
 interface PurchaseNotificationBody {
   name: string;
@@ -28,16 +27,6 @@ export const sendPurchaseNotification = async (req: Request<{}, {}, PurchaseNoti
         courseTitle: courseTitle,
         phone: phone,
         email: email
-      }
-    });
-
-    // 2. Enviar WhatsApp de confirmación
-    await sendWhatsAppMessage({
-      to: phone,
-      templateName: 'compra_exitosa', // Asumiendo que esta es la plantilla correcta
-      data: {
-        name: name,
-        courseTitle: courseTitle
       }
     });
 

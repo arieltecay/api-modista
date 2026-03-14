@@ -1,30 +1,22 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { MercadoPagoConfig, Preference } from 'mercadopago';
 import routes from './routes/index.js';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { logger } from './services/logger.js';
 import connectDB from './config/db.js';
-import { whatsappBot } from './services/whatsappBotService.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import http from 'http'; // Importar http
-import { Server as SocketIOServer } from 'socket.io'; // Importar Server de socket.io
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
-const mongooseInstance = await connectDB();
-
-// Pasar la instancia de mongoose al bot para cuando se necesite inicializar
-whatsappBot.setMongoose(mongooseInstance);
+await connectDB();
 
 const app = express();
-const server = http.createServer(app); // Crear servidor HTTP
 
 const corsOptions = {
     origin: [process.env.CORS_ORIGIN, process.env.URL_LOCAL],
@@ -33,8 +25,6 @@ const corsOptions = {
     credentials: true,
     optionsSuccessStatus: 200
 };
-
-const io = new SocketIOServer(server, { cors: corsOptions }); // Conectar socket.io al servidor
 
 // Middleware para manejar la ruta raíz
 app.get('/', (req, res) => {
@@ -62,37 +52,13 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 
-// Servir archivos estáticos (ruta absoluta para el código QR)
+// Servir archivos estáticos
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Rutas principales
 app.use('/api', routes); // Usamos las rutas consolidadas bajo /api
 
-// Lógica de Socket.IO
-const initializeSocket = (socketServer) => {
-    socketServer.on('connection', (socket) => {
-        logger.info(`🔌 Nuevo cliente conectado: ${socket.id}`);
-
-        // Inyectar el socket en el servicio del bot
-        whatsappBot.setSocket(socket);
-
-        // Cuando el frontend solicita iniciar, comenzamos la inicialización del bot
-        socket.on('init_whatsapp', () => {
-            logger.info(`Evento 'init_whatsapp' recibido de ${socket.id}. Inicializando bot...`);
-            whatsappBot.initialize(); // No es necesario pasar mongoose aquí si ya se estableció
-        });
-
-        socket.on('disconnect', () => {
-            logger.info(`👋 Cliente desconectado: ${socket.id}`);
-            // Opcional: podrías querer destruir la sesión del bot si el cliente se desconecta
-            // whatsappBot.logout(); 
-        });
-    });
-};
-
-initializeSocket(io);
-
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => { // Usar server.listen en lugar de app.listen
-    logger.info(`🚀 Servidor de API corriendo con WebSockets en http://localhost:${PORT}`);
+app.listen(PORT, () => {
+    logger.info(`🚀 Servidor de API corriendo en http://localhost:${PORT}`);
 });
