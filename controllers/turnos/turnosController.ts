@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import Turno from '../../models/Turno.js';
 import Course from '../../models/Course.js'; // Importar modelo Course
 import { logError } from '../../services/logger.js';
@@ -22,32 +23,41 @@ interface TurnoBody {
 
 // Helper para obtener el _id de un curso a partir de un UUID o _id
 const getCourseObjectId = async (id: string): Promise<string> => {
-    // Si parece un UUID (tiene guiones), buscar el curso
-    if (id && id.includes('-')) {
+    if (!id) return id;
+
+    // Si es un ObjectId válido, devolverlo tal cual
+    if (mongoose.Types.ObjectId.isValid(id)) {
+        return id;
+    }
+
+    // Si no es un ObjectId pero parece un UUID (tiene guiones), buscar el curso
+    if (id.includes('-')) {
         const course = await Course.findOne({ uuid: id }).select('_id');
         return course ? (course._id as any).toString() : id;
     }
-    return id; // Si no tiene guiones, asumir que es un _id
+
+    return id; 
 };
 
 // @desc    Obtener turnos por curso
 // @route   GET /api/turnos/course/:courseId
-// @access  Public
-export const getTurnosByCourse = async (req: Request<GetTurnosByCourseRequestParams>, res: Response) => {
+// @access  Public (Optional Auth)
+export const getTurnosByCourse = async (req: Request<any>, res: Response) => {
     try {
-        let { courseId } = req.params;
+        const { courseId } = req.params;
         const { admin } = req.query;
 
         // Resolver UUID a ObjectId si es necesario
-        courseId = await getCourseObjectId(courseId);
+        const resolvedCourseId = await getCourseObjectId(courseId);
 
         const query: any = {
-            courseId,
+            courseId: resolvedCourseId,
             isActive: true
         };
 
-        // Solo los administradores autenticados pueden ver turnos bloqueados
-        const canSeeBlocked = req.user?.role === 'admin' && admin === 'true';
+        // Solo los administradores autenticados pueden ver turnos bloqueados si envían admin=true
+        const isAdmin = req.user && req.user.role === 'admin';
+        const canSeeBlocked = isAdmin && admin === 'true';
 
         if (!canSeeBlocked) {
             query.isBlocked = false;

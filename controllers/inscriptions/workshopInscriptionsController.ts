@@ -17,7 +17,21 @@ export const getWorkshopInscriptions = async (req: Request<{ workshopId: string 
   const { page = '1', limit = '10', search, sortBy, sortOrder, paymentStatusFilter = 'all', turnoFilter } = req.query;
 
   try {
-    let queryFilter: any = { courseId: workshopId };
+    // Buscar el curso para obtener tanto el _id como el uuid
+    let course = null;
+    if (mongoose.Types.ObjectId.isValid(workshopId)) {
+      course = await Course.findById(workshopId);
+    }
+    if (!course) {
+      course = await Course.findOne({ uuid: workshopId });
+    }
+
+    // Crear un filtro que busque por cualquiera de los dos IDs posibles (UUID o ObjectId)
+    const idFilter = course 
+      ? { $in: [course.uuid, (course._id as any).toString()] }
+      : workshopId;
+
+    let queryFilter: any = { courseId: idFilter };
 
     if (search) {
       const searchRegex = { $regex: search, $options: 'i' };

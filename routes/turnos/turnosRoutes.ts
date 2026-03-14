@@ -5,16 +5,16 @@ import {
     updateTurno,
     deleteTurno
 } from '../../controllers/turnos/turnosController.js';
-import { authenticateToken, requireAdmin } from '../../middleware/authMiddleware.js';
+import { authenticateToken, optionalAuthenticateToken, requireAdmin } from '../../middleware/authMiddleware.js';
 
 const router = Router();
 
 /**
  * @route   GET /api/turnos/course/:courseId
  * @desc    Obtener turnos por curso
- * @access  Public
+ * @access  Public (Opcional Auth para Admin)
  */
-router.get('/course/:courseId', getTurnosByCourse);
+router.get('/course/:courseId', optionalAuthenticateToken, getTurnosByCourse);
 
 /**
  * @route   POST /api/turnos
