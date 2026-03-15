@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { logError } from '../../services/logger.js';
 import Course from '../../models/Course.js';
-import { generateUniqueUUID } from './helper.js';
+import { generateUniqueUUID, resolveCourseIdentifier } from './helper.js';
 import { CreateCourseBody, GetCoursesQuery, UpdateCourseBody } from './types.js';
 
 export const getCourses = async (req: Request, res: Response): Promise<void> => {
@@ -33,33 +33,10 @@ export const getCourses = async (req: Request, res: Response): Promise<void> => 
 export const getCourseById = async (req: Request<{ id: string }>, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    // Determinar si estamos en desarrollo
-    const isDevelopment = process.env.NODE_ENV === 'development';
 
-    // Construir query: excluir cursos de test en producción
-    const query = isDevelopment ? {} : { category: { $ne: 'test' } };
-
-    // Buscar por UUID primero (nuevo sistema)
-    let course = await Course.findOne({ uuid: id, ...query });
-
-    if (!course) {
-      // Compatibilidad backward: buscar por _id de MongoDB
-      course = await Course.findById(id);
-      if (course && !isDevelopment && course.category === 'test') {
-        course = null; // Excluir cursos de test en producción
-      }
-    }
-
-    if (!course) {
-      // Última compatibilidad: buscar por posición numérica (legacy)
-      const numericId = parseInt(id);
-      if (!isNaN(numericId) && numericId > 0) {
-        const courses = await Course.find(query).sort({ createdAt: -1, updatedAt: -1 });
-        if (numericId <= courses.length) {
-          course = courses[numericId - 1]; // Array es 0-indexed
-        }
-      }
-    }
+    // Usar el helper centralizado para resolver el curso
+    // Soporta UUID, ObjectId y Posición Legacy con las prioridades correctas
+    const course = await resolveCourseIdentifier(id);
 
     if (!course) {
       res.status(404).json({ message: "Curso no encontrado" });

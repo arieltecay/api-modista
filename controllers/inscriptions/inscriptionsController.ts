@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import mongoose from 'mongoose';
+import mongoose, { isValidObjectId } from 'mongoose';
 import Inscription from '../../models/Inscription.js';
 import Turno from '../../models/Turno.js';
 import Course from '../../models/Course.js';
@@ -7,6 +7,7 @@ import { logError } from '../../services/logger.js';
 import { sendDepositEmail } from '../../services/emailServices.js';
 import ExcelJS from 'exceljs';
 import { CreateInscriptionBody, ExportInscriptionsQuery, GetInscriptionsQuery, UpdateDepositBody, UpdatePaymentStatusBody } from './types.js';
+import { resolveCourseIdentifier } from '../courses/helper.js';
 import { logger } from '../../services/logger.js';
 
 // --- Helpers ---
@@ -26,6 +27,18 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
       return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios' });
     }
 
+    // Resolución Segura del Curso (Standard Write)
+    // Buscamos el curso real basado en el ID que nos enviaron (UUID, ObjectId, etc.)
+    const resolvedCourse = await resolveCourseIdentifier(courseId);
+    
+    if (!resolvedCourse) {
+      return res.status(404).json({ success: false, message: 'El curso seleccionado no existe.' });
+    }
+
+    // IMPORTANTE: Usamos SIEMPRE el UUID del curso para guardar la inscripción
+    // Esto estandariza la base de datos hacia el futuro.
+    const finalCourseId = resolvedCourse.uuid;
+
     // Validación de Turno (si se proporciona)
     let turnoData = null;
     if (turnoId) {
@@ -41,10 +54,10 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
       }
     }
 
-    // Validación: verificar si ya existe una inscripción para este email + courseId específico
+    // Validación: verificar si ya existe una inscripción para este email + courseId (UUID)
     const existingInscription = await Inscription.findOne({
       email: email,
-      courseId: courseId
+      courseId: finalCourseId // Usamos el UUID normalizado
     });
 
     if (existingInscription) {
@@ -54,7 +67,13 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
       });
     }
 
-    const inscription = await Inscription.create(req.body);
+    // Crear la inscripción con el ID normalizado
+    const inscriptionData = {
+      ...req.body,
+      courseId: finalCourseId // Sobreescribimos con el UUID seguro
+    };
+
+    const inscription = await Inscription.create(inscriptionData);
     res.status(201).json({
       success: true,
       data: inscription,
