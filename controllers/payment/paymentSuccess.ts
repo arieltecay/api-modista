@@ -1,6 +1,11 @@
 import { Request, Response } from 'express';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 import dotenv from 'dotenv';
+import Inscription from '../../models/Inscription.js';
+import Turno from '../../models/Turno.js';
+import { sendDepositEmail } from '../../services/emailServices.js';
+import { logError } from '../../services/logger.js';
+import { Types } from 'mongoose';
 
 dotenv.config();
 
@@ -80,8 +85,65 @@ export const getVerifiedPaymentData = async (req: Request, res: Response): Promi
       res.status(404).json({ message: 'Pago no encontrado o no aprobado.' });
       return;
     }
+    
+    // Aseguramos que paymentResult y sus propiedades críticas no son undefined
+    const mpPaymentId: string = paymentResult.id!;
+    const mpTransactionAmount: number = paymentResult.transaction_amount!;
+    const mpPaymentMethod: string = paymentResult.payment_method_id || 'desconocido';
+    const mpDateApproved: string = paymentResult.date_approved!;
+    
+    // --- LÓGICA DE ACTUALIZACIÓN DE INSCRIPCIÓN ---
+    const inscriptionId = payment_ref;
+    const inscription = await Inscription.findById(inscriptionId);
 
-    console.log('Pago aprobado encontrado. ID:', paymentResult.id);
+    if (inscription) {
+      // Evitar duplicar el pago si la página se recarga
+      const paymentAlreadyExists = inscription.paymentHistory.some(p => p._id && p._id.toString() === mpPaymentId);
+
+      if (!paymentAlreadyExists) {
+        const newPayment = {
+          _id: new Types.ObjectId(mpPaymentId), // Guardar ID de MP como ObjectId
+          amount: mpTransactionAmount,
+          paymentMethod: mpPaymentMethod,
+          date: new Date(mpDateApproved),
+          notes: `Pago #${mpPaymentId}`
+        };
+
+        inscription.paymentHistory.push(newPayment);
+
+        // Sincronizar campos antiguos
+        const totalPaid = inscription.paymentHistory.reduce((sum, p) => sum + p.amount, 0);
+        inscription.depositAmount = totalPaid;
+        inscription.depositDate = new Date(mpDateApproved);
+        
+        // Actualizar estado
+        if (totalPaid >= inscription.coursePrice) {
+          inscription.paymentStatus = 'paid';
+          inscription.paymentDate = new Date(mpDateApproved);
+        } else {
+          inscription.paymentStatus = 'partial';
+        }
+
+        // Marcar reserva y cupo (solo si no estaba reservado)
+        if (!inscription.isReserved && inscription.turnoId) {
+          await Turno.findByIdAndUpdate(inscription.turnoId, { $inc: { cuposInscriptos: 1 } });
+          inscription.isReserved = true;
+        }
+
+        await inscription.save();
+
+        // Enviar email de confirmación
+        try {
+          await sendDepositEmail({ ...inscription.toObject(), lastPaymentAmount: newPayment.amount });
+        } catch (err) {
+          logError('sendDepositEmail after MP success', err instanceof Error ? err : new Error(String(err)));
+        }
+      }
+    }
+    // --- FIN LÓGICA DE ACTUALIZACIÓN ---
+
+
+    console.log('Pago aprobado encontrado. ID:', mpPaymentId);
     const courseData = paymentResult.metadata.course;
     const paymentStatus = paymentResult.status;
     const paymentId = paymentResult.id;

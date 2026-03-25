@@ -122,7 +122,7 @@ export const exportWorkshopInscriptions = async (req: Request<{ workshopId: stri
       { header: 'Día', key: 'dia', width: 15 },
       { header: 'Horario', key: 'horario', width: 15 },
       { header: 'Precio', key: 'coursePrice', width: 10 },
-      { header: 'Seña', key: 'depositAmount', width: 10 },
+      { header: 'Total Pagado', key: 'totalPaid', width: 10 },
       { header: 'Estado', key: 'paymentStatus', width: 15 },
       { header: 'Fecha Insc.', key: 'fechaInscripcion', width: 20 },
     ];
@@ -162,7 +162,6 @@ export const getWorkshopDetails = async (req: Request<{ workshopId: string }>, r
   const { workshopId } = req.params;
 
   try {
-    // Intentar encontrar el curso para obtener el precio oficial de forma segura
     let course = null;
     if (mongoose.Types.ObjectId.isValid(workshopId)) {
       course = await Course.findById(workshopId);
@@ -174,18 +173,14 @@ export const getWorkshopDetails = async (req: Request<{ workshopId: string }>, r
     
     const inscriptions = await Inscription.find({
       courseId: workshopId,
-      isReserved: true,
-      $or: [
-        { paymentStatus: 'paid' },
-        { depositAmount: { $gt: 0 } }
-      ]
+      isReserved: true, // Mantenemos la lógica de solo mostrar inscriptos que han asegurado su lugar
     }).populate('turnoId').sort({ fechaInscripcion: -1 });
 
     if (inscriptions.length === 0) {
       return res.status(200).json({
         workshopTitle: course?.title || 'Taller no encontrado',
         workshopPrice: course?.price || 0,
-        summary: { totalPaidCount: 0, depositPaidCount: 0, totalInscriptions: 0 },
+        summary: { totalPaidCount: 0, partialPaidCount: 0, totalInscriptions: 0 },
         turnoGroups: []
       });
     }
@@ -197,9 +192,8 @@ export const getWorkshopDetails = async (req: Request<{ workshopId: string }>, r
       (insc) => insc.paymentStatus === 'paid'
     ).length;
 
-    // Solo contar como seña si NO ha pagado el total y tiene un monto de seña menor al total
-    const depositPaidCount = inscriptions.filter(
-      (insc) => insc.paymentStatus !== 'paid' && (insc.depositAmount ?? 0) > 0 && (insc.depositAmount ?? 0) < workshopPrice
+    const partialPaidCount = inscriptions.filter(
+      (insc) => insc.paymentStatus === 'partial'
     ).length;
 
     const turnoMap = new Map<string, {
@@ -211,7 +205,7 @@ export const getWorkshopDetails = async (req: Request<{ workshopId: string }>, r
         _id: string;
         nombre: string;
         apellido: string;
-        depositAmount: number;
+        totalPaid: number; // Campo actualizado
         isFullPayment: boolean;
       }>;
     }>();
@@ -238,12 +232,11 @@ export const getWorkshopDetails = async (req: Request<{ workshopId: string }>, r
         });
       }
       
-      const depositAmount = insc.depositAmount ?? 0;
       turnoMap.get(turnoId)!.inscriptions.push({
         _id: String(insc._id),
         nombre: insc.nombre,
         apellido: insc.apellido,
-        depositAmount,
+        totalPaid: insc.totalPaid, // Usamos el virtual
         isFullPayment: insc.paymentStatus === 'paid'
       });
     }
@@ -255,7 +248,7 @@ export const getWorkshopDetails = async (req: Request<{ workshopId: string }>, r
       workshopPrice,
       summary: {
         totalPaidCount,
-        depositPaidCount,
+        partialPaidCount,
         totalInscriptions: inscriptions.length
       },
       turnoGroups

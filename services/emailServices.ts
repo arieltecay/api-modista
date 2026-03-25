@@ -82,18 +82,21 @@ export const sendDepositEmail = async (inscription: any): Promise<void> => {
     ? `${inscription.turnoId.diaSemana} - ${inscription.turnoId.horaInicio} hs`
     : 'A coordinar';
 
+  // Usar el monto del último pago si está disponible, si no, usar el total (para compatibilidad)
+  const monto = inscription.lastPaymentAmount || inscription.depositAmount;
+
   const data = {
     nombre: inscription.nombre,
     apellido: inscription.apellido,
     courseTitle: inscription.courseTitle,
     horario: horario,
-    monto: inscription.depositAmount.toString(),
+    monto: monto.toString(),
     fecha: new Date().toLocaleDateString('es-AR')
   };
 
   await sendEmail({
     to: inscription.email,
-    subject: `Reserva confirmada: ${inscription.courseTitle}`,
+    subject: `Confirmación de pago: ${inscription.courseTitle}`,
     templateName: 'depositConfirmation',
     data
   });

@@ -398,6 +398,18 @@ export const updateDeposit = async (req: Request<{ id: string }, {}, UpdateDepos
       }
     }
 
+    if (!inscription.paymentHistory || inscription.paymentHistory.length === 0) {
+      const newPayment = {
+        amount: depositAmount,
+        date: new Date(),
+        paymentMethod: 'Manual', // O un valor por defecto
+        notes: 'Pago de seña inicial'
+      };
+      inscription.paymentHistory = [newPayment];
+      inscription.paymentStatus = 'partial';
+    }
+    // --- FIN SINCRONIZACIÓN ---
+
     inscription.depositAmount = depositAmount;
     inscription.depositDate = new Date();
     await inscription.save();
@@ -418,6 +430,119 @@ export const updateDeposit = async (req: Request<{ id: string }, {}, UpdateDepos
   } catch (error) {
     logError('updateDeposit', error instanceof Error ? error : new Error(String(error)));
     res.status(500).json({ success: false, message: 'Error al actualizar la seña.' });
+  }
+};
+
+/**
+ * @desc    Añadir un nuevo pago a una inscripción (Aditivo)
+ * @route   POST /api/inscriptions/:id/payments
+ * @access  Private (JWT + Admin role)
+ */
+export const addPayment = async (req: Request<{ id: string }, {}, { amount: number, paymentMethod?: string, notes?: string }>, res: Response) => {
+  const { id } = req.params;
+  const { amount, paymentMethod, notes } = req.body;
+
+  if (!amount || amount <= 0) {
+    return res.status(400).json({ success: false, message: 'El monto del pago debe ser mayor a cero.' });
+  }
+
+  if (!isValidObjectId(id)) {
+    return res.status(400).json({ success: false, message: 'ID de inscripción no válido.' });
+  }
+
+  try {
+    const inscription = await Inscription.findById(id);
+
+    if (!inscription) {
+      return res.status(404).json({ success: false, message: 'Inscripción no encontrada.' });
+    }
+
+    // Lógica de cupo (solo se ejecuta con el primer pago)
+    if (!inscription.isReserved && inscription.turnoId) {
+      const turno = await Turno.findById(inscription.turnoId);
+      if (turno) {
+        if (turno.cuposInscriptos >= turno.cupoMaximo) {
+          return res.status(400).json({
+            success: false,
+            message: 'No se puede registrar el pago: El turno ya ha alcanzado su cupo máximo.'
+          });
+        }
+        await Turno.findByIdAndUpdate(inscription.turnoId, { $inc: { cuposInscriptos: 1 } });
+        inscription.isReserved = true;
+      }
+    }
+
+    // Acción 1: Añadir al historial
+    const newPayment = { amount, paymentMethod, notes, date: new Date() };
+    inscription.paymentHistory.push(newPayment);
+
+    // Acción 2 (Sincronización): Actualizar depositAmount con el total del historial
+    const totalPaid = inscription.paymentHistory.reduce((sum, payment) => sum + payment.amount, 0);
+    inscription.depositAmount = totalPaid;
+
+    // Acción 3 (Sincronización): Actualizar fechas
+    inscription.depositDate = new Date(); // Actualiza la fecha del último depósito/pago
+    
+    // Acción 4 (Estado): Actualizar paymentStatus
+    if (totalPaid >= inscription.coursePrice) {
+      inscription.paymentStatus = 'paid';
+      inscription.paymentDate = new Date(); // Marcar la fecha de pago completo
+    } else {
+      inscription.paymentStatus = 'partial';
+    }
+
+    await inscription.save();
+
+    // Enviar email
+    try {
+      await sendDepositEmail({ ...inscription.toObject(), lastPaymentAmount: newPayment.amount });
+    } catch (err) {
+      logError('sendDepositEmail after addPayment', err instanceof Error ? err : new Error(String(err)));
+    }
+
+    res.status(200).json({
+      success: true,
+      data: inscription,
+      message: 'Pago registrado correctamente.'
+    });
+
+  } catch (error) {
+    logError('addPayment', error instanceof Error ? error : new Error(String(error)));
+    res.status(500).json({ success: false, message: 'Error al registrar el pago.' });
+  }
+};
+
+
+/**
+ * @desc    Obtener el historial de pagos de una inscripción
+ * @route   GET /api/inscriptions/:id/payments
+ * @access  Private (JWT + Admin role)
+ */
+export const getPaymentHistory = async (req: Request<{ id: string }>, res: Response) => {
+  const { id } = req.params;
+
+  if (!isValidObjectId(id)) {
+    return res.status(400).json({ success: false, message: 'ID de inscripción no válido.' });
+  }
+
+  try {
+    const inscription = await Inscription.findById(id).select('paymentHistory coursePrice');
+
+    if (!inscription) {
+      return res.status(404).json({ success: false, message: 'Inscripción no encontrada.' });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        history: inscription.paymentHistory,
+        totalPaid: inscription.totalPaid, // El virtual se encarga del cálculo
+        coursePrice: inscription.coursePrice
+      }
+    });
+  } catch (error) {
+    logError('getPaymentHistory', error instanceof Error ? error : new Error(String(error)));
+    res.status(500).json({ success: false, message: 'Error al obtener el historial de pagos.' });
   }
 };
 

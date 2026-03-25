@@ -1,6 +1,14 @@
 import { Schema, model, Document, PaginateModel, Types } from 'mongoose';
 import mongoosePaginate from 'mongoose-paginate-v2';
 
+export interface IPayment {
+  _id?: Types.ObjectId;
+  amount: number;
+  date: Date;
+  paymentMethod?: string;
+  notes?: string;
+}
+
 // Interface para tipar el documento de inscripción
 export interface IInscription extends Document {
   nombre: string;
@@ -10,17 +18,28 @@ export interface IInscription extends Document {
   courseId: string;
   courseTitle: string;
   coursePrice: number;
-  paymentStatus: 'pending' | 'paid';
+  paymentStatus: 'pending' | 'paid' | 'partial';
   paymentDate?: Date;
   turnoId?: Types.ObjectId;
   depositAmount?: number;
   depositDate?: Date;
   isReserved?: boolean;
   fechaInscripcion: Date;
+  paymentHistory: IPayment[];
+  totalPaid: number;
 }
 
 // Interface para el modelo con paginación
 interface IInscriptionModel extends PaginateModel<IInscription> { }
+
+// Subdocumento para el historial de pagos (aditivo)
+const PaymentSchema = new Schema<IPayment>({
+  amount: { type: Number, required: true },
+  date: { type: Date, default: Date.now },
+  paymentMethod: { type: String, trim: true },
+  notes: { type: String, trim: true },
+});
+
 
 const InscriptionSchema = new Schema<IInscription>({
   nombre: {
@@ -64,7 +83,7 @@ const InscriptionSchema = new Schema<IInscription>({
   },
   paymentStatus: {
     type: String,
-    enum: ['pending', 'paid'],
+    enum: ['pending', 'paid', 'partial'],
     default: 'pending',
   },
   paymentDate: {
@@ -90,7 +109,26 @@ const InscriptionSchema = new Schema<IInscription>({
     type: Date,
     default: Date.now,
   },
+  // Nuevo campo de historial de pagos
+  paymentHistory: {
+    type: [PaymentSchema],
+    default: [],
+  }
+}, {
+  // Habilitar campos virtuales para que se incluyan en las respuestas JSON
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
+
+// Virtual para calcular el total pagado (aditivo)
+InscriptionSchema.virtual('totalPaid').get(function() {
+  if (this.paymentHistory && this.paymentHistory.length > 0) {
+    return this.paymentHistory.reduce((total, payment) => total + payment.amount, 0);
+  }
+  // Fallback al depositAmount si no hay historial, para datos antiguos
+  return this.depositAmount || 0;
+});
+
 
 // Índices para optimizar consultas
 InscriptionSchema.index({ paymentStatus: 1, fechaInscripcion: -1 });
