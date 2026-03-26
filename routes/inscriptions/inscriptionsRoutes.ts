@@ -8,6 +8,7 @@ import {
   updateDeposit,
   addPayment,
   getPaymentHistory,
+  deletePayment, // <--- Añadido
 } from '../../controllers/inscriptions/inscriptionsController.js';
 import { authenticateToken, requireAdmin } from '../../middleware/authMiddleware.js';
 
@@ -26,5 +27,6 @@ router.patch('/:id/deposit', authenticateToken, requireAdmin, updateDeposit);
 // Nuevas rutas para historial de pagos (Aditivas)
 router.post('/:id/payments', authenticateToken, requireAdmin, addPayment);
 router.get('/:id/payments', authenticateToken, requireAdmin, getPaymentHistory);
+router.delete('/:id/payments/:paymentId', authenticateToken, requireAdmin, deletePayment); // <--- Añadido
 
 export default router;

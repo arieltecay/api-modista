@@ -546,6 +546,72 @@ export const getPaymentHistory = async (req: Request<{ id: string }>, res: Respo
   }
 };
 
+/**
+ * @desc    Eliminar un pago del historial de una inscripción
+ * @route   DELETE /api/inscriptions/:id/payments/:paymentId
+ * @access  Private (JWT + Admin role)
+ */
+export const deletePayment = async (req: Request<{ id: string, paymentId: string }>, res: Response) => {
+  const { id, paymentId } = req.params;
+
+  if (!isValidObjectId(id)) {
+    return res.status(400).json({ success: false, message: 'ID de inscripción no válido.' });
+  }
+
+  try {
+    const inscription = await Inscription.findById(id);
+
+    if (!inscription) {
+      return res.status(404).json({ success: false, message: 'Inscripción no encontrada.' });
+    }
+
+    // Filtrar el pago a eliminar
+    const originalLength = inscription.paymentHistory.length;
+    inscription.paymentHistory = inscription.paymentHistory.filter(p => p._id && p._id.toString() !== paymentId) as any;
+
+    if (inscription.paymentHistory.length === originalLength) {
+      return res.status(404).json({ success: false, message: 'Pago no encontrado en el historial.' });
+    }
+
+    // Recalcular total y sincronizar campos antiguos
+    const totalPaid = inscription.paymentHistory.reduce((sum, p) => sum + p.amount, 0);
+    inscription.depositAmount = totalPaid;
+
+    // Actualizar estado de pago
+    if (totalPaid <= 0) {
+      inscription.paymentStatus = 'pending';
+      inscription.paymentDate = undefined;
+      inscription.depositDate = undefined;
+
+      // Si no quedan pagos, liberar el cupo del turno
+      if (inscription.isReserved && inscription.turnoId) {
+        await Turno.findByIdAndUpdate(inscription.turnoId, { $inc: { cuposInscriptos: -1 } });
+        inscription.isReserved = false;
+      }
+    } else if (totalPaid >= inscription.coursePrice) {
+      inscription.paymentStatus = 'paid';
+    } else {
+      inscription.paymentStatus = 'partial';
+    }
+
+    await inscription.save();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        history: inscription.paymentHistory,
+        totalPaid: inscription.totalPaid,
+        coursePrice: inscription.coursePrice
+      },
+      message: 'Pago eliminado correctamente.'
+    });
+
+  } catch (error) {
+    logError('deletePayment', error instanceof Error ? error : new Error(String(error)));
+    res.status(500).json({ success: false, message: 'Error al eliminar el pago.' });
+  }
+};
+
 // @desc    Contar todas las inscripciones
 // @route   GET /api/inscriptions/count
 // @access  Public
