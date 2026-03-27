@@ -14,7 +14,11 @@ declare global {
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'tu_secreto_jwt';
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET no está definido en las variables de entorno');
+}
 
 /**
  * Middleware para autenticar tokens JWT.

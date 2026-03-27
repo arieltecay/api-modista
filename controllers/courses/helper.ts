@@ -30,9 +30,8 @@ export const generateUniqueUUID = async (): Promise<string> => {
  * Filtra cursos de test en producción.
  */
 export const resolveCourseIdentifier = async (identifier: string): Promise<ICourse | null> => {
-  // 1. Determinar entorno y filtro base
-  const isDevelopment = process.env.URL_LOCAL === 'http://localhost:5173' || process.env.NODE_ENV === 'development';
-  const queryBase = isDevelopment ? {} : { category: { $ne: 'test' } };
+  // 1. Filtro base sin exclusión de tests
+  const queryBase = {};
 
   let course: ICourse | null = null;
 

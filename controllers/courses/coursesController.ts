@@ -6,12 +6,8 @@ import { CreateCourseBody, GetCoursesQuery, UpdateCourseBody } from './types.js'
 
 export const getCourses = async (req: Request, res: Response): Promise<void> => {
   try {
-    // Determinar si estamos en desarrollo
-    // const isDevelopment = process.env.NODE_ENV === 'development';
-    const isDevelopment = process.env.URL_LOCAL === 'http://localhost:5173';
-
-    // Construir query: excluir cursos de test en producción
-    const query = isDevelopment ? {} : { category: { $ne: 'test' } };
+    // Obtener todos los cursos sin filtros de entorno local
+    const query = {};
 
     // Ordenar por fecha de creación descendente, luego por fecha de actualización descendente
     const courses = await Course.find(query).sort({ createdAt: -1, updatedAt: -1 });
@@ -236,9 +232,7 @@ export const getCoursePaidLink = async (req: Request<{ courseTitle: string }>, r
     // Buscar el curso por título (decodificar URL si es necesario)
     const decodedCourseTitle = decodeURIComponent(courseTitle);
 
-    // Determinar si estamos en desarrollo para saber cómo buscar
-    const isDevelopment = process.env.URL_LOCAL === 'http://localhost:5173';
-    const query = isDevelopment ? { title: decodedCourseTitle } : { title: decodedCourseTitle, category: { $ne: 'test' } };
+    const query = { title: decodedCourseTitle };
 
     const course = await Course.findOne(query);
 
