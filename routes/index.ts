@@ -9,8 +9,12 @@ import testimonialsRoute from './testimonials/testimonialsRoute.js';
 import authRoutes from './auth/authRoutes.js';
 import turnosRoutes from './turnos/turnosRoutes.js';
 import tariffRoutes from './tariff/tariffRoutes.js';
+import uploadRoutes from './upload/index.js';
 
 const router: Router = express.Router();
+
+// Use upload routes
+router.use('/upload', uploadRoutes);
 
 // Use notification routes
 router.use('/notifications', notificationRoutes);

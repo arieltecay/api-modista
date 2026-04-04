@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { logError } from '../../services/logger.js';
 import Course from '../../models/Course.js';
+import cloudinary from '../../config/cloudinaryConfig.js';
 import { generateUniqueUUID, resolveCourseIdentifier } from './helper.js';
 import { CreateCourseBody, GetCoursesQuery, UpdateCourseBody } from './types.js';
 
@@ -118,11 +119,25 @@ export const updateCourse = async (req: Request<{ id: string }, {}, UpdateCourse
 
     // Resolver UUID a ObjectId si es necesario
     let course;
-    if (id && id.includes('-')) {
-      course = await Course.findOneAndUpdate({ uuid: id }, filteredUpdateData, { new: true, runValidators: true });
-    } else {
-      course = await Course.findByIdAndUpdate(id, filteredUpdateData, { new: true, runValidators: true });
+    const filter = (id && id.includes('-')) ? { uuid: id } : { _id: id };
+    
+    // Buscar curso actual para manejar cambio de imagen
+    const existingCourse = await Course.findOne(filter);
+    if (!existingCourse) {
+      res.status(404).json({ success: false, message: 'Curso no encontrado' });
+      return;
     }
+
+    // Si la imagen cambia, borrar la anterior de Cloudinary
+    if (filteredUpdateData.imagePublicId && existingCourse.imagePublicId && filteredUpdateData.imagePublicId !== existingCourse.imagePublicId) {
+      try {
+        await cloudinary.uploader.destroy(existingCourse.imagePublicId);
+      } catch (cloudinaryError) {
+        logError("updateCourse:cloudinary", cloudinaryError instanceof Error ? cloudinaryError : new Error(String(cloudinaryError)));
+      }
+    }
+
+    course = await Course.findOneAndUpdate(filter, filteredUpdateData, { new: true, runValidators: true });
 
     if (!course) {
       res.status(404).json({ success: false, message: 'Curso no encontrado' });
@@ -157,6 +172,16 @@ export const deleteCourse = async (req: Request<{ id: string }>, res: Response):
     if (!course) {
       res.status(404).json({ success: false, message: 'Curso no encontrado' });
       return;
+    }
+
+    // Borrar imagen de Cloudinary si existe el publicId
+    if (course.imagePublicId) {
+      try {
+        await cloudinary.uploader.destroy(course.imagePublicId);
+      } catch (cloudinaryError) {
+        logError("deleteCourse:cloudinary", cloudinaryError instanceof Error ? cloudinaryError : new Error(String(cloudinaryError)));
+        // No detenemos el proceso si falla el borrado en Cloudinary
+      }
     }
 
     res.status(200).json({

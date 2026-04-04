@@ -31,6 +31,11 @@ app.get('/', (req, res) => {
   res.status(200).json({ message: 'API de Modista App funcionando correctamente' });
 });
 
+// Silenciar peticiones de Socket.io residuales (evita 404 en logs de Vercel)
+app.all(/^\/socket\.io.*/, (req, res) => {
+    res.status(204).end();
+});
+
 // Middleware para manejar solicitudes de favicon (cualquier extensión)
 app.get(/^\/favicon\.(ico|png)$/, (req, res) => res.status(204).send());
 
@@ -57,6 +62,23 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Rutas principales
 app.use('/api', routes); // Usamos las rutas consolidadas bajo /api
+
+// Middleware de manejo de errores global
+app.use((err, req, res, next) => {
+    logger.error(`Error no manejado: ${err.message}`, { stack: err.stack });
+    
+    if (err instanceof Error && (err.name === 'MulterError' || err.message.includes('Formato de archivo'))) {
+        return res.status(400).json({ 
+            success: false, 
+            message: err.message 
+        });
+    }
+
+    res.status(err.status || 500).json({
+        success: false,
+        message: err.message || 'Error interno del servidor'
+    });
+});
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {

@@ -12,6 +12,7 @@ export interface ICourse extends Document {
   videoUrl?: string;
   price: number;
   coursePaid?: string;
+  imagePublicId?: string;
   uuid?: string; // UUID único para reemplazar IDs posicionales (opcional durante migración)
   isPresencial?: boolean;
   status?: 'active' | 'inactive';
@@ -32,6 +33,7 @@ const courseSchema = new Schema<ICourse>({
   videoUrl: { type: String },
   price: { type: Number, required: true },
   coursePaid: { type: String },
+  imagePublicId: { type: String },
   uuid: {
     type: String,
     required: true,

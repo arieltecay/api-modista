@@ -7,6 +7,8 @@ export interface IUser extends Document {
   name: string;
   createdAt: Date;
   role: 'admin' | 'user';
+  imageUrl?: string;
+  imagePublicId?: string;
 }
 
 const userSchema = new Schema<IUser>({
@@ -38,6 +40,13 @@ const userSchema = new Schema<IUser>({
     type: String,
     enum: ['admin', 'user'],
     default: 'user',
+  },
+  imageUrl: {
+    type: String,
+    default: '',
+  },
+  imagePublicId: {
+    type: String,
   },
 });
 
