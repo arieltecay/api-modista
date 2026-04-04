@@ -16,6 +16,8 @@ export interface ICourse extends Document {
   uuid?: string; // UUID único para reemplazar IDs posicionales (opcional durante migración)
   isPresencial?: boolean;
   status?: 'active' | 'inactive';
+  lastMonthlyClosureDate?: Date;
+  currentPaymentCycleStartDate?: Date;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -47,6 +49,14 @@ const courseSchema = new Schema<ICourse>({
     type: String,
     enum: ['active', 'inactive'],
     default: 'active'
+  },
+  lastMonthlyClosureDate: {
+    type: Date,
+    default: null
+  },
+  currentPaymentCycleStartDate: {
+    type: Date,
+    default: null
   },
 }, {
   timestamps: true  // Agrega createdAt y updatedAt automáticamente
