@@ -10,11 +10,15 @@ import authRoutes from './auth/authRoutes.js';
 import turnosRoutes from './turnos/turnosRoutes.js';
 import tariffRoutes from './tariff/tariffRoutes.js';
 import uploadRoutes from './upload/index.js';
+import carouselRoutes from './carousel/carousel-routes.js';
 
 const router: Router = express.Router();
 
 // Use upload routes
 router.use('/upload', uploadRoutes);
+
+// Use carousel routes
+router.use('/carousel', carouselRoutes);
 
 // Use notification routes
 router.use('/notifications', notificationRoutes);
