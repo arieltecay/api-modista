@@ -19,7 +19,15 @@ await connectDB();
 const app = express();
 
 const corsOptions = {
-    origin: process.env.CORS_ORIGIN,
+    origin: function (origin, callback) {
+        const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : [];
+        // Permitir peticiones sin origen (como apps móviles o curl) o si el origen está en la lista
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('No permitido por CORS'));
+        }
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
     credentials: true,
