@@ -2,11 +2,17 @@ import { Request, Response, NextFunction } from 'express';
 import CarouselService from '../../services/carousel/carousel-service.js';
 import { createSlideSchema, updateSlideSchema, reorderSlidesSchema } from './types.js';
 import { ValidationError, EntityNotFoundError } from '../../utils/errors.js';
+import { cache } from '../../utils/cache.js';
 
 class CarouselController {
   async getAllSlides(req: Request, res: Response, next: NextFunction) {
     try {
+      const cacheKey = 'carousel_all';
+      const cached = cache.get(cacheKey);
+      if (cached) return res.status(200).json(cached);
+
       const slides = await CarouselService.getAllSlides();
+      cache.set(cacheKey, slides, 600); // 10 min
       res.status(200).json(slides);
     } catch (error) {
       next(error);
@@ -15,7 +21,12 @@ class CarouselController {
 
   async getActiveSlides(req: Request, res: Response, next: NextFunction) {
     try {
+      const cacheKey = 'carousel_active';
+      const cached = cache.get(cacheKey);
+      if (cached) return res.status(200).json(cached);
+
       const slides = await CarouselService.getActiveSlides();
+      cache.set(cacheKey, slides, 600); // 10 min
       res.status(200).json(slides);
     } catch (error) {
       next(error);
@@ -34,6 +45,8 @@ class CarouselController {
         publishAt: validation.data.publishAt ? new Date(validation.data.publishAt) : undefined,
         expireAt: validation.data.expireAt ? new Date(validation.data.expireAt) : undefined
       });
+
+      cache.clear();
       res.status(201).json(newSlide);
     } catch (error) {
       next(error);
@@ -58,6 +71,7 @@ class CarouselController {
         throw new EntityNotFoundError('Slide no encontrado');
       }
       
+      cache.clear();
       res.status(200).json(updatedSlide);
     } catch (error) {
       next(error);
@@ -73,6 +87,7 @@ class CarouselController {
         throw new EntityNotFoundError('Slide no encontrado');
       }
       
+      cache.clear();
       res.status(204).send();
     } catch (error) {
       next(error);
@@ -87,6 +102,7 @@ class CarouselController {
       }
       
       await CarouselService.reorderSlides(validation.data);
+      cache.clear();
       res.status(200).json({ message: 'Slides reordenados correctamente' });
     } catch (error) {
       next(error);

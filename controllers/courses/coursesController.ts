@@ -4,14 +4,40 @@ import Course from '../../models/Course.js';
 import cloudinary from '../../config/cloudinaryConfig.js';
 import { generateUniqueUUID, resolveCourseIdentifier } from './helper.js';
 import { CreateCourseBody, GetCoursesQuery, UpdateCourseBody } from './types.js';
+import { cache } from '../../utils/cache.js';
 
 export const getCourses = async (req: Request, res: Response): Promise<void> => {
   try {
+    const { limit, page = '1' } = req.query;
+    const cacheKey = `courses_list_${limit || 'all'}_${page}`;
+    
+    // Intentar obtener del caché
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      res.status(200).json(cachedData);
+      return;
+    }
+
     // Obtener todos los cursos sin filtros de entorno local
     const query = {};
 
-    // Ordenar por fecha de creación descendente, luego por fecha de actualización descendente
-    const courses = await Course.find(query).sort({ createdAt: -1, updatedAt: -1 });
+    let courses;
+    if (limit) {
+      const limitNum = parseInt(limit as string, 10);
+      const pageNum = parseInt(page as string, 10);
+      const skip = (pageNum - 1) * limitNum;
+      
+      courses = await Course.find(query)
+        .sort({ createdAt: -1, updatedAt: -1 })
+        .skip(skip)
+        .limit(limitNum);
+    } else {
+      // Si no hay límite, establecer uno máximo razonable para proteger el servidor (ej. 100)
+      courses = await Course.find(query)
+        .sort({ createdAt: -1, updatedAt: -1 })
+        .limit(100);
+    }
+
     // Usar UUID como id principal, mantener compatibilidad backward
     const coursesWithId: any[] = courses.map((course, index) => ({
       ...course.toObject(),
@@ -20,6 +46,10 @@ export const getCourses = async (req: Request, res: Response): Promise<void> => 
       // Mantener posición como campo adicional para compatibilidad
       position: (index + 1).toString()
     }));
+
+    // Guardar en caché por 5 minutos (300 segundos)
+    cache.set(cacheKey, coursesWithId, 300);
+
     res.status(200).json(coursesWithId);
   } catch (error) {
     logError("getCourses", error instanceof Error ? error : new Error(String(error)));
@@ -30,6 +60,14 @@ export const getCourses = async (req: Request, res: Response): Promise<void> => 
 export const getCourseById = async (req: Request<{ id: string }>, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    const cacheKey = `course_detail_${id}`;
+
+    // Intentar obtener del caché
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      res.status(200).json(cachedData);
+      return;
+    }
 
     // Usar el helper centralizado para resolver el curso
     // Soporta UUID, ObjectId y Posición Legacy con las prioridades correctas
@@ -40,11 +78,16 @@ export const getCourseById = async (req: Request<{ id: string }>, res: Response)
       return;
     }
 
-    res.status(200).json({
+    const courseData = {
       ...course.toObject(),
       id: course.uuid, // UUID como id principal
       courseId: (course._id as any).toString(), // _id como respaldo
-    });
+    };
+
+    // Guardar en caché por 5 minutos
+    cache.set(cacheKey, courseData, 300);
+
+    res.status(200).json(courseData);
   } catch (error) {
     logError("getCourseById", error instanceof Error ? error : new Error(String(error)));
     res.status(500).json({ message: "Error al obtener el curso" });
@@ -80,6 +123,10 @@ export const createCourse = async (req: Request<{}, {}, CreateCourseBody>, res: 
     };
 
     const course = await Course.create(courseData);
+
+    // Invalidar caché de cursos
+    cache.clear();
+
     res.status(201).json({
       success: true,
       data: {
@@ -144,6 +191,9 @@ export const updateCourse = async (req: Request<{ id: string }, {}, UpdateCourse
       return;
     }
 
+    // Invalidar caché
+    cache.clear();
+
     res.status(200).json({
       success: true,
       data: course,
@@ -183,6 +233,9 @@ export const deleteCourse = async (req: Request<{ id: string }>, res: Response):
         // No detenemos el proceso si falla el borrado en Cloudinary
       }
     }
+
+    // Invalidar caché
+    cache.clear();
 
     res.status(200).json({
       success: true,
