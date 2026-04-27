@@ -11,8 +11,12 @@ import turnosRoutes from './turnos/turnosRoutes.js';
 import tariffRoutes from './tariff/tariffRoutes.js';
 import uploadRoutes from './upload/index.js';
 import carouselRoutes from './carousel/carousel-routes.js';
+import faqRoutes from './faq/faqRoutes.js';
 
 const router: Router = express.Router();
+
+// Use faq routes
+router.use('/faq', faqRoutes);
 
 // Use upload routes
 router.use('/upload', uploadRoutes);
@@ -21,7 +25,7 @@ router.use('/upload', uploadRoutes);
 router.use('/carousel', carouselRoutes);
 
 // Use notification routes
-router.use('/notifications', notificationRoutes);
+router.use('/notification', notificationRoutes);
 
 // Use payment routes
 router.use('/payment', paymentRoutes);
