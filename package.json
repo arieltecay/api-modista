@@ -20,7 +20,6 @@
     "@types/jsonwebtoken": "^9.0.10",
     "axios": "^1.10.0",
     "bcrypt": "^6.0.0",
-    "chrome-aws-lambda": "10.1.0",
     "cloudinary": "^1.41.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
