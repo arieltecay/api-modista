@@ -12,11 +12,15 @@ import tariffRoutes from './tariff/tariffRoutes.js';
 import uploadRoutes from './upload/index.js';
 import carouselRoutes from './carousel/carousel-routes.js';
 import faqRoutes from './faq/faqRoutes.js';
+import chatRoutes from './chat/chatRoutes.js';
 
 const router: Router = express.Router();
 
 // Use faq routes
 router.use('/faq', faqRoutes);
+
+// Use chat routes
+router.use('/chat', chatRoutes);
 
 // Use upload routes
 router.use('/upload', uploadRoutes);

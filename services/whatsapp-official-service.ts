@@ -12,6 +12,12 @@ export const sendWhatsAppMessage = async (to: string, message: string): Promise<
     return false;
   }
 
+  // Sanitizar número de Argentina para ruteo internacional (54 + código area + número)
+  // Probamos el formato sin el 9, pero asegurándonos de que Meta lo reconozca como número válido.
+  let formattedTo = to.startsWith('549') ? '54' + to.substring(3) : to;
+
+  console.log(`[DEBUG Meta] Enviando mensaje final a: ${formattedTo}`);
+
   const API_URL = `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`;
 
   try {
@@ -20,7 +26,7 @@ export const sendWhatsAppMessage = async (to: string, message: string): Promise<
       {
         messaging_product: 'whatsapp',
         recipient_type: 'individual',
-        to: to,
+        to: formattedTo,
         type: 'text',
         text: {
           preview_url: false,
@@ -35,7 +41,7 @@ export const sendWhatsAppMessage = async (to: string, message: string): Promise<
       }
     );
 
-    console.log(`WhatsApp message sent to ${to}. ID: ${response.data.messages[0].id}`);
+    console.log(`WhatsApp message sent to ${formattedTo}. ID: ${response.data.messages[0].id}`);
     return true;
   } catch (error: any) {
     console.error('Error sending WhatsApp message:', error.response?.data || error.message);
