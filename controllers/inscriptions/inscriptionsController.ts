@@ -8,7 +8,7 @@ import { sendDepositEmail } from '../../services/emailServices.js';
 import ExcelJS from 'exceljs';
 import { CreateInscriptionBody, ExportInscriptionsQuery, GetInscriptionsQuery, UpdateDepositBody, UpdatePaymentStatusBody } from './types.js';
 import { resolveCourseIdentifier } from '../courses/helper.js';
-import { logger } from '../../services/logger.js';
+import { getEffectiveStartDate } from '../../utils/dateUtils.js';
 
 // --- Helpers ---
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -512,32 +512,49 @@ export const addPayment = async (req: Request<{ id: string }, {}, { amount: numb
   }
 };
 
-
 /**
- * @desc    Obtener el historial de pagos de una inscripción
+ * @desc    Obtener el historial de pagos de una inscripción (con filtro opcional de fecha)
  * @route   GET /api/inscriptions/:id/payments
  * @access  Private (JWT + Admin role)
  */
-export const getPaymentHistory = async (req: Request<{ id: string }>, res: Response) => {
+export const getPaymentHistory = async (req: Request<{ id: string }, {}, {}, { startDate?: string }>, res: Response) => {
   const { id } = req.params;
+  const { startDate } = req.query;
 
   if (!isValidObjectId(id)) {
     return res.status(400).json({ success: false, message: 'ID de inscripción no válido.' });
   }
 
   try {
-    const inscription = await Inscription.findById(id).select('paymentHistory coursePrice');
+    const inscription = await Inscription.findById(id).select('paymentHistory coursePrice courseId');
 
     if (!inscription) {
       return res.status(404).json({ success: false, message: 'Inscripción no encontrada.' });
     }
 
+    // Determinar la fecha de inicio
+    let start: Date;
+    if (startDate) {
+      start = new Date(startDate);
+    } else {
+      start = await getEffectiveStartDate(inscription.courseId);
+    }
+
+    let filteredHistory = inscription.paymentHistory;
+    
+    if (!isNaN(start.getTime())) {
+      filteredHistory = filteredHistory.filter(payment => new Date(payment.date) >= start);
+    }
+
+    const totalPaid = filteredHistory.reduce((sum, payment) => sum + payment.amount, 0);
+
     res.status(200).json({
       success: true,
       data: {
-        history: inscription.paymentHistory,
-        totalPaid: inscription.totalPaid, // El virtual se encarga del cálculo
-        coursePrice: inscription.coursePrice
+        history: filteredHistory,
+        totalPaid: totalPaid,
+        coursePrice: inscription.coursePrice,
+        startDate: start.toISOString().split('T')[0] // Retornamos la fecha usada
       }
     });
   } catch (error) {
