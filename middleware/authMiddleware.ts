@@ -61,6 +61,12 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
   }
 };
 
+interface TokenPayload {
+  userId: string;
+  email: string;
+  role: 'admin' | 'user';
+}
+
 /**
  * Middleware para autenticar tokens JWT opcionalmente.
  * No falla si no hay token (acceso como invitado), pero si se provee un token,
@@ -69,38 +75,26 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
 export const optionalAuthenticateToken = (req: Request, res: Response, next: NextFunction): void => {
   const authHeader = req.headers.authorization;
 
-  // Caso 1: No hay token (Invitado) - Continuar sin req.user
   if (!authHeader) {
+    req.user = undefined;
     return next();
   }
 
-  // Caso 2: Intento de autenticación - Validar formato y contenido
   const parts = authHeader.split(' ');
   if (parts.length !== 2 || parts[0] !== 'Bearer') {
-    res.status(401).json({ message: 'Formato de autorización inválido. Use "Bearer [token]"' });
-    return;
+    req.user = undefined;
+    return next();
   }
 
   const token = parts[1];
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as {
-      userId: string;
-      email: string;
-      role: 'admin' | 'user';
-    };
-
+    const decoded = jwt.verify(token, JWT_SECRET) as TokenPayload;
     req.user = decoded;
     next();
   } catch (error) {
-    // Si se envió un token, pero es inválido o expiró, informamos al cliente.
-    // Esto es preferible a fallar silenciosamente para que el cliente pueda renovar sesión.
-    if (error instanceof jwt.TokenExpiredError) {
-      res.status(401).json({ message: 'El token ha expirado. Por favor, inicie sesión de nuevo.' });
-      return;
-    }
-    
-    res.status(403).json({ message: 'Token de acceso inválido o corrupto.' });
+    req.user = undefined;
+    next();
   }
 };
 

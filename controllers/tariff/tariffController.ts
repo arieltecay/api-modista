@@ -7,7 +7,7 @@ export const getTariffs = async (req: Request, res: Response): Promise<void> => 
   try {
     const { type, periodIdentifier } = req.query;
 
-    let query: any = {};
+    let query: any = { status: 'active' };
     if (type) {
       query.type = type;
     }
@@ -17,8 +17,8 @@ export const getTariffs = async (req: Request, res: Response): Promise<void> => 
 
     let tariff: ITariff | null;
 
-    if (Object.keys(query).length === 0) {
-      tariff = await Tariff.findOne().sort({ startDate: -1 });
+    if (Object.keys(query).length === 1) { // Solo status: 'active'
+      tariff = await Tariff.findOne(query).sort({ startDate: -1 });
     } else if (type && !periodIdentifier) {
       tariff = await Tariff.findOne(query).sort({ startDate: -1 });
     } else {
@@ -26,7 +26,7 @@ export const getTariffs = async (req: Request, res: Response): Promise<void> => 
     }
 
     if (!tariff) {
-      res.status(404).json({ message: "Tarifario no encontrado con los criterios especificados." });
+      res.status(404).json({ message: "Tarifario no encontrado." });
       return;
     }
 
@@ -43,12 +43,14 @@ export const getAvailableTariffMetadata = async (req: Request, res: Response): P
       type: 1,
       periodIdentifier: 1,
       startDate: 1,
+      status: 1,
       'metadata.titulo': 1,
       'metadata.periodo.inicio': 1,
       'metadata.periodo.fin': 1,
     };
 
-    const tariffsMeta = await Tariff.find({})
+    // Public: only active
+    const tariffsMeta = await Tariff.find({ status: 'active' })
       .select(projection)
       .sort({ startDate: -1 });
 
@@ -56,6 +58,7 @@ export const getAvailableTariffMetadata = async (req: Request, res: Response): P
       _id: t._id,
       type: t.type,
       title: t.metadata.titulo,
+      status: t.status || 'active',
       periodDescription: `${t.metadata.periodo.inicio} a ${t.metadata.periodo.fin}`,
       periodIdentifier: t.periodIdentifier,
       startDate: t.startDate,
@@ -65,6 +68,136 @@ export const getAvailableTariffMetadata = async (req: Request, res: Response): P
   } catch (error) {
     logError("getAvailableTariffMetadata", error instanceof Error ? error : new Error(String(error)));
     res.status(500).json({ message: "Error al obtener los metadatos del tarifario." });
+  }
+};
+
+export const getAdminTariffMetadata = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const projection = {
+      type: 1,
+      periodIdentifier: 1,
+      startDate: 1,
+      status: 1,
+      'metadata.titulo': 1,
+      'metadata.periodo.inicio': 1,
+      'metadata.periodo.fin': 1,
+    };
+
+    // Admin: all records
+    const tariffsMeta = await Tariff.find({})
+      .select(projection)
+      .sort({ startDate: -1 });
+
+    const result = tariffsMeta.map(t => ({
+      _id: t._id,
+      type: t.type,
+      title: t.metadata.titulo,
+      status: t.status || 'active',
+      periodDescription: `${t.metadata.periodo.inicio} a ${t.metadata.periodo.fin}`,
+      periodIdentifier: t.periodIdentifier,
+      startDate: t.startDate,
+    }));
+
+    res.status(200).json(result);
+  } catch (error) {
+    logError("getAdminTariffMetadata", error instanceof Error ? error : new Error(String(error)));
+    res.status(500).json({ message: "Error al obtener los metadatos administrativos." });
+  }
+};
+
+export const getTariffById = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const tariff = await Tariff.findById(id);
+
+    if (!tariff) {
+      res.status(404).json({ message: "Tarifario no encontrado." });
+      return;
+    }
+
+    res.status(200).json(tariff);
+  } catch (error) {
+    logError("getTariffById", error instanceof Error ? error : new Error(String(error)));
+    res.status(500).json({ message: "Error al obtener el tarifario." });
+  }
+};
+
+export const createTariff = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const tariffData: ITariff = req.body;
+    const newTariff = new Tariff(tariffData);
+    await newTariff.save();
+
+    res.status(201).json(newTariff);
+  } catch (error) {
+    logError("createTariff", error instanceof Error ? error : new Error(String(error)));
+    res.status(500).json({ message: "Error al crear el tarifario." });
+  }
+};
+
+export const updateTariff = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const updatedTariff = await Tariff.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+
+    if (!updatedTariff) {
+      res.status(404).json({ message: "Tarifario no encontrado." });
+      return;
+    }
+
+    res.status(200).json(updatedTariff);
+  } catch (error) {
+    logError("updateTariff", error instanceof Error ? error : new Error(String(error)));
+    res.status(500).json({ message: "Error al actualizar el tarifario." });
+  }
+};
+
+export const deleteTariff = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const deletedTariff = await Tariff.findByIdAndDelete(id);
+
+    if (!deletedTariff) {
+      res.status(404).json({ message: "Tarifario no encontrado." });
+      return;
+    }
+
+    res.status(200).json({ message: "Tarifario eliminado correctamente." });
+  } catch (error) {
+    logError("deleteTariff", error instanceof Error ? error : new Error(String(error)));
+    res.status(500).json({ message: "Error al eliminar el tarifario." });
+  }
+};
+
+export const duplicateTariff = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const original = await Tariff.findById(id);
+
+    if (!original) {
+      res.status(404).json({ message: "Tarifario original no encontrado." });
+      return;
+    }
+
+    const duplicateData = original.toObject() as any;
+    delete duplicateData._id;
+    delete duplicateData.createdAt;
+    delete duplicateData.updatedAt;
+    delete duplicateData.__v;
+
+    duplicateData.periodIdentifier = `${duplicateData.periodIdentifier} (Copia)`;
+    duplicateData.status = 'inactive';
+    duplicateData.startDate = new Date();
+
+    const newTariff = new Tariff(duplicateData);
+    await newTariff.save();
+
+    res.status(201).json(newTariff);
+  } catch (error) {
+    logError("duplicateTariff", error instanceof Error ? error : new Error(String(error)));
+    res.status(500).json({ message: "Error al duplicar el tarifario." });
   }
 };
 

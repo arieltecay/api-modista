@@ -18,38 +18,41 @@ interface ITariffMetadataNew {
   nota_precios: string;
   nota_adicional: string;
   moneda: string;
-  contacto: IContacto;
+  contacto?: IContacto;
   ultimaActualizacion?: string;
   version?: string;
   notas?: string[];
 }
 const PeriodSchema = new Schema<IPeriod>({
-  inicio: { type: String, required: true },
-  fin: { type: String, required: true },
-});
+  inicio: { type: String, required: false, default: '' },
+  fin: { type: String, required: false, default: '' },
+}, { _id: false });
+
 const ContactoSchema = new Schema<IContacto>({
-  email: { type: String, required: true },
-  nota: { type: String, required: true },
-});
+  email: { type: String, required: false, default: '' },
+  nota: { type: String, required: false, default: '' },
+}, { _id: false });
+
 const TariffMetadataNewSchema = new Schema<ITariffMetadataNew>({
   titulo: { type: String, required: true },
-  organizacion: { type: String, required: true },
-  periodo: { type: PeriodSchema, required: true },
-  descripcion: { type: String, required: true },
-  nota_precios: { type: String, required: true },
-  nota_adicional: { type: String, required: true },
-  moneda: { type: String, required: true },
-  contacto: { type: ContactoSchema, required: true },
+  organizacion: { type: String, default: 'Modista' },
+  periodo: { type: PeriodSchema, required: false, default: () => ({}) },
+  descripcion: { type: String, required: false, default: '' },
+  nota_precios: { type: String, required: false, default: '' },
+  nota_adicional: { type: String, required: false, default: '' },
+  moneda: { type: String, default: 'ARS' },
+  contacto: { type: ContactoSchema, required: false, default: () => ({}) },
   ultimaActualizacion: { type: String },
   version: { type: String },
   notas: [{ type: String }],
-});
+}, { _id: false });
 
 
 export interface ITariff extends Document {
   type: string;
   periodIdentifier: string;
   startDate: Date;
+  status: 'active' | 'inactive';
   metadata: ITariffMetadataNew;
   content: Record<string, any>;
   createdAt?: Date;
@@ -60,6 +63,7 @@ const TariffSchema = new Schema<ITariff>({
   type: { type: String, required: true, unique: false },
   periodIdentifier: { type: String, required: true },
   startDate: { type: Date, required: true },
+  status: { type: String, enum: ['active', 'inactive'], default: 'active' },
   metadata: { type: TariffMetadataNewSchema, required: true },
   content: { type: Schema.Types.Mixed, required: true },
 }, {
