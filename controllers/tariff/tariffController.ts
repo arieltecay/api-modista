@@ -7,7 +7,7 @@ export const getTariffs = async (req: Request, res: Response): Promise<void> => 
   try {
     const { type, periodIdentifier } = req.query;
 
-    let query: any = { status: 'active' };
+    let query: any = { status: { $ne: 'inactive' } };
     if (type) {
       query.type = type;
     }
@@ -49,8 +49,8 @@ export const getAvailableTariffMetadata = async (req: Request, res: Response): P
       'metadata.periodo.fin': 1,
     };
 
-    // Public: only active
-    const tariffsMeta = await Tariff.find({ status: 'active' })
+    // Public: only active (or documents without status field which we treat as active)
+    const tariffsMeta = await Tariff.find({ status: { $ne: 'inactive' } })
       .select(projection)
       .sort({ startDate: -1 });
 
