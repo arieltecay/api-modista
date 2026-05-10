@@ -8,15 +8,13 @@ export const sendWhatsAppMessage = async (to: string, message: string): Promise<
   const PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID;
   
   if (!ACCESS_TOKEN || !PHONE_NUMBER_ID) {
-    console.error('WhatsApp API credentials missing in environment variables');
+    console.error('[WhatsApp Error] Credentials missing in environment variables');
     return false;
   }
 
   // Sanitizar número de Argentina para ruteo internacional (54 + código area + número)
-  // Probamos el formato sin el 9, pero asegurándonos de que Meta lo reconozca como número válido.
+  // Se quita el '9' si está presente (549 -> 54) para coincidir con el ruteo oficial de Meta Business
   let formattedTo = to.startsWith('549') ? '54' + to.substring(3) : to;
-
-  console.log(`[DEBUG Meta] Enviando mensaje final a: ${formattedTo}`);
 
   const API_URL = `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`;
 
@@ -41,10 +39,10 @@ export const sendWhatsAppMessage = async (to: string, message: string): Promise<
       }
     );
 
-    console.log(`WhatsApp message sent to ${formattedTo}. ID: ${response.data.messages[0].id}`);
+    console.log(`[WhatsApp OK] Mensaje enviado a ${formattedTo}. ID: ${response.data.messages[0].id}`);
     return true;
   } catch (error: any) {
-    console.error('Error sending WhatsApp message:', error.response?.data || error.message);
+    console.error('[WhatsApp Error] Detalle API Meta:', error.response?.data || error.message);
     return false;
   }
 };
@@ -68,7 +66,7 @@ export const sendWhatsAppTemplate = async (to: string, templateName: string, com
         template: {
           name: templateName,
           language: {
-            code: 'es_AR' // o 'es' según corresponda
+            code: 'es_AR'
           },
           components: components
         }
@@ -81,7 +79,7 @@ export const sendWhatsAppTemplate = async (to: string, templateName: string, com
     );
     return true;
   } catch (error: any) {
-    console.error(`Error sending template ${templateName}:`, error.response?.data || error.message);
+    console.error(`[WhatsApp Error] Fallo al enviar plantilla ${templateName}:`, error.response?.data || error.message);
     return false;
   }
 };

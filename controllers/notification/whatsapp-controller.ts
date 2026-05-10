@@ -15,7 +15,6 @@ export const verifyWebhook = (req: Request, res: Response) => {
 
   if (mode && token) {
     if (mode === 'subscribe' && token === process.env.META_VERIFY_TOKEN) {
-      console.log('WEBHOOK_VERIFIED');
       res.status(200).send(challenge);
     } else {
       res.sendStatus(403);
@@ -27,7 +26,6 @@ export const handleWebhook = async (req: Request, res: Response) => {
   try {
     const signature = req.headers['x-hub-signature-256'] as string;
     
-    // Validate Signature if META_APP_SECRET is present
     if (process.env.META_APP_SECRET && signature) {
       const elements = signature.split('=');
       const signatureHash = elements[1];
@@ -50,36 +48,50 @@ export const handleWebhook = async (req: Request, res: Response) => {
         for (const change of entry.changes) {
           const value = change.value;
           
-          // Handle Messages
+          // Manejar Mensajes
           if (value.messages) {
             for (const message of value.messages) {
               const from = message.from;
               const textBody = message.text?.body;
               
               if (textBody) {
-                console.log(`Received message from ${from}: ${textBody}`);
                 
-                // 1. Persist inbound message
-                await ConversationMessage.create({ platform: 'whatsapp', platform_id: from, body: textBody, direction: 'inbound', status: 'delivered' });
+                // 1. Persistir mensaje entrante
+                await ConversationMessage.create({ 
+                  platform: 'whatsapp', 
+                  platform_id: from, 
+                  body: textBody, 
+                  direction: 'inbound', 
+                  status: 'delivered' 
+                });
                 
-                // Get AI Response using Gemini
+                // 2. Obtener respuesta de Mila (Gemini)
                 const aiResponse = await generateAIResponse(textBody, from);
                 
-                // Send response back via WhatsApp
+                // 3. Enviar respuesta oficial
                 const sent = await sendWhatsAppMessage(from, aiResponse);
 
-                // 2. Persist outbound message if successful
+                // 4. Persistir mensaje saliente si fue exitoso
                 if (sent) {
-                  await ConversationMessage.create({ platform: 'whatsapp', platform_id: from, body: aiResponse, direction: 'outbound', status: 'sent' });
+                  await ConversationMessage.create({ 
+                    platform: 'whatsapp', 
+                    platform_id: from, 
+                    body: aiResponse, 
+                    direction: 'outbound', 
+                    status: 'sent' 
+                  });
                 }
               }
             }
           }
 
-          // Handle Status Updates (sent, delivered, read)
+          // Manejar Actualizaciones de Estado
           if (value.statuses) {
             for (const status of value.statuses) {
-              console.log(`Status update for message ${status.id}: ${status.status}`);
+              // Log mínimo para monitorear entrega
+              if (status.status === 'failed') {
+                console.error(`[WhatsApp] Error en mensaje ${status.id}:`, status.errors);
+              }
             }
           }
         }

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import ConversationMessage from '../../models/ConversationMessage.js';
+import { sendWhatsAppMessage } from '../../services/whatsapp-official-service.js';
 
 export const getChats = async (req: Request, res: Response) => {
   try {
@@ -34,8 +35,27 @@ export const sendMessage = async (req: Request, res: Response) => {
   try {
     const { platform, platform_id } = req.params;
     const { body } = req.body;
-    const message = await ConversationMessage.create({ platform, platform_id, body, direction: 'outbound', status: 'sent' });
-    res.status(201).json(message);
+
+    let sent = true;
+    
+    // Si la plataforma es WhatsApp, enviamos el mensaje real a través de la API oficial
+    if (platform === 'whatsapp') {
+      console.log(`[Admin Hub] Enviando respuesta manual a ${platform_id}...`);
+      sent = await sendWhatsAppMessage(platform_id as string, body);
+    }
+
+    if (sent) {
+      const message = await ConversationMessage.create({ 
+        platform, 
+        platform_id, 
+        body, 
+        direction: 'outbound', 
+        status: 'sent' 
+      });
+      res.status(201).json(message);
+    } else {
+      res.status(500).json({ error: 'No se pudo enviar el mensaje por WhatsApp a través de la API de Meta' });
+    }
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
