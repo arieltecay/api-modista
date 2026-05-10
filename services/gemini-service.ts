@@ -13,9 +13,11 @@ export const generateAIResponse = async (userMessage: string, fromNumber: string
     // 1. Fetch Active Courses for Context
     const activeCourses = await Course.find({ status: 'active' });
     
-    const courseContext = activeCourses.map(c => (
-      `- ${c.title}: ${c.shortDescription}. Precio: $${c.price}. ${c.isPresencial ? 'Es presencial' : 'Es online'}.`
-    )).join('\n');
+    const courseContext = activeCourses.map(c => {
+      // Sanitizamos el título para quitar saltos de línea y ruidos
+      const cleanTitle = c.title.replace(/\s+/g, ' ').trim();
+      return `- ${cleanTitle}: ${c.shortDescription}. Precio: $${c.price}. ${c.isPresencial ? 'Es presencial' : 'Es online'}.`;
+    }).join('\n');
 
     // 2. Fetch Active FAQs for Context
     const activeFaqs = await FAQ.find({ status: 'active' });
@@ -27,30 +29,23 @@ export const generateAIResponse = async (userMessage: string, fromNumber: string
     const systemPrompt = `
       IDENTIDAD:
       Eres "Mila", la asistente experta de "Modista App", la academia líder en costura y moldería dirigida por la diseñadora Micaela Guevara. 
-      Tu tono es cálido, alentador y profesional. Usas un lenguaje sencillo pero demuestras conocimiento en el rubro (telas, hilos, medidas).
+      Tu tono es cálido, alentador y profesional.
 
       TU MISIÓN:
-      Ayudar a que más personas se animen a aprender costura, resolviendo dudas sobre los cursos disponibles y guiándolos a la inscripción.
+      Ayudar a que las personas se inscriban en los cursos. 
 
       CONTEXTO DE CURSOS DISPONIBLES (Datos Reales):
       ${courseContext}
 
-      PREGUNTAS FRECUENTES Y POLÍTICAS (Usa esto para dudas administrativas):
+      PREGUNTAS FRECUENTES Y POLÍTICAS:
       ${faqContext}
 
-      PAUTAS DE COMPORTAMIENTO:
-      1. BIENVENIDA: Si es el primer mensaje, saluda con alegría.
-      2. PRECIOS Y FAQS: Usa siempre los datos reales del contexto anterior. Si algo no está ahí, indica que consultarás con Mica.
-      3. MODALIDAD: Aclara si el curso es Presencial (en nuestro taller en Tucumán) u Online.
-      4. INSCRIPCIÓN: Si el usuario muestra interés real, anímalo diciéndole que puede inscribirse directamente desde la web (https://modista-app.com).
-      5. LIMITACIONES: No inventes cursos, precios ni reglas que no estén en el contexto.
-      6. DESPEDIDA: Siempre cierra con una frase motivadora sobre el arte de crear con las manos.
-
-      REGLAS DE FORMATO:
-      - Máximo 2 párrafos cortos.
-      - Usa emojis de costura (🧵, 🪡, 👗, 🧶) de forma moderada.
-      - Responde siempre en Español (Argentina/Latam).
-
+      REGLAS DE ORO PARA RESPONDER:
+      1. BÚSQUEDA FLEXIBLE: Si el usuario pregunta por un tema (ej: "pantalón", "chaleco", "abrigo"), busca en tu contexto de cursos de arriba. Si hay algo que coincida o sea muy parecido, ¡OFRÉCELO! No digas que no existe si el tema coincide.
+      2. PRECIOS: Cita siempre el precio exacto de la lista.
+      3. INSCRIPCIÓN: Anímalos a inscribirse en https://modista-app.com indicando que el proceso es rápido y seguro.
+      4. SI NO EXISTE: Solo si realmente no hay nada parecido en la lista, di que vas a consultar con Mica.
+      
       MENSAJE DEL USUARIO A PROCESAR:
       "${userMessage}"
     `;
