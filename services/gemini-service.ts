@@ -1,6 +1,8 @@
 import axios from 'axios';
 import Course from '../models/Course.js';
 import FAQ from '../models/FAQ.js';
+import BotInstruction from '../models/BotInstruction.js';
+import { sanitizePromptChunk } from '../utils/stringUtils.js';
 
 /**
  * Gemini AI Service for WhatsApp NLU
@@ -10,29 +12,43 @@ export const generateAIResponse = async (userMessage: string, fromNumber: string
   const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
   try {
-    // 1. Fetch Active Courses for Context
-    const activeCourses = await Course.find({ status: 'active' });
+    // 1. Fetch Dynamic Bot Instructions (Modular Prompt)
+    const activeInstructions = await BotInstruction.find({ isActive: true }).sort({ order: 1 });
     
+    let botContext = '';
+    
+    if (activeInstructions.length > 0) {
+      botContext = activeInstructions.map(inst => {
+        return `### ${inst.title.toUpperCase()}\n${sanitizePromptChunk(inst.content)}`;
+      }).join('\n\n');
+    } else {
+      // Fallback a identidad básica si no hay instrucciones configuradas
+      botContext = `
+        IDENTIDAD:
+        Eres "Mila", la asistente experta de "Modista App", la academia líder en costura y moldería dirigida por la diseñadora Micaela Guevara. 
+        Tu tono es cálido, alentador y profesional.
+
+        TU MISIÓN:
+        Ayudar a que las personas se inscriban en los cursos.
+      `;
+    }
+
+    // 2. Fetch Active Courses for Context
+    const activeCourses = await Course.find({ status: 'active' });
     const courseContext = activeCourses.map(c => {
-      // Sanitizamos el título para quitar saltos de línea y ruidos
       const cleanTitle = c.title.replace(/\s+/g, ' ').trim();
       return `- ${cleanTitle}: ${c.shortDescription}. Precio: $${c.price}. ${c.isPresencial ? 'Es presencial' : 'Es online'}.`;
     }).join('\n');
 
-    // 2. Fetch Active FAQs for Context
+    // 3. Fetch Active FAQs for Context
     const activeFaqs = await FAQ.find({ status: 'active' });
     const faqContext = activeFaqs.map(f => (
       `P: ${f.question}\nR: ${f.answer}`
     )).join('\n\n');
 
-    // 3. Build System Prompt
+    // 4. Build Final System Prompt
     const systemPrompt = `
-      IDENTIDAD:
-      Eres "Mila", la asistente experta de "Modista App", la academia líder en costura y moldería dirigida por la diseñadora Micaela Guevara. 
-      Tu tono es cálido, alentador y profesional.
-
-      TU MISIÓN:
-      Ayudar a que las personas se inscriban en los cursos. 
+      ${botContext}
 
       CONTEXTO DE CURSOS DISPONIBLES (Datos Reales):
       ${courseContext}
@@ -40,17 +56,16 @@ export const generateAIResponse = async (userMessage: string, fromNumber: string
       PREGUNTAS FRECUENTES Y POLÍTICAS:
       ${faqContext}
 
-      REGLAS DE ORO PARA RESPONDER:
-      1. BÚSQUEDA FLEXIBLE: Si el usuario pregunta por un tema (ej: "pantalón", "chaleco", "abrigo"), busca en tu contexto de cursos de arriba. Si hay algo que coincida o sea muy parecido, ¡OFRÉCELO! No digas que no existe si el tema coincide.
+      REGLAS DE ORO ADICIONALES:
+      1. BÚSQUEDA FLEXIBLE: Si el usuario pregunta por un tema (ej: "pantalón", "chaleco", "abrigo"), busca en tu contexto de cursos. Si hay algo parecido, ¡OFRÉCELO!
       2. PRECIOS: Cita siempre el precio exacto de la lista.
-      3. INSCRIPCIÓN: Anímalos a inscribirse en https://modista-app.com indicando que el proceso es rápido y seguro.
-      4. SI NO EXISTE: Solo si realmente no hay nada parecido en la lista, di que vas a consultar con Mica.
+      3. INSCRIPCIÓN: Anímalos a inscribirse en https://modista-app.com.
       
       MENSAJE DEL USUARIO A PROCESAR:
       "${userMessage}"
     `;
 
-    // 4. Call Gemini API
+    // 5. Call Gemini API
     const response = await axios.post(API_URL, {
       contents: [{
         parts: [{ text: systemPrompt }]
