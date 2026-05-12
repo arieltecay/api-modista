@@ -60,3 +60,29 @@ export const sendMessage = async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+export const deleteMessage = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const deletedMessage = await ConversationMessage.findByIdAndDelete(id);
+    
+    if (!deletedMessage) {
+      return res.status(404).json({ error: 'Mensaje no encontrado' });
+    }
+    
+    res.json({ message: 'Mensaje eliminado correctamente' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const clearChatHistory = async (req: Request, res: Response) => {
+  try {
+    const { platform, platform_id } = req.params;
+    await ConversationMessage.deleteMany({ platform, platform_id });
+    
+    res.json({ message: 'Historial de chat eliminado correctamente' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};

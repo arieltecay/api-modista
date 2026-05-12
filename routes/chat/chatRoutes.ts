@@ -9,6 +9,8 @@ const router = Router();
 router.get('/', authenticateToken, chatController.getChats);
 router.get('/:platform/:platform_id', authenticateToken, chatController.getMessagesByPlatform);
 router.post('/:platform/:platform_id/messages', authenticateToken, chatController.sendMessage);
+router.delete('/:platform/:platform_id/clear', authenticateToken, requireAdmin, chatController.clearChatHistory);
+router.delete('/messages/:id', authenticateToken, requireAdmin, chatController.deleteMessage);
 
 // Rutas de entrenamiento (Instrucciones)
 router.get('/instructions', authenticateToken, botInstructionController.getInstructions);
