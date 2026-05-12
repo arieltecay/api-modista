@@ -29,7 +29,7 @@ router.use('/upload', uploadRoutes);
 router.use('/carousel', carouselRoutes);
 
 // Use notification routes
-router.use('/notification', notificationRoutes);
+router.use('/notifications', notificationRoutes);
 
 // Use payment routes
 router.use('/payment', paymentRoutes);

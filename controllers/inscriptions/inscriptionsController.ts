@@ -5,6 +5,7 @@ import Turno from '../../models/Turno.js';
 import Course from '../../models/Course.js';
 import { logError } from '../../services/logger.js';
 import { sendDepositEmail } from '../../services/emailServices.js';
+import { sendWhatsAppTemplate } from '../../services/whatsapp-official-service.js';
 import ExcelJS from 'exceljs';
 import { CreateInscriptionBody, ExportInscriptionsQuery, GetInscriptionsQuery, UpdateDepositBody, UpdatePaymentStatusBody } from './types.js';
 import { resolveCourseIdentifier } from '../courses/helper.js';
@@ -321,23 +322,62 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
 
     // Solo actuar si hay un cambio de estado
     if (inscription.paymentStatus !== paymentStatus) {
-      if (paymentStatus === 'paid') {
-        // Manejo de Cupos al pagar
-        if (inscription.turnoId && !inscription.isReserved) {
-          const turno = await Turno.findById(inscription.turnoId);
-          if (turno) {
-            if (turno.cuposInscriptos >= turno.cupoMaximo) {
-              return res.status(400).json({
-                success: false,
-                message: 'No se puede marcar como pagado: El turno ya ha alcanzado su cupo máximo.'
-              });
+        if (paymentStatus === 'paid') {
+            // Manejo de Cupos al pagar
+            if (inscription.turnoId && !inscription.isReserved) {
+                const turno = await Turno.findById(inscription.turnoId);
+                if (turno) {
+                    if (turno.cuposInscriptos >= turno.cupoMaximo) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'No se puede marcar como pagado: El turno ya ha alcanzado su cupo máximo.'
+                        });
+                    }
+                    // Incrementar cupo
+                    await Turno.findByIdAndUpdate(inscription.turnoId, { $inc: { cuposInscriptos: 1 } });
+                    inscription.isReserved = true;
+                }
             }
-            // Incrementar cupo
-            await Turno.findByIdAndUpdate(inscription.turnoId, { $inc: { cuposInscriptos: 1 } });
-            inscription.isReserved = true;
-          }
+
+            // --- NOTIFICACIÓN WHATSAPP (Meta API) ---
+            if (inscription.celular) {
+              try {
+                // Buscamos el curso para obtener el link de acceso pago
+                const course = await Course.findOne({ title: inscription.courseTitle });
+                const courseLink = course?.coursePaid || 'https://modista-app.com/mis-cursos';
+
+                // Preparamos los componentes para la plantilla 'inscripcion_confirmada'
+                // {{1}} = Nombre completo del alumno
+                // {{2}} = Título del curso
+                // {{3}} = Link de acceso (YouTube/Plataforma)
+                const components = [
+                  {
+                    type: 'body',
+                    parameters: [
+                      { type: 'text', text: `${inscription.nombre} ${inscription.apellido}` },
+                      { type: 'text', text: inscription.courseTitle },
+                      { type: 'text', text: courseLink }
+                    ]
+                  }
+                ];
+
+                // Disparar envío asíncrono
+                // Usamos 'inscripcion_confirmada' que es la que creaste en español
+                sendWhatsAppTemplate(inscription.celular, 'inscripcion_confirmada', components, 'es_AR')
+                  .then(success => {
+                    if (!success) {
+                      console.warn(`[WhatsApp Automation] No se pudo enviar 'inscripcion_confirmada'. Posiblemente aún no esté aprobada.`);
+                    }
+                  })
+                  .catch(err => console.error('[WhatsApp Automation Error]:', err));
+
+              } catch (wsError) {
+                console.error('Error preparando notificación WhatsApp:', wsError);
+              }
+            }
         }
-      } else if (paymentStatus === 'pending' && inscription.paymentStatus === 'paid') {
+        else if (paymentStatus === 'pending' && inscription.paymentStatus === 'paid') {
+
         // Liberar cupo si vuelve a pendiente
         if (inscription.turnoId && inscription.isReserved) {
           await Turno.findByIdAndUpdate(inscription.turnoId, { $inc: { cuposInscriptos: -1 } });

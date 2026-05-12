@@ -48,25 +48,104 @@ export const sendWhatsAppMessage = async (to: string, message: string): Promise<
 };
 
 /**
+ * Fetches all message templates from the WhatsApp Business Account
+ */
+export const getWhatsAppTemplates = async () => {
+  const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
+  const WABA_ID = process.env.META_WABA_ID;
+
+  if (!ACCESS_TOKEN || !WABA_ID) {
+    console.error('[WhatsApp Error] Credentials missing for template management');
+    return [];
+  }
+
+  const API_URL = `https://graph.facebook.com/v21.0/${WABA_ID}/message_templates`;
+
+  try {
+    const response = await axios.get(API_URL, {
+      headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+    });
+    return response.data.data;
+  } catch (error: any) {
+    console.error('[WhatsApp Error] Fallo al obtener plantillas:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Creates a new message template in Meta
+ */
+export const createWhatsAppTemplate = async (templateData: any) => {
+  const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
+  const WABA_ID = process.env.META_WABA_ID;
+
+  if (!ACCESS_TOKEN || !WABA_ID) throw new Error('Meta credentials missing');
+
+  const API_URL = `https://graph.facebook.com/v21.0/${WABA_ID}/message_templates`;
+
+  try {
+    const response = await axios.post(API_URL, templateData, {
+      headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error('[WhatsApp Error] Fallo al crear plantilla:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Deletes a message template from Meta
+ */
+export const deleteWhatsAppTemplate = async (templateName: string) => {
+  const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
+  const WABA_ID = process.env.META_WABA_ID;
+
+  if (!ACCESS_TOKEN || !WABA_ID) throw new Error('Meta credentials missing');
+
+  // Según la documentación de Meta, para borrar por nombre se usa el parámetro 'name'
+  // y se debe hacer el DELETE sobre el endpoint de message_templates del WABA.
+  const API_URL = `https://graph.facebook.com/v21.0/${WABA_ID}/message_templates`;
+
+  try {
+    const response = await axios.delete(API_URL, {
+      params: {
+        name: templateName,
+        access_token: ACCESS_TOKEN
+      }
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error('[WhatsApp Error] Fallo al eliminar plantilla:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
  * Sends a pre-approved Meta template
  */
-export const sendWhatsAppTemplate = async (to: string, templateName: string, components: any[] = []): Promise<boolean> => {
+export const sendWhatsAppTemplate = async (to: string, templateName: string, components: any[] = [], languageCode: string = 'es_AR'): Promise<boolean> => {
   const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
   const PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID;
   
+  if (!ACCESS_TOKEN || !PHONE_NUMBER_ID) return false;
+
   const API_URL = `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`;
+
+  // Sanitizar número
+  let formattedTo = to.startsWith('549') ? '54' + to.substring(3) : to;
 
   try {
     await axios.post(
       API_URL,
       {
         messaging_product: 'whatsapp',
-        to: to,
+        to: formattedTo,
         type: 'template',
         template: {
           name: templateName,
           language: {
-            code: 'es_AR'
+            code: languageCode
           },
           components: components
         }
@@ -79,7 +158,7 @@ export const sendWhatsAppTemplate = async (to: string, templateName: string, com
     );
     return true;
   } catch (error: any) {
-    console.error(`[WhatsApp Error] Fallo al enviar plantilla ${templateName}:`, error.response?.data || error.message);
+    console.error(`[WhatsApp Error] Fallo al enviar plantilla ${templateName} (${languageCode}):`, error.response?.data || error.message);
     return false;
   }
 };
