@@ -344,29 +344,38 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
               try {
                 // Buscamos el curso para obtener el link de acceso pago
                 const course = await Course.findOne({ title: inscription.courseTitle });
-                const courseLink = course?.coursePaid || 'https://modista-app.com/mis-cursos';
+                const courseLink = course?.coursePaid || 'https://modista-app.com/cursos';
 
-                // Preparamos los componentes para la plantilla 'inscripcion_confirmada'
-                // {{1}} = Nombre completo del alumno
-                // {{2}} = Título del curso
-                // {{3}} = Link de acceso (YouTube/Plataforma)
+                // Preparamos los componentes para la plantilla con parámetros NOMBRADOS
+                // Meta ahora prefiere nombres descriptivos en lugar de {{1}}, {{2}}
                 const components = [
                   {
                     type: 'body',
                     parameters: [
-                      { type: 'text', text: `${inscription.nombre} ${inscription.apellido}` },
-                      { type: 'text', text: inscription.courseTitle },
-                      { type: 'text', text: courseLink }
+                      { 
+                        type: 'text', 
+                        parameter_name: 'nombre_alumno', 
+                        text: `${inscription.nombre} ${inscription.apellido}` 
+                      },
+                      { 
+                        type: 'text', 
+                        parameter_name: 'nombre_curso', 
+                        text: inscription.courseTitle 
+                      },
+                      { 
+                        type: 'text', 
+                        parameter_name: 'enlace_acceso', 
+                        text: courseLink 
+                      }
                     ]
                   }
                 ];
-
                 // Disparar envío asíncrono
-                // Usamos 'inscripcion_confirmada' que es la que creaste en español
-                sendWhatsAppTemplate(inscription.celular, 'inscripcion_confirmada', components, 'es_AR')
+                // Usamos 'actualizacion_inscripcion' que es la que creaste en español
+                sendWhatsAppTemplate(inscription.celular, 'actualizacion_inscripcion', components, 'es_AR')
                   .then(success => {
                     if (!success) {
-                      console.warn(`[WhatsApp Automation] No se pudo enviar 'inscripcion_confirmada'. Posiblemente aún no esté aprobada.`);
+                      console.warn(`[WhatsApp Automation] No se pudo enviar 'actualizacion_inscripcion'. Posiblemente aún no esté aprobada.`);
                     }
                   })
                   .catch(err => console.error('[WhatsApp Automation Error]:', err));

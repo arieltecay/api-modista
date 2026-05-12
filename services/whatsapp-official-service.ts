@@ -65,6 +65,9 @@ export const getWhatsAppTemplates = async () => {
     const response = await axios.get(API_URL, {
       headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
     });
+    console.log(`[WhatsApp Debug] Plantillas recuperadas de Meta: ${response.data.data.length}`);
+    // Logueamos los nombres para ver si Meta las está filtrando por algún motivo
+    console.log('[WhatsApp Debug] Nombres:', response.data.data.map((t: any) => t.name).join(', '));
     return response.data.data;
   } catch (error: any) {
     console.error('[WhatsApp Error] Fallo al obtener plantillas:', error.response?.data || error.message);
