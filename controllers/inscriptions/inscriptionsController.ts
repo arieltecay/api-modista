@@ -75,6 +75,52 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
     };
 
     const inscription = await Inscription.create(inscriptionData);
+
+    // --- NOTIFICACIÓN WHATSAPP AUTOMÁTICA AL INSCRIBIRSE ---
+    if (inscription.celular) {
+      try {
+        const components = [
+          {
+            type: 'body',
+            parameters: [
+              { 
+                type: 'text', 
+                parameter_name: 'nombre_alumno', 
+                text: `${inscription.nombre} ${inscription.apellido}` 
+              },
+              { 
+                type: 'text', 
+                parameter_name: 'nombre_curso', 
+                text: inscription.courseTitle 
+              },
+              { 
+                type: 'text', 
+                parameter_name: 'cvu', 
+                text: '0000003100069944243193' 
+              },
+              { 
+                type: 'text', 
+                parameter_name: 'alias', 
+                text: 'mica.menta' 
+              }
+            ]
+          }
+        ];
+
+        // Disparar envío asíncrono de la nueva plantilla
+        sendWhatsAppTemplate(inscription.celular, 'confirmacion_inscripcion_pago', components, 'es_AR')
+          .then(success => {
+            if (!success) {
+              console.warn(`[WhatsApp Automation] No se pudo enviar 'confirmacion_inscripcion_pago'. Posiblemente aún no esté aprobada.`);
+            }
+          })
+          .catch(err => console.error('[WhatsApp Automation Error]:', err));
+
+      } catch (wsError) {
+        console.error('Error preparando notificación WhatsApp inicial:', wsError);
+      }
+    }
+
     res.status(201).json({
       success: true,
       data: inscription,
