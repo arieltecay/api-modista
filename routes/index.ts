@@ -28,7 +28,8 @@ router.use('/upload', uploadRoutes);
 // Use carousel routes
 router.use('/carousel', carouselRoutes);
 
-// Use notification routes
+// Use notification routes - Soporta tanto singular (Meta) como plural (Admin)
+router.use('/notification', notificationRoutes);
 router.use('/notifications', notificationRoutes);
 
 // Use payment routes

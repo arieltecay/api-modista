@@ -11,37 +11,37 @@ import { authenticateToken, requireAdmin } from '../../middleware/authMiddleware
 const router: Router = express.Router();
 
 /**
- * @route   GET /api/notifications/whatsapp/webhook
+ * @route   GET /api/notification/whatsapp/webhook
  * @desc    Meta Webhook Verification (Subscribe)
  */
 router.get('/webhook', verifyWebhook);
 
 /**
- * @route   POST /api/notifications/whatsapp/webhook
+ * @route   POST /api/notification/whatsapp/webhook
  * @desc    Meta Webhook Handling (Messages & Status)
  */
 router.post('/webhook', handleWebhook);
 
 /**
- * @route   GET /api/notifications/whatsapp/templates
+ * @route   GET /api/notification/whatsapp/templates
  * @desc    Get all message templates from Meta
  */
 router.get('/templates', authenticateToken, requireAdmin, getTemplates);
 
 /**
- * @route   POST /api/notifications/whatsapp/templates
+ * @route   POST /api/notification/whatsapp/templates
  * @desc    Create a new message template in Meta
  */
 router.post('/templates', authenticateToken, requireAdmin, createTemplate);
 
 /**
- * @route   DELETE /api/notifications/whatsapp/templates/:name
+ * @route   DELETE /api/notification/whatsapp/templates/:name
  * @desc    Delete a message template from Meta
  */
 router.delete('/templates/:name', authenticateToken, requireAdmin, deleteTemplate);
 
 /**
- * @route   POST /api/notifications/whatsapp/templates/test
+ * @route   POST /api/notification/whatsapp/templates/test
  * @desc    Send a test template to a specific number
  */
 router.post('/templates/test', authenticateToken, requireAdmin, sendTestTemplate);
