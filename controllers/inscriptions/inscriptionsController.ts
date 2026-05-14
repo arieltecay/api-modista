@@ -108,10 +108,10 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
         ];
 
         // Disparar envío asíncrono de la nueva plantilla
-        sendWhatsAppTemplate(inscription.celular, 'confirmacion_inscripcion_pago', components, 'es_AR')
+        sendWhatsAppTemplate(inscription.celular, 'confirmacion_pago_utilidad', components, 'es_AR')
           .then(success => {
             if (!success) {
-              console.warn(`[WhatsApp Automation] No se pudo enviar 'confirmacion_inscripcion_pago'. Posiblemente aún no esté aprobada.`);
+              console.warn(`[WhatsApp Automation] No se pudo enviar 'confirmacion_pago_utilidad'. Posiblemente aún no esté aprobada.`);
             }
           })
           .catch(err => console.error('[WhatsApp Automation Error]:', err));
@@ -417,11 +417,11 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
                   }
                 ];
                 // Disparar envío asíncrono
-                // Usamos 'actualizacion_inscripcion' que es la que creaste en español
-                sendWhatsAppTemplate(inscription.celular, 'actualizacion_inscripcion', components, 'es_AR')
+                // Usamos 'inscripcion_pago_utilidad' que es la que creaste en español (Categoría Utilidad)
+                sendWhatsAppTemplate(inscription.celular, 'inscripcion_pago_utilidad', components, 'es_AR')
                   .then(success => {
                     if (!success) {
-                      console.warn(`[WhatsApp Automation] No se pudo enviar 'actualizacion_inscripcion'. Posiblemente aún no esté aprobada.`);
+                      console.warn(`[WhatsApp Automation] No se pudo enviar 'inscripcion_pago_utilidad'. Posiblemente aún no esté aprobada.`);
                     }
                   })
                   .catch(err => console.error('[WhatsApp Automation Error]:', err));
