@@ -27,6 +27,8 @@ export interface IInscription extends Document {
   fechaInscripcion: Date;
   paymentHistory: IPayment[];
   totalPaid: number;
+  marketingSource?: string;
+  utmParams?: Record<string, any>;
 }
 
 // Interface para el modelo con paginación
@@ -108,6 +110,16 @@ const InscriptionSchema = new Schema<IInscription>({
   fechaInscripcion: {
     type: Date,
     default: Date.now,
+  },
+  // Atribución de Marketing
+  marketingSource: {
+    type: String,
+    default: 'organic',
+    trim: true
+  },
+  utmParams: {
+    type: Schema.Types.Mixed,
+    default: {}
   },
   // Nuevo campo de historial de pagos
   paymentHistory: {

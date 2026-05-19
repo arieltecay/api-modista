@@ -13,11 +13,15 @@ import uploadRoutes from './upload/index.js';
 import carouselRoutes from './carousel/carousel-routes.js';
 import faqRoutes from './faq/faqRoutes.js';
 import chatRoutes from './chat/chatRoutes.js';
+import dashboardRoutes from './dashboard/dashboardRoutes.js';
 
 const router: Router = express.Router();
 
 // Use faq routes
 router.use('/faq', faqRoutes);
+
+// Use dashboard routes
+router.use('/dashboard', dashboardRoutes);
 
 // Use chat routes
 router.use('/chat', chatRoutes);

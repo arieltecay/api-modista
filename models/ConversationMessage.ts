@@ -7,6 +7,7 @@ export interface IConversationMessage extends Document {
   direction: 'inbound' | 'outbound';
   status: 'sent' | 'delivered' | 'read' | 'failed';
   timestamp: Date;
+  isAdminRead: boolean;
 }
 
 const ConversationMessageSchema: Schema = new Schema({
@@ -16,6 +17,7 @@ const ConversationMessageSchema: Schema = new Schema({
   direction: { type: String, enum: ['inbound', 'outbound'], required: true },
   status: { type: String, enum: ['sent', 'delivered', 'read', 'failed'], default: 'sent' },
   timestamp: { type: Date, default: Date.now },
+  isAdminRead: { type: Boolean, default: false },
 });
 
 export default mongoose.model<IConversationMessage>('ConversationMessage', ConversationMessageSchema);

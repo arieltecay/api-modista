@@ -24,8 +24,28 @@ export const getChats = async (req: Request, res: Response) => {
 export const getMessagesByPlatform = async (req: Request, res: Response) => {
   try {
     const { platform, platform_id } = req.params;
+    
+    // Al obtener los mensajes de un chat, marcamos los mensajes entrantes como leídos
+    await ConversationMessage.updateMany(
+      { platform, platform_id, direction: 'inbound', isAdminRead: false },
+      { $set: { isAdminRead: true } }
+    );
+
     const messages = await ConversationMessage.find({ platform, platform_id }).sort({ timestamp: 1 });
     res.json(messages);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const markAsRead = async (req: Request, res: Response) => {
+  try {
+    const { platform, platform_id } = req.params;
+    await ConversationMessage.updateMany(
+      { platform, platform_id, direction: 'inbound', isAdminRead: false },
+      { $set: { isAdminRead: true } }
+    );
+    res.json({ message: 'Mensajes marcados como leídos' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
