@@ -52,6 +52,22 @@ export const handleWebhook = async (req: Request, res: Response) => {
           if (value.messages) {
             for (const message of value.messages) {
               const from = message.from;
+              
+              // --- LÓGICA DE BOTONES DE RESPUESTA RÁPIDA ---
+              if (message.type === 'button' && message.button) {
+                const buttonText = message.button.text;
+                
+                if (buttonText === 'Copiar CVU') {
+                  await sendWhatsAppMessage(from, '0000003100069944243193');
+                  continue;
+                }
+                
+                if (buttonText === 'Copiar Alias') {
+                  await sendWhatsAppMessage(from, 'mica.menta');
+                  continue;
+                }
+              }
+
               const textBody = message.text?.body;
               
               if (textBody) {

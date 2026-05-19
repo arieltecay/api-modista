@@ -13,8 +13,12 @@ export const sendWhatsAppMessage = async (to: string, message: string): Promise<
   }
 
   // Sanitizar número de Argentina para ruteo internacional (54 + código area + número)
-  // Se quita el '9' si está presente (549 -> 54) para coincidir con el ruteo oficial de Meta Business
-  let formattedTo = to.startsWith('549') ? '54' + to.substring(3) : to;
+  // Meta Cloud API no acepta el '9' (móvil) después del '54' para Argentina.
+  // Ejemplo: 549381... -> 54381...
+  let formattedTo = to.replace(/\D/g, ''); // Quitar cualquier cosa que no sea número
+  if (formattedTo.startsWith('549')) {
+    formattedTo = '54' + formattedTo.substring(3);
+  }
 
   const API_URL = `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`;
 
@@ -135,8 +139,11 @@ export const sendWhatsAppTemplate = async (to: string, templateName: string, com
 
   const API_URL = `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`;
 
-  // Sanitizar número
-  let formattedTo = to.startsWith('549') ? '54' + to.substring(3) : to;
+  // Sanitizar número de Argentina
+  let formattedTo = to.replace(/\D/g, ''); 
+  if (formattedTo.startsWith('549')) {
+    formattedTo = '54' + formattedTo.substring(3);
+  }
 
   try {
     await axios.post(
