@@ -146,7 +146,7 @@ export const sendWhatsAppTemplate = async (to: string, templateName: string, com
   }
 
   try {
-    await axios.post(
+    const response = await axios.post(
       API_URL,
       {
         messaging_product: 'whatsapp',
@@ -166,6 +166,7 @@ export const sendWhatsAppTemplate = async (to: string, templateName: string, com
         }
       }
     );
+    console.log(`[WhatsApp OK] Plantilla '${templateName}' (${languageCode}) enviada a ${formattedTo}. ID: ${response.data.messages[0].id}`);
     return true;
   } catch (error: any) {
     console.error(`[WhatsApp Error] Fallo al enviar plantilla ${templateName} (${languageCode}):`, error.response?.data || error.message);

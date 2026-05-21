@@ -71,7 +71,6 @@ export const handleWebhook = async (req: Request, res: Response) => {
               const textBody = message.text?.body;
               
               if (textBody) {
-                
                 // 1. Persistir mensaje entrante
                 await ConversationMessage.create({ 
                   platform: 'whatsapp', 
@@ -80,6 +79,39 @@ export const handleWebhook = async (req: Request, res: Response) => {
                   direction: 'inbound', 
                   status: 'delivered' 
                 });
+
+                // --- LÓGICA DE FAST TRACK PARA PAGOS ---
+                const lowerText = textBody.toLowerCase();
+                const isPurchaseIntent = 
+                  lowerText.includes('comprar') || 
+                  lowerText.includes('pago') || 
+                  lowerText.includes('transferencia') || 
+                  lowerText.includes('alias') || 
+                  lowerText.includes('cvu');
+
+                if (isPurchaseIntent) {
+                  const paymentInfo = `¡Excelente elección! 😊 Aquí te paso los datos para que puedas realizar la transferencia:
+
+*Alias:*
+mica.menta
+
+*CVU:*
+0000003100069944243193
+
+Una vez que realices el pago, por favor enviame el comprobante por acá para darte el alta. ¡Muchas gracias!`;
+
+                  const sent = await sendWhatsAppMessage(from, paymentInfo);
+                  if (sent) {
+                    await ConversationMessage.create({ 
+                      platform: 'whatsapp', 
+                      platform_id: from, 
+                      body: paymentInfo, 
+                      direction: 'outbound', 
+                      status: 'sent' 
+                    });
+                  }
+                  continue; // Saltamos la respuesta de la IA para este flujo directo
+                }
                 
                 // 2. Obtener respuesta de Mila (Gemini)
                 const aiResponse = await generateAIResponse(textBody, from);
