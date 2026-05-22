@@ -10,6 +10,7 @@ import ExcelJS from 'exceljs';
 import { CreateInscriptionBody, ExportInscriptionsQuery, GetInscriptionsQuery, UpdateDepositBody, UpdatePaymentStatusBody } from './types.js';
 import { resolveCourseIdentifier } from '../courses/helper.js';
 import { getEffectiveStartDate } from '../../utils/dateUtils.js';
+import { createInscription as createInscriptionService } from '../../services/inscriptions/inscriptionService.js';
 
 // --- Helpers ---
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -21,132 +22,17 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 // @access  Public
 export const createInscription = async (req: Request<{}, {}, CreateInscriptionBody>, res: Response) => {
   try {
-    const { nombre, apellido, email, celular, courseId, courseTitle, coursePrice, turnoId } = req.body;
-
-    // Validación básica
-    if (!nombre || !apellido || !email || !celular || !courseId || !courseTitle || coursePrice == null) {
-      return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios' });
-    }
-
-    // Resolución Segura del Curso (Standard Write)
-    // Buscamos el curso real basado en el ID que nos enviaron (UUID, ObjectId, etc.)
-    const resolvedCourse = await resolveCourseIdentifier(courseId);
+    const result = await createInscriptionService(req.body);
+    res.status(201).json(result);
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Error del servidor';
     
-    if (!resolvedCourse) {
-      return res.status(404).json({ success: false, message: 'El curso seleccionado no existe.' });
+    if (statusCode === 409) {
+      return res.status(409).json({ success: false, message });
     }
-
-    // IMPORTANTE: Usamos SIEMPRE el UUID del curso para guardar la inscripción
-    // Esto estandariza la base de datos hacia el futuro.
-    const finalCourseId = resolvedCourse.uuid;
-
-    // Validación de Turno (si se proporciona)
-    let turnoData = null;
-    if (turnoId) {
-      turnoData = await Turno.findById(turnoId);
-      if (!turnoData) {
-        return res.status(404).json({ success: false, message: 'El turno seleccionado no existe' });
-      }
-      if (turnoData.isBlocked || !turnoData.isActive) {
-        return res.status(400).json({ success: false, message: 'El turno seleccionado no está disponible' });
-      }
-      if (turnoData.cuposInscriptos >= turnoData.cupoMaximo) {
-        return res.status(400).json({ success: false, message: 'El turno seleccionado ya no tiene cupos disponibles' });
-      }
-    }
-
-    // Validación: verificar si ya existe una inscripción para este email + courseId (UUID)
-    const existingInscription = await Inscription.findOne({
-      email: email,
-      courseId: finalCourseId // Usamos el UUID normalizado
-    });
-
-    if (existingInscription) {
-      return res.status(409).json({
-        success: false,
-        message: 'Ya te encuentras inscripto en este curso con este email.'
-      });
-    }
-
-    // Crear la inscripción con el ID normalizado
-    const inscriptionData = {
-      ...req.body,
-      courseId: finalCourseId // Sobreescribimos con el UUID seguro
-    };
-
-    const inscription = await Inscription.create(inscriptionData);
-
-    // --- NOTIFICACIÓN WHATSAPP AUTOMÁTICA AL INSCRIBIRSE ---
-    if (inscription.celular) {
-      try {
-        const components = [
-          {
-            type: 'body',
-            parameters: [
-              { 
-                type: 'text', 
-                parameter_name: 'nombre_alumno', 
-                text: `${inscription.nombre} ${inscription.apellido}` 
-              },
-              { 
-                type: 'text', 
-                parameter_name: 'nombre_curso', 
-                text: inscription.courseTitle 
-              },
-              { 
-                type: 'text', 
-                parameter_name: 'precio_curso', 
-                text: inscription.coursePrice.toString() 
-              },
-              { 
-                type: 'text', 
-                parameter_name: 'cvu', 
-                text: '0000003100069944243193' 
-              },
-              { 
-                type: 'text', 
-                parameter_name: 'alias', 
-                text: 'mica.menta' 
-              }
-            ]
-          }
-        ];
-
-        // Disparar envío asíncrono
-        sendWhatsAppTemplate(inscription.celular, 'confirmacion_pago_utilidad', components, 'es_AR')
-          .then(success => {
-            if (!success) {
-              console.warn(`[WhatsApp Automation] No se pudo enviar 'confirmacion_pago_utilidad' a ${inscription.celular}.`);
-            }
-          })
-          .catch(err => console.error('[WhatsApp Automation Error]:', err));
-
-      } catch (wsError) {
-        console.error('Error preparando notificación WhatsApp inicial:', wsError);
-      }
-    }
-
-    res.status(201).json({
-      success: true,
-      data: inscription,
-    });
-  } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
-      const errorMessage = ('message' in error && typeof error.message === 'string') ? error.message : '';
-      if (errorMessage.includes('email') && errorMessage.includes('courseId')) {
-        return res.status(409).json({
-          success: false,
-          message: 'Ya te encuentras inscripto en este curso con este email.'
-        });
-      }
-      return res.status(400).json({
-        success: false,
-        message: 'Ya existe una inscripción con estos datos.'
-      });
-    }
-
-    const errorMessage = error instanceof Error ? error.message : 'Error desconocido del servidor';
-    res.status(500).json({ success: false, message: 'Error del servidor', error: errorMessage });
+    
+    res.status(statusCode).json({ success: false, message, error: message });
   }
 };
 

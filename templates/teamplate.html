@@ -50,11 +50,29 @@
     .button {
       background-color: #8a2be2;
       color: #ffffff;
-      padding: 15px 25px;
+      padding: 15px 30px;
       text-decoration: none;
-      border-radius: 5px;
+      border-radius: 8px;
       font-weight: bold;
+      font-size: 16px;
       display: inline-block;
+    }
+
+    .button:hover {
+      background-color: #7a1fd2;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #e0e0e0;
+      margin: 25px 0;
+    }
+
+    .note {
+      text-align: center;
+      color: #666;
+      font-size: 14px;
+      margin-top: 15px;
     }
   </style>
 </head>
@@ -67,22 +85,26 @@
     </p>
     <p>
       ¡Estamos muy emocionados de tenerte con nosotros! Te has inscrito al curso:
-      <strong>"{{courseTitle}}"</strong> - <em>{{shortDescription}}</em>.
+      <strong>"{{courseTitle}}"</strong>.
     </p>
     <p>
-      Valor del Curso Completo: -<strong>${{price}}</strong>.-
+      Valor del Curso Completo: <strong>${{price}}</strong>
     </p>
-    <p>
-      Para realizar el pago debes hacer la transferencia a MercadoPago, lo datos quedan adjuntos abajo
+
+    <hr class="divider" />
+
+    <div class="button-container">
+      <a href="{{paymentLink}}" class="button">Realizar Pago con MercadoPago</a>
+    </div>
+
+    <p class="note">
+      También podés responder este mail con el comprobante de pago
     </p>
+
+    <hr class="divider" />
+
     <p>
-      <b>Titular</b> Micaela Denise Guevara<br />
-      <b>CVU:</b> 0000003100069944243193<br />
-      <b>Alias:</b> mica.menta
-    </p>
-    <p>Enviar el comprobante de pago a <strong>modistaapp@gmail.com</strong></p>
-    <p>
-      En breve nos pondremos en contacto contigo con más detalles.<br />
+      Una vez confirmado tu pago, recibirás el acceso al curso por WhatsApp y por mail.<br />
       ¡Prepárate para desatar tu creatividad!
     </p>
     <div class="footer">
