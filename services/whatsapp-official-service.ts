@@ -173,3 +173,39 @@ export const sendWhatsAppTemplate = async (to: string, templateName: string, com
     return false;
   }
 };
+
+/**
+ * Fetches WhatsApp Business Analytics from Meta
+ * Uses the WABA-level analytics endpoint for cost and conversation metrics
+ */
+export const getWhatsAppAnalytics = async (
+  startDate: string,
+  endDate: string
+): Promise<any> => {
+  const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
+  const WABA_ID = process.env.META_WABA_ID;
+
+  if (!ACCESS_TOKEN || !WABA_ID) {
+    console.warn('[WhatsApp Analytics] Credentials missing');
+    return null;
+  }
+
+  const API_URL = `https://graph.facebook.com/v21.0/${WABA_ID}/analytics`;
+
+  try {
+    const response = await axios.get(API_URL, {
+      params: {
+        start: startDate,
+        end: endDate,
+        granularity: 'DAY',
+        metric_types: 'COST,MESSAGES_SENT,MESSAGES_DELIVERED,MESSAGES_READ,CONVERSATIONS',
+        access_token: ACCESS_TOKEN,
+      },
+    });
+    console.log('[WhatsApp Analytics] Data received:', JSON.stringify(response.data).substring(0, 200));
+    return response.data;
+  } catch (error: any) {
+    console.error('[WhatsApp Analytics] Fallo al obtener analytics:', error.response?.data || error.message);
+    return null;
+  }
+};

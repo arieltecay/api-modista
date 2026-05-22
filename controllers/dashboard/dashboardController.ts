@@ -1,8 +1,7 @@
 import { Request, Response } from 'express';
 import Inscription from '../../models/Inscription.js';
 import ConversationMessage from '../../models/ConversationMessage.js';
-import { getWhatsAppTemplates } from '../../services/whatsapp-official-service.js';
-import axios from 'axios';
+
 
 /**
  * Controller for Dashboard metrics and insights
@@ -171,60 +170,49 @@ export const getCoursePerformance = async (req: Request, res: Response) => {
 };
 
 /**
- * Gets WhatsApp Analytics from Meta Cloud API
- * This uses the insights endpoint of the WABA
+ * Gets WhatsApp message stats from local DB
+ * - Message counts (sent/delivered/read) from ConversationMessage collection
+ * - Cost data is not available (WABA does not expose analytics endpoint)
  */
 export const getMetaWhatsAppStats = async (req: Request, res: Response) => {
   try {
     const { startDate, endDate } = req.query;
-    const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
-    const WABA_ID = process.env.META_WABA_ID;
+    const start = (startDate as string) || '';
+    const end = (endDate as string) || '';
 
-    if (!ACCESS_TOKEN || !WABA_ID) {
-      console.warn('[Dashboard] Meta credentials missing, returning empty stats');
-      return res.json({
-        spent: 0,
-        currency: 'ARS',
-        costPerMessage: 0,
-        sent: 0,
-        delivered: 0,
-        read: 0,
-        uniqueResponses: 0,
-        period: {
-          start: startDate || 'N/A',
-          end: endDate || 'N/A'
-        }
-      });
+    const dateQuery: any = {};
+    if (start || end) {
+      dateQuery.timestamp = {};
+      if (start) dateQuery.timestamp.$gte = new Date(start);
+      if (end) {
+        const endOfDay = new Date(end);
+        endOfDay.setUTCHours(23, 59, 59, 999);
+        dateQuery.timestamp.$lte = endOfDay;
+      }
     }
 
-    // Por ahora mantenemos los datos simulados pero con una advertencia de que son simulados
-    // mientras implementamos la integración real con Graph API
-    
-    res.json({
-      spent: 113.04,
-      currency: 'ARS',
-      costPerMessage: 37.68,
-      sent: 3,
-      delivered: 3,
-      read: 2,
-      uniqueResponses: 0,
-      period: {
-        start: startDate || '2026-05-10',
-        end: endDate || '2026-05-18'
-      }
-    });
-  } catch (error: any) {
-    console.error('[Dashboard] Error in getMetaWhatsAppStats:', error);
-    // Devolvemos 200 con ceros para no romper el Promise.all del frontend
+    const [totalSent, totalDelivered, totalRead] = await Promise.all([
+      ConversationMessage.countDocuments({ ...dateQuery, direction: 'outbound', status: { $ne: 'failed' } }),
+      ConversationMessage.countDocuments({ ...dateQuery, direction: 'outbound', status: { $in: ['delivered', 'read'] } }),
+      ConversationMessage.countDocuments({ ...dateQuery, direction: 'outbound', status: 'read' }),
+    ]);
+
     res.json({
       spent: 0,
       currency: 'ARS',
       costPerMessage: 0,
-      sent: 0,
-      delivered: 0,
-      read: 0,
+      sent: totalSent,
+      delivered: totalDelivered,
+      read: totalRead,
       uniqueResponses: 0,
-      error: 'Error al obtener datos de Meta'
+      period: { start: start || 'N/A', end: end || 'N/A' },
+    });
+  } catch (error: any) {
+    console.error('[Dashboard] Error in getMetaWhatsAppStats:', error);
+    res.json({
+      spent: 0, currency: 'ARS', costPerMessage: 0,
+      sent: 0, delivered: 0, read: 0, uniqueResponses: 0,
+      error: 'Error al obtener datos',
     });
   }
 };
