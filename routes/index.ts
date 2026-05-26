@@ -14,6 +14,7 @@ import carouselRoutes from './carousel/carousel-routes.js';
 import faqRoutes from './faq/faqRoutes.js';
 import chatRoutes from './chat/chatRoutes.js';
 import dashboardRoutes from './dashboard/dashboardRoutes.js';
+import analyticsRoutes from './analytics/analyticsRoutes.js';
 
 const router: Router = express.Router();
 
@@ -22,6 +23,7 @@ router.use('/faq', faqRoutes);
 
 // Use dashboard routes
 router.use('/dashboard', dashboardRoutes);
+router.use('/analytics', analyticsRoutes);
 
 // Use chat routes
 router.use('/chat', chatRoutes);

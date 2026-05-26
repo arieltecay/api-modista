@@ -29,6 +29,7 @@ export interface IInscription extends Document {
   totalPaid: number;
   marketingSource?: string;
   utmParams?: Record<string, any>;
+  sessionId?: string;
 }
 
 // Interface para el modelo con paginación
@@ -120,6 +121,11 @@ const InscriptionSchema = new Schema<IInscription>({
   utmParams: {
     type: Schema.Types.Mixed,
     default: {}
+  },
+  sessionId: {
+    type: String,
+    default: null,
+    index: true,
   },
   // Nuevo campo de historial de pagos
   paymentHistory: {
