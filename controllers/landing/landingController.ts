@@ -5,7 +5,7 @@ import { CreateLandingPageBody, GetLandingPagesQuery, UpdateLandingPageBody } fr
 
 /**
  * @desc    Crear una nueva Landing Page
- * @route   POST /api/landing-pages
+ * @route   POST /api/landings
  * @access  Private (Admin)
  */
 export const createLandingPage = async (req: Request<{}, {}, CreateLandingPageBody>, res: Response) => {
@@ -28,7 +28,7 @@ export const createLandingPage = async (req: Request<{}, {}, CreateLandingPageBo
 
 /**
  * @desc    Obtener todas las Landing Pages con paginación
- * @route   GET /api/landing-pages
+ * @route   GET /api/landings
  * @access  Private (Admin)
  */
 export const getLandingPages = async (req: Request<{}, {}, {}, GetLandingPagesQuery>, res: Response) => {
@@ -66,7 +66,7 @@ export const getLandingPages = async (req: Request<{}, {}, {}, GetLandingPagesQu
 
 /**
  * @desc    Obtener una Landing Page por su slug (Público)
- * @route   GET /api/landing-pages/slug/:slug
+ * @route   GET /api/landings/slug/:slug
  * @access  Public
  */
 export const getLandingPageBySlug = async (req: Request<{ slug: string }>, res: Response) => {
@@ -86,7 +86,7 @@ export const getLandingPageBySlug = async (req: Request<{ slug: string }>, res: 
 
 /**
  * @desc    Actualizar una Landing Page
- * @route   PATCH /api/landing-pages/:id
+ * @route   PATCH /api/landings/:id
  * @access  Private (Admin)
  */
 export const updateLandingPage = async (req: Request<{ id: string }, {}, UpdateLandingPageBody>, res: Response) => {
@@ -106,7 +106,7 @@ export const updateLandingPage = async (req: Request<{ id: string }, {}, UpdateL
 
 /**
  * @desc    Eliminar una Landing Page
- * @route   DELETE /api/landing-pages/:id
+ * @route   DELETE /api/landings/:id
  * @access  Private (Admin)
  */
 export const deleteLandingPage = async (req: Request<{ id: string }>, res: Response) => {
