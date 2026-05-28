@@ -11,6 +11,24 @@ export interface CreateInscriptionBody {
   courseTitle: string;
   coursePrice: number;
   turnoId?: string;
+  sourceType?: 'app' | 'landing';
+  landingPageId?: string;
+  marketingSource?: string;
+  utmParams?: any;
+  sessionId?: string;
+}
+
+export interface CreateLandingInscriptionBody {
+  fullName: string;
+  email: string;
+  celular: string;
+  courseId: string;
+  courseTitle: string;
+  coursePrice: number;
+  landingPageId: string;
+  marketingSource?: string;
+  utmParams?: any;
+  sessionId?: string;
 }
 
 export interface GetInscriptionsQuery {

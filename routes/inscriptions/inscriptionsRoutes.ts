@@ -1,6 +1,7 @@
 import express, { Router } from 'express';
 import {
   createInscription,
+  createLandingInscription,
   getInscriptions,
   exportInscriptions,
   updatePaymentStatus,
@@ -16,6 +17,7 @@ const router: Router = express.Router();
 
 // Ruta pública - cualquier usuario puede inscribirse
 router.post('/', createInscription);
+router.post('/landing', createLandingInscription);
 
 // Rutas protegidas - requieren autenticación JWT + rol admin
 router.get('/', authenticateToken, requireAdmin, getInscriptions);

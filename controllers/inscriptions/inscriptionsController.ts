@@ -7,7 +7,7 @@ import { logError } from '../../services/logger.js';
 import { sendDepositEmail } from '../../services/emailServices.js';
 import { sendWhatsAppTemplate } from '../../services/whatsapp-official-service.js';
 import ExcelJS from 'exceljs';
-import { CreateInscriptionBody, ExportInscriptionsQuery, GetInscriptionsQuery, UpdateDepositBody, UpdatePaymentStatusBody } from './types.js';
+import { CreateInscriptionBody, CreateLandingInscriptionBody, ExportInscriptionsQuery, GetInscriptionsQuery, UpdateDepositBody, UpdatePaymentStatusBody } from './types.js';
 import { resolveCourseIdentifier } from '../courses/helper.js';
 import { getEffectiveStartDate } from '../../utils/dateUtils.js';
 import { createInscription as createInscriptionService } from '../../services/inscriptions/inscriptionService.js';
@@ -23,6 +23,39 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export const createInscription = async (req: Request<{}, {}, CreateInscriptionBody>, res: Response) => {
   try {
     const result = await createInscriptionService(req.body);
+    res.status(201).json(result);
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Error del servidor';
+    
+    if (statusCode === 409) {
+      return res.status(409).json({ success: false, message });
+    }
+    
+    res.status(statusCode).json({ success: false, message, error: message });
+  }
+};
+
+// @desc    Crear una nueva inscripción desde Landing Page (Simplificada)
+// @route   POST /api/inscriptions/landing
+// @access  Public
+export const createLandingInscription = async (req: Request<{}, {}, CreateLandingInscriptionBody>, res: Response) => {
+  try {
+    const { fullName, ...rest } = req.body;
+    
+    // Split inteligente del nombre
+    const nameParts = fullName.trim().split(/\s+/);
+    const nombre = nameParts[0] || 'Sin Nombre';
+    const apellido = nameParts.length > 1 ? nameParts.slice(1).join(' ') : ' ';
+
+    const inscriptionData = {
+      ...rest,
+      nombre,
+      apellido,
+      sourceType: 'landing' as const
+    };
+
+    const result = await createInscriptionService(inscriptionData);
     res.status(201).json(result);
   } catch (error: any) {
     const statusCode = error.statusCode || 500;

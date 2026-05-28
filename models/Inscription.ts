@@ -30,6 +30,8 @@ export interface IInscription extends Document {
   marketingSource?: string;
   utmParams?: Record<string, any>;
   sessionId?: string;
+  sourceType: 'app' | 'landing';
+  landingPageId?: Types.ObjectId;
 }
 
 // Interface para el modelo con paginación
@@ -111,6 +113,18 @@ const InscriptionSchema = new Schema<IInscription>({
   fechaInscripcion: {
     type: Date,
     default: Date.now,
+  },
+  sourceType: {
+    type: String,
+    enum: ['app', 'landing'],
+    default: 'app',
+    index: true
+  },
+  landingPageId: {
+    type: Schema.Types.ObjectId,
+    ref: 'LandingPage',
+    required: false,
+    index: true
   },
   // Atribución de Marketing
   marketingSource: {

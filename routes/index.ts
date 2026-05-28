@@ -1,4 +1,6 @@
-import express, { Router } from 'express';
+import express from 'express';
+const router = express.Router();
+
 import notificationRoutes from './notification/index.js';
 import paymentRoutes from './payment/paymentRoutes.js';
 import coursesRoutes from './courses/coursesRoutes.js';
@@ -9,56 +11,35 @@ import testimonialsRoute from './testimonials/testimonialsRoute.js';
 import authRoutes from './auth/authRoutes.js';
 import turnosRoutes from './turnos/turnosRoutes.js';
 import tariffRoutes from './tariff/tariffRoutes.js';
-import uploadRoutes from './upload/index.js';
 import carouselRoutes from './carousel/carousel-routes.js';
 import faqRoutes from './faq/faqRoutes.js';
 import chatRoutes from './chat/chatRoutes.js';
 import dashboardRoutes from './dashboard/dashboardRoutes.js';
 import analyticsRoutes from './analytics/analyticsRoutes.js';
+import landingRoutes from './landing/landingRoutes.js';
 
-const router: Router = express.Router();
-
-// Use faq routes
-router.use('/faq', faqRoutes);
-
-// Use dashboard routes
-router.use('/dashboard', dashboardRoutes);
-router.use('/analytics', analyticsRoutes);
-
-// Use chat routes
-router.use('/chat', chatRoutes);
-
-// Use upload routes
-router.use('/upload', uploadRoutes);
-
-// Use carousel routes
-router.use('/carousel', carouselRoutes);
-
-// Use notification routes - Soporta tanto singular (Meta) como plural (Admin)
-router.use('/notification', notificationRoutes);
-router.use('/notifications', notificationRoutes);
-
-// Use payment routes
-router.use('/payment', paymentRoutes);
-
-router.use('/courses', coursesRoutes);
-
-router.use('/testimonials', testimonialsRoute);
-
-router.use('/email', emailRoutes); // Usar las rutas de email
-
-// Use inscriptions routes
+// Módulos de Venta y Campañas
+router.use('/landings', landingRoutes);
 router.use('/inscriptions', inscriptionsRoutes);
 router.use('/workshop-inscriptions', workshopInscriptionsRoutes);
 
-// Use auth routes
+// Módulos de Contenido
+router.use('/courses', coursesRoutes);
+router.use('/faq', faqRoutes);
+router.use('/testimonials', testimonialsRoute);
+router.use('/carousel', carouselRoutes);
+
+// Módulos de Usuario y Autenticación
 router.use('/auth', authRoutes);
-
-// Use turnos routes
 router.use('/turnos', turnosRoutes);
-
-// Use tariff routes
 router.use('/tariffs', tariffRoutes);
 
-export default router;
+// Módulos de Operaciones y Servicios
+router.use('/notifications', notificationRoutes);
+router.use('/payment', paymentRoutes);
+router.use('/email', emailRoutes);
+router.use('/dashboard', dashboardRoutes);
+router.use('/analytics', analyticsRoutes);
+router.use('/chat', chatRoutes);
 
+export default router;
