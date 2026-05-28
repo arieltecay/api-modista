@@ -3,6 +3,7 @@ import { authenticateToken, requireAdmin } from '../../middleware/authMiddleware
 import {
   createLandingPage,
   getLandingPages,
+  getLandingPageById,
   getLandingPageBySlug,
   updateLandingPage,
   deleteLandingPage
@@ -21,6 +22,7 @@ router.get('/slug/:slug', getLandingPageBySlug);
 // Admin: CRUD de campañas
 router.post('/', authenticateToken, requireAdmin, createLandingPage);
 router.get('/', authenticateToken, requireAdmin, getLandingPages);
+router.get('/:id', authenticateToken, requireAdmin, getLandingPageById);
 router.patch('/:id', authenticateToken, requireAdmin, updateLandingPage);
 router.delete('/:id', authenticateToken, requireAdmin, deleteLandingPage);
 

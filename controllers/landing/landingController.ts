@@ -51,18 +51,33 @@ export const getLandingPages = async (req: Request<{}, {}, {}, GetLandingPagesQu
 
     const result = await (LandingPage as any).paginate(query, options);
 
-    res.status(200).json({
-      success: true,
-      data: result.docs,
-      total: result.totalDocs,
-      totalPages: result.totalPages,
-      currentPage: result.page,
-    });
+    res.status(200).json({ success: true, data: result.docs, total: result.totalDocs, totalPages: result.totalPages, currentPage: result.page });
   } catch (error: any) {
     logError('getLandingPages', error);
     res.status(500).json({ success: false, message: 'Error al obtener las Landing Pages' });
   }
 };
+
+/**
+ * @desc    Obtener una Landing Page por ID
+ * @route   GET /api/landings/:id
+ * @access  Private (Admin)
+ */
+export const getLandingPageById = async (req: Request<{ id: string }>, res: Response) => {
+  try {
+    const landingPage = await LandingPage.findById(req.params.id);
+    
+    if (!landingPage) {
+      return res.status(404).json({ success: false, message: 'Landing Page no encontrada' });
+    }
+
+    res.status(200).json({ success: true, data: landingPage });
+  } catch (error: any) {
+    logError('getLandingPageById', error);
+    res.status(500).json({ success: false, message: 'Error al obtener la Landing Page' });
+  }
+};
+
 
 /**
  * @desc    Obtener una Landing Page por su slug (Público)
