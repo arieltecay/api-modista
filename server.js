@@ -44,6 +44,12 @@ app.all(/^\/socket\.io.*/, (req, res) => {
     res.status(204).end();
 });
 
+// Middleware para robots.txt - Mejora reputación ante Meta/Google bots
+app.get('/robots.txt', (req, res) => {
+    res.type('text/plain');
+    res.send("User-agent: *\nDisallow: /api/\nDisallow: /config/\nAllow: /");
+});
+
 // Middleware para manejar solicitudes de favicon (cualquier extensión)
 app.get(/^\/favicon\.(ico|png)$/, (req, res) => res.status(204).send());
 
