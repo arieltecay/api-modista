@@ -71,6 +71,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Rutas principales
 app.use('/api', routes); // Usamos las rutas consolidadas bajo /api
 
+// Manejador de rutas no encontradas (404)
+app.use((req, res, next) => {
+    logger.warn(`Ruta no encontrada (404): ${req.method} ${req.originalUrl}`);
+    res.status(404).json({
+        success: false,
+        message: `La ruta ${req.originalUrl} no existe en este servidor.`
+    });
+});
+
 // Middleware de manejo de errores global
 app.use((err, req, res, next) => {
     logger.error(`Error no manejado: ${err.message}`, { stack: err.stack });

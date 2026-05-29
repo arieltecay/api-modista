@@ -4,6 +4,7 @@ import { MetaWhatsAppWebhookPayload } from '../../types/whatsapp-official.js';
 import { generateAIResponse } from '../../services/gemini-service.js';
 import { sendWhatsAppMessage } from '../../services/whatsapp-official-service.js';
 import ConversationMessage from '../../models/ConversationMessage.js';
+import { logger } from '../../services/logger.js';
 import { 
   handlePurchaseIntent, 
   handlePaymentConfirmation, 
@@ -20,8 +21,10 @@ export const verifyWebhook = (req: Request, res: Response) => {
 
   if (mode && token) {
     if (mode === 'subscribe' && token === process.env.META_VERIFY_TOKEN) {
+      logger.info('Webhook de WhatsApp verificado con éxito');
       res.status(200).send(challenge);
     } else {
+      logger.warn('Intento de verificación de webhook fallido: Token inválido');
       res.sendStatus(403);
     }
   }
@@ -40,7 +43,7 @@ export const handleWebhook = async (req: Request, res: Response) => {
         .digest('hex');
 
       if (signatureHash !== expectedHash) {
-        console.warn('⚠️ HMAC Signature validation failed - Check META_APP_SECRET if in PROD');
+        logger.warn('⚠️ Validación de firma HMAC fallida en Webhook de WhatsApp');
       }
     }
 
@@ -109,7 +112,7 @@ export const handleWebhook = async (req: Request, res: Response) => {
           if (value.statuses) {
             for (const status of value.statuses) {
               if (status.status === 'failed') {
-                console.error(`[WhatsApp] Error en mensaje ${status.id}:`, status.errors);
+                logger.error(`[WhatsApp] Error en mensaje ${status.id}`, { errors: status.errors });
               }
             }
           }
@@ -117,10 +120,11 @@ export const handleWebhook = async (req: Request, res: Response) => {
       }
       res.status(200).send('EVENT_RECEIVED');
     } else {
+      logger.warn('Webhook recibido con objeto no reconocido:', { object: body.object });
       res.sendStatus(404);
     }
   } catch (error: any) {
-    console.error('Error handling Meta Webhook:', error.message);
+    logger.error('Error procesando Webhook de Meta:', { message: error.message, stack: error.stack });
     res.sendStatus(500);
   }
 };

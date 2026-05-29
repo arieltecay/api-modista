@@ -36,6 +36,7 @@ router.use('/tariffs', tariffRoutes);
 
 // Módulos de Operaciones y Servicios
 router.use('/notifications', notificationRoutes);
+router.use('/notification', notificationRoutes); // Alias para compatibilidad con Meta Webhook y consistencia interna
 router.use('/payment', paymentRoutes);
 router.use('/email', emailRoutes);
 router.use('/dashboard', dashboardRoutes);
