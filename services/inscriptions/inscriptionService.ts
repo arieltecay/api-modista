@@ -2,6 +2,7 @@ import Inscription from '../../models/Inscription.js';
 import { validateInscriptionData } from './inscriptionValidator.js';
 import { sendEmail } from '../../services/emailServices.js';
 import { InscriptionBody, CreateInscriptionResult } from './types.js';
+import { sendMetaConversionEvent } from '../../services/meta-capi-service.js';
 
 export const createInscription = async (body: InscriptionBody): Promise<CreateInscriptionResult> => {
   const validation = await validateInscriptionData(body);
@@ -19,6 +20,26 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
   };
 
   const inscription = await Inscription.create(inscriptionData);
+
+  // --- Meta CAPI: InitiateCheckout ---
+  try {
+    sendMetaConversionEvent({
+      eventName: 'InitiateCheckout',
+      email: inscription.email,
+      phone: inscription.celular,
+      firstName: inscription.nombre,
+      lastName: inscription.apellido,
+      value: inscription.coursePrice,
+      contentName: inscription.courseTitle,
+      orderId: inscription._id.toString(),
+      fbc: inscription.metaFbc,
+      fbp: inscription.metaFbp,
+      clientIpAddress: inscription.clientIpAddress,
+      clientUserAgent: inscription.clientUserAgent
+    });
+  } catch (capiError) {
+    console.error('[Meta CAPI InitiateCheckout Error]:', capiError);
+  }
 
   // Enviar email de confirmación con link de pago
   try {

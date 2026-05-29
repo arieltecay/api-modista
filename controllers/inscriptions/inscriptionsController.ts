@@ -11,6 +11,7 @@ import { CreateInscriptionBody, CreateLandingInscriptionBody, ExportInscriptions
 import { resolveCourseIdentifier } from '../courses/helper.js';
 import { getEffectiveStartDate } from '../../utils/dateUtils.js';
 import { createInscription as createInscriptionService } from '../../services/inscriptions/inscriptionService.js';
+import { sendMetaConversionEvent } from '../../services/meta-capi-service.js';
 
 // --- Helpers ---
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -22,7 +23,14 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 // @access  Public
 export const createInscription = async (req: Request<{}, {}, CreateInscriptionBody>, res: Response) => {
   try {
-    const result = await createInscriptionService(req.body);
+    const clientIpAddress = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString();
+    const clientUserAgent = req.headers['user-agent'] || '';
+
+    const result = await createInscriptionService({
+      ...req.body,
+      clientIpAddress,
+      clientUserAgent
+    });
     res.status(201).json(result);
   } catch (error: any) {
     const statusCode = error.statusCode || 500;
@@ -42,6 +50,8 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
 export const createLandingInscription = async (req: Request<{}, {}, CreateLandingInscriptionBody>, res: Response) => {
   try {
     const { fullName, ...rest } = req.body;
+    const clientIpAddress = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString();
+    const clientUserAgent = req.headers['user-agent'] || '';
     
     // Split inteligente del nombre
     const nameParts = fullName.trim().split(/\s+/);
@@ -52,7 +62,9 @@ export const createLandingInscription = async (req: Request<{}, {}, CreateLandin
       ...rest,
       nombre,
       apellido,
-      sourceType: 'landing' as const
+      sourceType: 'landing' as const,
+      clientIpAddress,
+      clientUserAgent
     };
 
     const result = await createInscriptionService(inscriptionData);
@@ -309,6 +321,26 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
                 }
             }
 
+            // --- Meta CAPI: Purchase ---
+            try {
+              sendMetaConversionEvent({
+                eventName: 'Purchase',
+                email: inscription.email,
+                phone: inscription.celular,
+                firstName: inscription.nombre,
+                lastName: inscription.apellido,
+                value: inscription.coursePrice,
+                contentName: inscription.courseTitle,
+                orderId: inscription._id.toString(),
+                fbc: inscription.metaFbc,
+                fbp: inscription.metaFbp,
+                clientIpAddress: inscription.clientIpAddress,
+                clientUserAgent: inscription.clientUserAgent
+              });
+            } catch (capiError) {
+              console.error('[Meta CAPI Purchase Error]:', capiError);
+            }
+
             // --- NOTIFICACIÓN WHATSAPP (Meta API) ---
             if (inscription.celular) {
               try {
@@ -502,10 +534,34 @@ export const addPayment = async (req: Request<{ id: string }, {}, { amount: numb
     // Acción 3 (Sincronización): Actualizar fechas
     inscription.depositDate = new Date(); // Actualiza la fecha del último depósito/pago
     
+    const wasAlreadyPaid = inscription.paymentStatus === 'paid';
+
     // Acción 4 (Estado): Actualizar paymentStatus
     if (totalPaid >= inscription.coursePrice) {
       inscription.paymentStatus = 'paid';
       inscription.paymentDate = new Date(); // Marcar la fecha de pago completo
+
+      // --- Meta CAPI: Purchase ---
+      if (!wasAlreadyPaid) {
+        try {
+          sendMetaConversionEvent({
+            eventName: 'Purchase',
+            email: inscription.email,
+            phone: inscription.celular,
+            firstName: inscription.nombre,
+            lastName: inscription.apellido,
+            value: inscription.coursePrice,
+            contentName: inscription.courseTitle,
+            orderId: inscription._id.toString(),
+            fbc: inscription.metaFbc,
+            fbp: inscription.metaFbp,
+            clientIpAddress: inscription.clientIpAddress,
+            clientUserAgent: inscription.clientUserAgent
+          });
+        } catch (capiError) {
+          console.error('[Meta CAPI Purchase Error in addPayment]:', capiError);
+        }
+      }
     } else {
       inscription.paymentStatus = 'partial';
     }

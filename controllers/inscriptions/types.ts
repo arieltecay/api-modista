@@ -16,6 +16,10 @@ export interface CreateInscriptionBody {
   marketingSource?: string;
   utmParams?: any;
   sessionId?: string;
+  metaFbc?: string;
+  metaFbp?: string;
+  clientIpAddress?: string;
+  clientUserAgent?: string;
 }
 
 export interface CreateLandingInscriptionBody {
@@ -29,6 +33,10 @@ export interface CreateLandingInscriptionBody {
   marketingSource?: string;
   utmParams?: any;
   sessionId?: string;
+  metaFbc?: string;
+  metaFbp?: string;
+  clientIpAddress?: string;
+  clientUserAgent?: string;
 }
 
 export interface GetInscriptionsQuery {

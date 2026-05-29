@@ -32,6 +32,11 @@ export interface IInscription extends Document {
   sessionId?: string;
   sourceType: 'app' | 'landing';
   landingPageId?: Types.ObjectId;
+  // Meta Conversions API (CAPI) Tracking
+  metaFbc?: string;
+  metaFbp?: string;
+  clientIpAddress?: string;
+  clientUserAgent?: string;
 }
 
 // Interface para el modelo con paginación
@@ -140,6 +145,23 @@ const InscriptionSchema = new Schema<IInscription>({
     type: String,
     default: null,
     index: true,
+  },
+  // Meta Conversions API (CAPI) Tracking
+  metaFbc: {
+    type: String,
+    default: null
+  },
+  metaFbp: {
+    type: String,
+    default: null
+  },
+  clientIpAddress: {
+    type: String,
+    default: null
+  },
+  clientUserAgent: {
+    type: String,
+    default: null
   },
   // Nuevo campo de historial de pagos
   paymentHistory: {

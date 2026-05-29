@@ -20,6 +20,10 @@ export interface InscriptionBody {
   marketingSource?: string;
   utmParams?: any;
   sessionId?: string;
+  metaFbc?: string;
+  metaFbp?: string;
+  clientIpAddress?: string;
+  clientUserAgent?: string;
 }
 
 export interface CreateInscriptionResult {
