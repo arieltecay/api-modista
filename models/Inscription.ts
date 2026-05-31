@@ -37,6 +37,8 @@ export interface IInscription extends Document {
   metaFbp?: string;
   clientIpAddress?: string;
   clientUserAgent?: string;
+  recoveryMessageSent: boolean;
+  recoveryMessageAt?: Date;
 }
 
 // Interface para el modelo con paginación
@@ -161,6 +163,14 @@ const InscriptionSchema = new Schema<IInscription>({
   },
   clientUserAgent: {
     type: String,
+    default: null
+  },
+  recoveryMessageSent: {
+    type: Boolean,
+    default: false
+  },
+  recoveryMessageAt: {
+    type: Date,
     default: null
   },
   // Nuevo campo de historial de pagos

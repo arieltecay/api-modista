@@ -9,8 +9,9 @@ import {
   updateDeposit,
   addPayment,
   getPaymentHistory,
-  deletePayment, // <--- Añadido
+  deletePayment,
 } from '../../controllers/inscriptions/inscriptionsController.js';
+import { triggerInscriptionsRecovery } from '../../controllers/inscriptions/recoveryController.js';
 import { authenticateToken, requireAdmin } from '../../middleware/authMiddleware.js';
 
 const router: Router = express.Router();
@@ -18,6 +19,9 @@ const router: Router = express.Router();
 // Ruta pública - cualquier usuario puede inscribirse
 router.post('/', createInscription);
 router.post('/landing', createLandingInscription);
+
+// Ruta para disparar la recuperación (protegida para evitar spam)
+router.post('/run-recovery', authenticateToken, requireAdmin, triggerInscriptionsRecovery);
 
 // Rutas protegidas - requieren autenticación JWT + rol admin
 router.get('/', authenticateToken, requireAdmin, getInscriptions);

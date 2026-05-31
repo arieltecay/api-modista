@@ -21,8 +21,25 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
 
   const inscription = await Inscription.create(inscriptionData);
 
-  // --- Meta CAPI: InitiateCheckout ---
+  // --- Meta CAPI: Lead & InitiateCheckout ---
   try {
+    // Evento de Lead (Conversión principal para optimización de campañas de captación)
+    sendMetaConversionEvent({
+      eventName: 'Lead',
+      email: inscription.email,
+      phone: inscription.celular,
+      firstName: inscription.nombre,
+      lastName: inscription.apellido,
+      value: inscription.coursePrice,
+      contentName: inscription.courseTitle,
+      orderId: inscription._id.toString(),
+      fbc: inscription.metaFbc,
+      fbp: inscription.metaFbp,
+      clientIpAddress: inscription.clientIpAddress,
+      clientUserAgent: inscription.clientUserAgent
+    });
+
+    // Evento de InitiateCheckout (Progreso en el funnel)
     sendMetaConversionEvent({
       eventName: 'InitiateCheckout',
       email: inscription.email,
@@ -38,7 +55,7 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
       clientUserAgent: inscription.clientUserAgent
     });
   } catch (capiError) {
-    console.error('[Meta CAPI InitiateCheckout Error]:', capiError);
+    console.error('[Meta CAPI Lead Error]:', capiError);
   }
 
   // Enviar email de confirmación con link de pago
