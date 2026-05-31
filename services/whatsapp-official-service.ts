@@ -1,4 +1,5 @@
 import axios from 'axios';
+import ConversationMessage from '../models/ConversationMessage.js';
 
 /**
  * WhatsApp Official Service (Meta Cloud API)
@@ -44,6 +45,21 @@ export const sendWhatsAppMessage = async (to: string, message: string): Promise<
     );
 
     console.log(`[WhatsApp OK] Mensaje enviado a ${formattedTo}. ID: ${response.data.messages[0].id}`);
+    
+    // Persistir el mensaje enviado en la base de datos para que sea visible en el panel Admin
+    try {
+      await ConversationMessage.create({
+        platform: 'whatsapp',
+        platform_id: formattedTo,
+        body: message,
+        direction: 'outbound',
+        status: 'sent',
+        isAdminRead: true
+      });
+    } catch (dbError) {
+      console.error('[WhatsApp Debug] Error al persistir mensaje saliente:', dbError);
+    }
+
     return true;
   } catch (error: any) {
     console.error('[WhatsApp Error] Detalle API Meta:', error.response?.data || error.message);
