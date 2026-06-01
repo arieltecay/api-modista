@@ -10,6 +10,7 @@ router.use(authenticateToken, requireAdmin);
 router.get('/stats', dashboardController.getGeneralStats);
 router.get('/performance', dashboardController.getCoursePerformance);
 router.get('/meta-whatsapp', dashboardController.getMetaWhatsAppStats);
+router.get('/messaging-stats', dashboardController.getMessagingStats);
 router.get('/unread-messages', dashboardController.getUnreadMessagesCount);
 
 export default router;

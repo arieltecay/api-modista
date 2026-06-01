@@ -93,7 +93,7 @@ export const handleWebhook = async (req: Request, res: Response) => {
                   continue;
                 }
                 
-                const aiResponse = await generateAIResponse(textBody, from);
+                const aiResponse = await generateAIResponse(textBody, from, 'whatsapp');
                 const sent = await sendWhatsAppMessage(from, aiResponse);
 
                 if (sent) {

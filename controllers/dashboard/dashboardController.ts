@@ -217,6 +217,71 @@ export const getMetaWhatsAppStats = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Obtiene estadísticas de mensajería por plataforma
+ * GET /api/dashboard/messaging-stats?platform=whatsapp|instagram&startDate=...&endDate=...
+ */
+export const getMessagingStats = async (req: Request, res: Response) => {
+  try {
+    const { startDate, endDate, platform } = req.query;
+    const start = (startDate as string) || '';
+    const end = (endDate as string) || '';
+
+    const dateQuery: any = {};
+    if (start || end) {
+      dateQuery.timestamp = {};
+      if (start) dateQuery.timestamp.$gte = new Date(start);
+      if (end) {
+        const endOfDay = new Date(end);
+        endOfDay.setUTCHours(23, 59, 59, 999);
+        dateQuery.timestamp.$lte = endOfDay;
+      }
+    }
+
+    // Filtro opcional por plataforma
+    if (platform === 'whatsapp' || platform === 'instagram') {
+      dateQuery.platform = platform;
+    }
+
+    const [totalSent, totalDelivered, totalRead] = await Promise.all([
+      ConversationMessage.countDocuments({
+        ...dateQuery,
+        direction: 'outbound',
+        status: { $ne: 'failed' },
+      }),
+      ConversationMessage.countDocuments({
+        ...dateQuery,
+        direction: 'outbound',
+        status: { $in: ['delivered', 'read'] },
+      }),
+      ConversationMessage.countDocuments({
+        ...dateQuery,
+        direction: 'outbound',
+        status: 'read',
+      }),
+    ]);
+
+    res.json({
+      spent: 0,
+      currency: 'ARS',
+      costPerMessage: 0,
+      sent: totalSent,
+      delivered: totalDelivered,
+      read: totalRead,
+      uniqueResponses: 0,
+      platform: platform || 'all',
+      period: { start: start || 'N/A', end: end || 'N/A' },
+    });
+  } catch (error: any) {
+    console.error('[Dashboard] Error en getMessagingStats:', error);
+    res.status(500).json({
+      spent: 0, currency: 'ARS', costPerMessage: 0,
+      sent: 0, delivered: 0, read: 0, uniqueResponses: 0,
+      error: 'Error al obtener datos',
+    });
+  }
+};
+
 export const getUnreadMessagesCount = async (req: Request, res: Response) => {
   try {
     const count = await ConversationMessage.countDocuments({ 

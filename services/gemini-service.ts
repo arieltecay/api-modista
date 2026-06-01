@@ -5,9 +5,13 @@ import BotInstruction from '../models/BotInstruction.js';
 import { sanitizePromptChunk } from '../utils/stringUtils.js';
 
 /**
- * Gemini AI Service for WhatsApp NLU
+ * Gemini AI Service for WhatsApp & Instagram NLU
  */
-export const generateAIResponse = async (userMessage: string, fromNumber: string): Promise<string> => {
+export const generateAIResponse = async (
+  userMessage: string, 
+  fromNumber: string,
+  platform?: 'whatsapp' | 'instagram'
+): Promise<string> => {
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
   const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
@@ -47,6 +51,10 @@ export const generateAIResponse = async (userMessage: string, fromNumber: string
     )).join('\n\n');
 
     // 4. Build Final System Prompt
+    const platformContext = platform 
+      ? `\nPLATAFORMA: Estás respondiendo por ${platform === 'instagram' ? 'Instagram DM' : 'WhatsApp'}.`
+      : '';
+
     const systemPrompt = `
       ${botContext}
 
@@ -55,6 +63,7 @@ export const generateAIResponse = async (userMessage: string, fromNumber: string
 
       PREGUNTAS FRECUENTES Y POLÍTICAS:
       ${faqContext}
+      ${platformContext}
 
       REGLAS DE ORO ADICIONALES:
       1. BÚSQUEDA FLEXIBLE: Si el usuario pregunta por un tema (ej: "pantalón", "chaleco", "abrigo"), busca en tu contexto de cursos. Si hay algo parecido, ¡OFRÉCELO!

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import ConversationMessage from '../../models/ConversationMessage.js';
 import { sendWhatsAppMessage } from '../../services/whatsapp-official-service.js';
+import { sendInstagramMessage } from '../../services/instagram/instagram-official-service.js';
 
 export const getChats = async (req: Request, res: Response) => {
   try {
@@ -58,10 +59,12 @@ export const sendMessage = async (req: Request, res: Response) => {
 
     let sent = true;
     
-    // Si la plataforma es WhatsApp, enviamos el mensaje real a través de la API oficial
     if (platform === 'whatsapp') {
-      console.log(`[Admin Hub] Enviando respuesta manual a ${platform_id}...`);
+      console.log(`[Admin Hub] Enviando respuesta manual por WhatsApp a ${platform_id}...`);
       sent = await sendWhatsAppMessage(platform_id as string, body);
+    } else if (platform === 'instagram') {
+      console.log(`[Admin Hub] Enviando respuesta manual por Instagram a ${platform_id}...`);
+      sent = await sendInstagramMessage(platform_id as string, body);
     }
 
     if (sent) {
@@ -74,7 +77,7 @@ export const sendMessage = async (req: Request, res: Response) => {
       });
       res.status(201).json(message);
     } else {
-      res.status(500).json({ error: 'No se pudo enviar el mensaje por WhatsApp a través de la API de Meta' });
+      res.status(500).json({ error: `No se pudo enviar el mensaje por ${platform}` });
     }
   } catch (error: any) {
     res.status(500).json({ error: error.message });
