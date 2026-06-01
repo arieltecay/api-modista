@@ -22,7 +22,7 @@ const BASE_URL = `https://graph.facebook.com/${API_VERSION}`;
  * Obtiene las credenciales de Instagram desde las variables de entorno
  */
 function getCredentials() {
-  const ACCESS_TOKEN = process.env.META_INSTAGRAM_ACCESS_TOKEN;
+  const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
   const IG_USER_ID = process.env.META_INSTAGRAM_USER_ID;
 
   if (!ACCESS_TOKEN || !IG_USER_ID) {
