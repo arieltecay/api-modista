@@ -68,7 +68,11 @@ const courseTitles = {};
 app.set('courseTitles', courseTitles);
 
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({
+    verify: (req, res, buf) => {
+        req.rawBody = buf;
+    }
+}));
 app.use(cookieParser());
 
 // Servir archivos estáticos

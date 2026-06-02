@@ -48,8 +48,8 @@ export const sendInstagramMessage = async (
   const creds = getCredentials();
   if (!creds) return false;
 
-  const { ACCESS_TOKEN, IG_USER_ID } = creds;
-  const API_URL = `${BASE_URL}/${IG_USER_ID}/messages`;
+  const { ACCESS_TOKEN } = creds;
+  const API_URL = `${BASE_URL}/me/messages`;
 
   const postRequest = async (messagingType: 'RESPONSE' | 'MESSAGE_TAG', tag?: string) => {
     const payload: any = {
@@ -129,8 +129,8 @@ export const sendInstagramTaggedMessage = async (
   const creds = getCredentials();
   if (!creds) return false;
 
-  const { ACCESS_TOKEN, IG_USER_ID } = creds;
-  const API_URL = `${BASE_URL}/${IG_USER_ID}/messages`;
+  const { ACCESS_TOKEN } = creds;
+  const API_URL = `${BASE_URL}/me/messages`;
 
   try {
     const response = await axios.post(
@@ -174,11 +174,11 @@ export const markInstagramMessageRead = async (
   const creds = getCredentials();
   if (!creds) return false;
 
-  const { ACCESS_TOKEN, IG_USER_ID } = creds;
+  const { ACCESS_TOKEN } = creds;
 
   try {
     await axios.post(
-      `${BASE_URL}/${IG_USER_ID}/messages`,
+      `${BASE_URL}/me/messages`,
       {
         recipient: { id: recipientId },
         sender_action: 'mark_seen',

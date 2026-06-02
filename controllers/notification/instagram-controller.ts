@@ -49,9 +49,14 @@ export const handleWebhook = async (req: Request, res: Response) => {
     if (process.env.META_APP_SECRET && signature) {
       const elements = signature.split('=');
       const signatureHash = elements[1];
+      
+      // BUG HMAC: Usar req.rawBody si está disponible para evitar discrepancias de serialización en Express
+      // @ts-ignore
+      const rawPayload = req.rawBody ? req.rawBody : JSON.stringify(req.body);
+      
       const expectedHash = crypto
         .createHmac('sha256', process.env.META_APP_SECRET)
-        .update(JSON.stringify(req.body))
+        .update(rawPayload)
         .digest('hex');
 
       if (signatureHash !== expectedHash) {
