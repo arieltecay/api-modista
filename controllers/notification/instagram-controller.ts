@@ -73,6 +73,12 @@ export const handleWebhook = async (req: Request, res: Response) => {
         for (const messaging of entry.messaging) {
           if (!messaging.message) continue;
 
+          // BUG #3: Ignorar echos para prevenir loops de mensajeria
+          if (messaging.message.is_echo) {
+            logger.info('[Instagram Webhook] Se detectó evento de tipo ECO (legacy), ignorando');
+            continue;
+          }
+
           const from = messaging.sender.id;
           const textBody = messaging.message.text;
 
@@ -95,6 +101,18 @@ export const handleWebhook = async (req: Request, res: Response) => {
           if (value.messages) {
             for (const message of value.messages) {
               const from = message.from;
+
+              // BUG #3: Ignorar echos del propio bot en Cloud API para evitar loops
+              if (from === process.env.META_INSTAGRAM_USER_ID) {
+                logger.info('[Instagram Webhook] Se detectó evento de origen bot (Cloud API), ignorando echo');
+                continue;
+              }
+
+              // @ts-ignore
+              if (message.is_echo) {
+                logger.info('[Instagram Webhook] Se detectó bandera is_echo en Cloud API, ignorando echo');
+                continue;
+              }
               
               let textBody = message.text?.body;
 

@@ -28,6 +28,7 @@ export interface InstagramMessageAttachment {
 export interface InstagramMessage {
   mid: string;                // Message ID
   text?: string;              // Text content (if text message)
+  is_echo?: boolean;          // Meta eco flag
   attachments?: InstagramMessageAttachment[]; // Media attachments
   quick_reply?: {
     payload: string;

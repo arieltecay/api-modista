@@ -64,7 +64,7 @@ export const sendMessage = async (req: Request, res: Response) => {
       sent = await sendWhatsAppMessage(platform_id as string, body);
     } else if (platform === 'instagram') {
       console.log(`[Admin Hub] Enviando respuesta manual por Instagram a ${platform_id}...`);
-      sent = await sendInstagramMessage(platform_id as string, body);
+      sent = await sendInstagramMessage(platform_id as string, body, true);
     }
 
     if (sent) {

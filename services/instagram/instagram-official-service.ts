@@ -42,7 +42,8 @@ function getCredentials() {
  */
 export const sendInstagramMessage = async (
   recipientId: string, 
-  message: string
+  message: string,
+  isAdminManual: boolean = false
 ): Promise<boolean> => {
   const creds = getCredentials();
   if (!creds) return false;
@@ -50,14 +51,20 @@ export const sendInstagramMessage = async (
   const { ACCESS_TOKEN, IG_USER_ID } = creds;
   const API_URL = `${BASE_URL}/${IG_USER_ID}/messages`;
 
-  try {
-    const response = await axios.post<{ message_id: string; recipient_id: string }>(
+  const postRequest = async (messagingType: 'RESPONSE' | 'MESSAGE_TAG', tag?: string) => {
+    const payload: any = {
+      recipient: { id: recipientId },
+      message: { text: message },
+      messaging_type: messagingType,
+    };
+
+    if (messagingType === 'MESSAGE_TAG' && tag) {
+      payload.tag = tag;
+    }
+
+    return axios.post<{ message_id: string; recipient_id: string }>(
       API_URL,
-      {
-        recipient: { id: recipientId },
-        message: { text: message },
-        messaging_type: 'RESPONSE',
-      } as InstagramSendMessageRequest,
+      payload,
       {
         headers: {
           Authorization: `Bearer ${ACCESS_TOKEN}`,
@@ -65,28 +72,37 @@ export const sendInstagramMessage = async (
         },
       }
     );
+  };
 
-    logger.info(
-      `[Instagram OK] Mensaje enviado a ${recipientId}. ID: ${response.data.message_id}`
-    );
-
-    // Persistir el mensaje saliente en la base de datos
-    try {
-      await ConversationMessage.create({
-        platform: 'instagram',
-        platform_id: recipientId,
-        body: message,
-        direction: 'outbound',
-        status: 'sent',
-        isAdminRead: true,
-      });
-    } catch (dbError: any) {
-      logger.error('[Instagram Error] Fallo al persistir mensaje saliente:', {
-        error: dbError.message,
-      });
+  try {
+    // Si es un envio manual por el administrador, usamos HUMAN_AGENT directamente
+    if (isAdminManual) {
+      logger.info(`[Instagram Manual] Envío manual por Admin. Usando tag HUMAN_AGENT para ${recipientId}`);
+      const response = await postRequest('MESSAGE_TAG', 'HUMAN_AGENT');
+      logger.info(`[Instagram Manual OK] Mensaje manual enviado a ${recipientId}. ID: ${response.data.message_id}`);
+      return true;
     }
 
-    return true;
+    // Respuesta automatica (bot): intentamos de forma estandar RESPONSE
+    try {
+      const response = await postRequest('RESPONSE');
+      logger.info(`[Instagram Bot OK] Mensaje bot enviado a ${recipientId}. ID: ${response.data.message_id}`);
+      return true;
+    } catch (apiError: any) {
+      const metaError = apiError.response?.data?.error;
+      const isWindowError = 
+        metaError?.code === 10 || 
+        metaError?.error_subcode === 2018307 || 
+        String(metaError?.message).toLowerCase().includes('window');
+
+      if (isWindowError) {
+        logger.warn(`[Instagram Fallback] Ventana de 24h cerrada para ${recipientId}. Reintentando con tag HUMAN_AGENT...`);
+        const fallbackResponse = await postRequest('MESSAGE_TAG', 'HUMAN_AGENT');
+        logger.info(`[Instagram Fallback OK] Mensaje bot enviado con exito usando tag a ${recipientId}. ID: ${fallbackResponse.data.message_id}`);
+        return true;
+      }
+      throw apiError;
+    }
   } catch (error: any) {
     logger.error('[Instagram Error] Detalle API Meta:', {
       status: error.response?.status,
@@ -136,14 +152,6 @@ export const sendInstagramTaggedMessage = async (
     logger.info(
       `[Instagram Tagged OK] Mensaje tag=${tag} enviado a ${recipientId}`
     );
-
-    await ConversationMessage.create({
-      platform: 'instagram',
-      platform_id: recipientId,
-      body: message,
-      direction: 'outbound',
-      status: 'sent',
-    });
 
     return true;
   } catch (error: any) {
