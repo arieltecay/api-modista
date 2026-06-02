@@ -15,8 +15,50 @@ import {
  * - pages_manage_metadata
  */
 
-const API_VERSION = 'v21.0';
+const API_VERSION = 'v25.0';
 const BASE_URL = `https://graph.facebook.com/${API_VERSION}`;
+
+let cachedPageId: string | null = null;
+
+/**
+ * Resuelve dinámicamente el ID de la página de Facebook asociada al token de acceso actual.
+ * Esto es necesario cuando se utiliza un System User Token, ya que '/me' apunta al System User
+ * y no soporta el endpoint de mensajería '/messages'.
+ */
+async function getPageId(accessToken: string): Promise<string> {
+  // 1. Prioridad: Variable de entorno explícita
+  if (process.env.META_PAGE_ID) {
+    return process.env.META_PAGE_ID;
+  }
+
+  // 2. Caché en memoria
+  if (cachedPageId) {
+    return cachedPageId;
+  }
+
+  try {
+    logger.info('[Instagram Service] Resolviendo PAGE_ID dinámicamente desde Meta Graph...');
+    const response = await axios.get<{ data: Array<{ id: string; name: string }> }>(
+      `${BASE_URL}/me/accounts`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (response.data?.data && response.data.data.length > 0) {
+      cachedPageId = response.data.data[0].id;
+      logger.info(`[Instagram Service] PAGE_ID resuelto con éxito: ${cachedPageId} (${response.data.data[0].name})`);
+      return cachedPageId;
+    }
+  } catch (error: any) {
+    logger.warn('[Instagram Service] Advertencia: No se pudo resolver PAGE_ID a través de /me/accounts, usando fallback:', error.message);
+  }
+
+  // 3. Fallback: Devolvemos 'me'
+  return 'me';
+}
 
 /**
  * Obtiene las credenciales de Instagram desde las variables de entorno
@@ -49,7 +91,8 @@ export const sendInstagramMessage = async (
   if (!creds) return false;
 
   const { ACCESS_TOKEN } = creds;
-  const API_URL = `${BASE_URL}/me/messages`;
+  const PAGE_ID = await getPageId(ACCESS_TOKEN);
+  const API_URL = `${BASE_URL}/${PAGE_ID}/messages`;
 
   const postRequest = async (messagingType: 'RESPONSE' | 'MESSAGE_TAG', tag?: string) => {
     const payload: any = {
@@ -130,7 +173,8 @@ export const sendInstagramTaggedMessage = async (
   if (!creds) return false;
 
   const { ACCESS_TOKEN } = creds;
-  const API_URL = `${BASE_URL}/me/messages`;
+  const PAGE_ID = await getPageId(ACCESS_TOKEN);
+  const API_URL = `${BASE_URL}/${PAGE_ID}/messages`;
 
   try {
     const response = await axios.post(
@@ -175,10 +219,11 @@ export const markInstagramMessageRead = async (
   if (!creds) return false;
 
   const { ACCESS_TOKEN } = creds;
+  const PAGE_ID = await getPageId(ACCESS_TOKEN);
 
   try {
     await axios.post(
-      `${BASE_URL}/me/messages`,
+      `${BASE_URL}/${PAGE_ID}/messages`,
       {
         recipient: { id: recipientId },
         sender_action: 'mark_seen',
