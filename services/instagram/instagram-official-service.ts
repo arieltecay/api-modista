@@ -28,13 +28,14 @@ const BASE_URL = `https://graph.facebook.com/${API_VERSION}`;
 function getCredentials() {
   const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
   const IG_USER_ID = process.env.META_INSTAGRAM_USER_ID;
+  const PAGE_ID = process.env.META_PAGE_ID;
 
-  if (!ACCESS_TOKEN || !IG_USER_ID) {
-    logger.error('[Instagram] Credenciales faltantes: META_ACCESS_TOKEN o META_INSTAGRAM_USER_ID no definidos');
+  if (!ACCESS_TOKEN || !IG_USER_ID || !PAGE_ID) {
+    logger.error('[Instagram] Credenciales faltantes: META_ACCESS_TOKEN, META_INSTAGRAM_USER_ID o META_PAGE_ID no definidos');
     return null;
   }
 
-  return { ACCESS_TOKEN, IG_USER_ID };
+  return { ACCESS_TOKEN, IG_USER_ID, PAGE_ID };
 }
 
 /**
@@ -53,10 +54,9 @@ export const sendInstagramMessage = async (
   const creds = getCredentials();
   if (!creds) return false;
 
-  const { ACCESS_TOKEN, IG_USER_ID } = creds;
-  // CORRECTO: usamos el IG Business Account ID directamente desde la variable de entorno.
-  // Los System User Tokens NO soportan '/me', siempre usar el ID explícito.
-  const API_URL = `${BASE_URL}/${IG_USER_ID}/messages`;
+  const { ACCESS_TOKEN, PAGE_ID } = creds;
+  // CORRECTO: usar el ID de la Página de Facebook para mensajería en lugar del ID de la cuenta de Instagram
+  const API_URL = `${BASE_URL}/${PAGE_ID}/messages`;
 
   const postRequest = async (messagingType: 'RESPONSE' | 'MESSAGE_TAG', tag?: string) => {
     const payload: any = {
@@ -137,8 +137,8 @@ export const sendInstagramTaggedMessage = async (
   const creds = getCredentials();
   if (!creds) return false;
 
-  const { ACCESS_TOKEN, IG_USER_ID } = creds;
-  const API_URL = `${BASE_URL}/${IG_USER_ID}/messages`;
+  const { ACCESS_TOKEN, PAGE_ID } = creds;
+  const API_URL = `${BASE_URL}/${PAGE_ID}/messages`;
 
   try {
     await axios.post(
@@ -179,11 +179,11 @@ export const markInstagramMessageRead = async (
   const creds = getCredentials();
   if (!creds) return false;
 
-  const { ACCESS_TOKEN, IG_USER_ID } = creds;
+  const { ACCESS_TOKEN, PAGE_ID } = creds;
 
   try {
     await axios.post(
-      `${BASE_URL}/${IG_USER_ID}/messages`,
+      `${BASE_URL}/${PAGE_ID}/messages`,
       {
         recipient: { id: recipientId },
         sender_action: 'mark_seen',
