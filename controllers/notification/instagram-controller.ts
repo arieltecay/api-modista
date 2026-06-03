@@ -50,9 +50,11 @@ export const handleWebhook = async (req: Request, res: Response) => {
       const elements = signature.split('=');
       const signatureHash = elements[1];
       
-      // BUG HMAC: Usar req.rawBody si está disponible para evitar discrepancias de serialización en Express
+      // CORRECTO: Usar req.rawBody (Buffer raw del body) para calcular HMAC.
+      // JSON.stringify(req.body) puede diferir del payload original de Meta por orden de claves.
+      // El Buffer raw garantiza que el hash coincide exactamente con lo que Meta firmó.
       // @ts-ignore
-      const rawPayload = req.rawBody ? req.rawBody : JSON.stringify(req.body);
+      const rawPayload: Buffer | string = req.rawBody ?? JSON.stringify(req.body);
       
       const expectedHash = crypto
         .createHmac('sha256', process.env.META_APP_SECRET)

@@ -37,9 +37,11 @@ export const handleWebhook = async (req: Request, res: Response) => {
     if (process.env.META_APP_SECRET && signature) {
       const elements = signature.split('=');
       const signatureHash = elements[1];
+      // @ts-ignore
+      const rawPayload: Buffer | string = req.rawBody ?? JSON.stringify(req.body);
       const expectedHash = crypto
         .createHmac('sha256', process.env.META_APP_SECRET)
-        .update(JSON.stringify(req.body))
+        .update(rawPayload)
         .digest('hex');
 
       if (signatureHash !== expectedHash) {

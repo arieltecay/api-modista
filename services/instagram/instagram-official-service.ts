@@ -8,57 +8,19 @@ import {
 
 /**
  * Instagram Messaging Service (Meta Graph API)
- * 
- * Usa un token de página de Facebook con permisos:
+ *
+ * IMPORTANTE: Usa un System User Token (META_ACCESS_TOKEN) con permisos:
  * - instagram_basic
  * - instagram_manage_messages
- * - pages_manage_metadata
+ * - whatsapp_business_management
+ * - whatsapp_business_messaging
+ *
+ * El endpoint de envío usa META_INSTAGRAM_USER_ID (ID del IG Business Account),
+ * NO '/me', porque los System User Tokens no soportan ese endpoint.
  */
 
-const API_VERSION = 'v25.0';
+const API_VERSION = 'v21.0';
 const BASE_URL = `https://graph.facebook.com/${API_VERSION}`;
-
-let cachedPageId: string | null = null;
-
-/**
- * Resuelve dinámicamente el ID de la página de Facebook asociada al token de acceso actual.
- * Esto es necesario cuando se utiliza un System User Token, ya que '/me' apunta al System User
- * y no soporta el endpoint de mensajería '/messages'.
- */
-async function getPageId(accessToken: string): Promise<string> {
-  // 1. Prioridad: Variable de entorno explícita
-  if (process.env.META_PAGE_ID) {
-    return process.env.META_PAGE_ID;
-  }
-
-  // 2. Caché en memoria
-  if (cachedPageId) {
-    return cachedPageId;
-  }
-
-  try {
-    logger.info('[Instagram Service] Resolviendo PAGE_ID dinámicamente desde Meta Graph...');
-    const response = await axios.get<{ data: Array<{ id: string; name: string }> }>(
-      `${BASE_URL}/me/accounts`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
-
-    if (response.data?.data && response.data.data.length > 0) {
-      cachedPageId = response.data.data[0].id;
-      logger.info(`[Instagram Service] PAGE_ID resuelto con éxito: ${cachedPageId} (${response.data.data[0].name})`);
-      return cachedPageId;
-    }
-  } catch (error: any) {
-    logger.warn('[Instagram Service] Advertencia: No se pudo resolver PAGE_ID a través de /me/accounts, usando fallback:', error.message);
-  }
-
-  // 3. Fallback: Devolvemos 'me'
-  return 'me';
-}
 
 /**
  * Obtiene las credenciales de Instagram desde las variables de entorno
@@ -68,7 +30,7 @@ function getCredentials() {
   const IG_USER_ID = process.env.META_INSTAGRAM_USER_ID;
 
   if (!ACCESS_TOKEN || !IG_USER_ID) {
-    logger.error('[Instagram] Credenciales faltantes en variables de entorno');
+    logger.error('[Instagram] Credenciales faltantes: META_ACCESS_TOKEN o META_INSTAGRAM_USER_ID no definidos');
     return null;
   }
 
@@ -77,10 +39,11 @@ function getCredentials() {
 
 /**
  * Envía un mensaje de texto a un usuario de Instagram
- * 
- * @param recipientId - ID del usuario de Instagram (scoped)
- * @param message     - Contenido del mensaje
- * @returns boolean   - true si se envió correctamente
+ *
+ * @param recipientId  - IGSID del usuario de Instagram (scoped ID recibido en webhook)
+ * @param message      - Contenido del mensaje
+ * @param isAdminManual - true cuando el envío viene del panel admin (usa HUMAN_AGENT siempre)
+ * @returns boolean    - true si se envió correctamente
  */
 export const sendInstagramMessage = async (
   recipientId: string, 
@@ -90,9 +53,10 @@ export const sendInstagramMessage = async (
   const creds = getCredentials();
   if (!creds) return false;
 
-  const { ACCESS_TOKEN } = creds;
-  const PAGE_ID = await getPageId(ACCESS_TOKEN);
-  const API_URL = `${BASE_URL}/${PAGE_ID}/messages`;
+  const { ACCESS_TOKEN, IG_USER_ID } = creds;
+  // CORRECTO: usamos el IG Business Account ID directamente desde la variable de entorno.
+  // Los System User Tokens NO soportan '/me', siempre usar el ID explícito.
+  const API_URL = `${BASE_URL}/${IG_USER_ID}/messages`;
 
   const postRequest = async (messagingType: 'RESPONSE' | 'MESSAGE_TAG', tag?: string) => {
     const payload: any = {
@@ -118,30 +82,31 @@ export const sendInstagramMessage = async (
   };
 
   try {
-    // Si es un envio manual por el administrador, usamos HUMAN_AGENT directamente
+    // Envíos manuales del admin → siempre HUMAN_AGENT (no hay restricción de ventana de 24h)
     if (isAdminManual) {
-      logger.info(`[Instagram Manual] Envío manual por Admin. Usando tag HUMAN_AGENT para ${recipientId}`);
+      logger.info(`[Instagram Manual] Envío por Admin con HUMAN_AGENT a ${recipientId}`);
       const response = await postRequest('MESSAGE_TAG', 'HUMAN_AGENT');
-      logger.info(`[Instagram Manual OK] Mensaje manual enviado a ${recipientId}. ID: ${response.data.message_id}`);
+      logger.info(`[Instagram Manual OK] Enviado a ${recipientId}. ID: ${response.data.message_id}`);
       return true;
     }
 
-    // Respuesta automatica (bot): intentamos de forma estandar RESPONSE
+    // Respuesta del bot → intentar con RESPONSE (ventana de 24h abierta)
     try {
       const response = await postRequest('RESPONSE');
-      logger.info(`[Instagram Bot OK] Mensaje bot enviado a ${recipientId}. ID: ${response.data.message_id}`);
+      logger.info(`[Instagram Bot OK] Enviado a ${recipientId}. ID: ${response.data.message_id}`);
       return true;
     } catch (apiError: any) {
+      // Si la ventana de 24h cerró, reintentar con HUMAN_AGENT
       const metaError = apiError.response?.data?.error;
       const isWindowError = 
         metaError?.code === 10 || 
         metaError?.error_subcode === 2018307 || 
-        String(metaError?.message).toLowerCase().includes('window');
+        String(metaError?.message ?? '').toLowerCase().includes('window');
 
       if (isWindowError) {
-        logger.warn(`[Instagram Fallback] Ventana de 24h cerrada para ${recipientId}. Reintentando con tag HUMAN_AGENT...`);
+        logger.warn(`[Instagram Fallback] Ventana cerrada para ${recipientId}. Reintentando con HUMAN_AGENT...`);
         const fallbackResponse = await postRequest('MESSAGE_TAG', 'HUMAN_AGENT');
-        logger.info(`[Instagram Fallback OK] Mensaje bot enviado con exito usando tag a ${recipientId}. ID: ${fallbackResponse.data.message_id}`);
+        logger.info(`[Instagram Fallback OK] Enviado a ${recipientId}. ID: ${fallbackResponse.data.message_id}`);
         return true;
       }
       throw apiError;
@@ -158,10 +123,10 @@ export const sendInstagramMessage = async (
 
 /**
  * Envía un mensaje con tag (para comunicación fuera de la ventana de 24h)
- * 
- * @param recipientId - ID del usuario de Instagram
+ *
+ * @param recipientId - IGSID del usuario de Instagram
  * @param message     - Contenido del mensaje
- * @param tag         - Tag permitido por Meta
+ * @param tag         - Tag permitido por Meta (default: HUMAN_AGENT)
  * @returns boolean   - true si se envió correctamente
  */
 export const sendInstagramTaggedMessage = async (
@@ -172,12 +137,11 @@ export const sendInstagramTaggedMessage = async (
   const creds = getCredentials();
   if (!creds) return false;
 
-  const { ACCESS_TOKEN } = creds;
-  const PAGE_ID = await getPageId(ACCESS_TOKEN);
-  const API_URL = `${BASE_URL}/${PAGE_ID}/messages`;
+  const { ACCESS_TOKEN, IG_USER_ID } = creds;
+  const API_URL = `${BASE_URL}/${IG_USER_ID}/messages`;
 
   try {
-    const response = await axios.post(
+    await axios.post(
       API_URL,
       {
         recipient: { id: recipientId },
@@ -193,10 +157,7 @@ export const sendInstagramTaggedMessage = async (
       }
     );
 
-    logger.info(
-      `[Instagram Tagged OK] Mensaje tag=${tag} enviado a ${recipientId}`
-    );
-
+    logger.info(`[Instagram Tagged OK] Mensaje tag=${tag} enviado a ${recipientId}`);
     return true;
   } catch (error: any) {
     logger.error('[Instagram Tagged Error]:', {
@@ -218,12 +179,11 @@ export const markInstagramMessageRead = async (
   const creds = getCredentials();
   if (!creds) return false;
 
-  const { ACCESS_TOKEN } = creds;
-  const PAGE_ID = await getPageId(ACCESS_TOKEN);
+  const { ACCESS_TOKEN, IG_USER_ID } = creds;
 
   try {
     await axios.post(
-      `${BASE_URL}/${PAGE_ID}/messages`,
+      `${BASE_URL}/${IG_USER_ID}/messages`,
       {
         recipient: { id: recipientId },
         sender_action: 'mark_seen',
