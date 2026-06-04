@@ -83,7 +83,14 @@ app.use('/api', routes); // Usamos las rutas consolidadas bajo /api
 
 // Manejador de rutas no encontradas (404)
 app.use((req, res, next) => {
-    logger.warn(`Ruta no encontrada (404): ${req.method} ${req.originalUrl}`);
+    const context = {
+        ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+        userAgent: req.headers['user-agent'],
+        referer: req.headers['referer'],
+        method: req.method,
+        url: req.originalUrl
+    };
+    logger.warn(`Ruta no encontrada (404): ${req.method} ${req.originalUrl}`, context);
     res.status(404).json({
         success: false,
         message: `La ruta ${req.originalUrl} no existe en este servidor.`
@@ -92,7 +99,19 @@ app.use((req, res, next) => {
 
 // Middleware de manejo de errores global
 app.use((err, req, res, next) => {
-    logger.error(`Error no manejado: ${err.message}`, { stack: err.stack });
+    const errorContext = {
+        ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+        userAgent: req.headers['user-agent'],
+        method: req.method,
+        url: req.originalUrl,
+        query: req.query,
+        // Evitamos loguear bodies extremadamente pesados o sensibles si fuera necesario, 
+        // pero para debugging de 4xx/5xx es vital.
+        body: req.method !== 'GET' ? req.body : undefined,
+        stack: err.stack
+    };
+
+    logger.error(`Error no manejado: ${err.message}`, errorContext);
     
     if (err instanceof Error && (err.name === 'MulterError' || err.message.includes('Formato de archivo'))) {
         return res.status(400).json({ 
