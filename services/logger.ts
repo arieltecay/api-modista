@@ -13,7 +13,7 @@ export const logger = winston.createLogger({
     new winston.transports.Console(),
     new AxiomTransport({
       dataset: process.env.AXIOM_DATASET || 'api-modista',
-      token: process.env.AXIOM_TOKEN,
+      token: process.env.AXIOM_TOKEN || '',
     }),
   ]
 });

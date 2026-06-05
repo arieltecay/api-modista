@@ -322,8 +322,10 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
             }
 
             // --- Meta CAPI: Purchase ---
+            // Se dispara cuando el admin marca manualmente la inscripción como 'paid'.
+            // Este es el evento ms valioso para el algoritmo de Meta: le indica quién compra.
             try {
-              sendMetaConversionEvent({
+              const capiSuccess = await sendMetaConversionEvent({
                 eventName: 'Purchase',
                 email: inscription.email,
                 phone: inscription.celular,
@@ -331,14 +333,17 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
                 lastName: inscription.apellido,
                 value: inscription.coursePrice,
                 contentName: inscription.courseTitle,
-                orderId: inscription._id.toString(),
+                orderId: `purchase_${inscription._id.toString()}`,
                 fbc: inscription.metaFbc,
                 fbp: inscription.metaFbp,
                 clientIpAddress: inscription.clientIpAddress,
                 clientUserAgent: inscription.clientUserAgent
               });
+              if (!capiSuccess) {
+                console.warn(`[Meta CAPI] Evento Purchase NO confirmado para inscripción: ${id}. Verificar META_ACCESS_TOKEN.`);
+              }
             } catch (capiError) {
-              console.error('[Meta CAPI Purchase Error]:', capiError);
+              console.error('[Meta CAPI Purchase Error en updatePaymentStatus]:', capiError);
             }
 
             // --- NOTIFICACIÓN WHATSAPP (Meta API) ---
@@ -541,10 +546,11 @@ export const addPayment = async (req: Request<{ id: string }, {}, { amount: numb
       inscription.paymentStatus = 'paid';
       inscription.paymentDate = new Date(); // Marcar la fecha de pago completo
 
-      // --- Meta CAPI: Purchase ---
+      // --- Meta CAPI: Purchase (va addPayment) ---
+      // Se dispara cuando el total acumulado de pagos parciales alcanza el precio del curso.
       if (!wasAlreadyPaid) {
         try {
-          sendMetaConversionEvent({
+          const capiSuccess = await sendMetaConversionEvent({
             eventName: 'Purchase',
             email: inscription.email,
             phone: inscription.celular,
@@ -552,14 +558,17 @@ export const addPayment = async (req: Request<{ id: string }, {}, { amount: numb
             lastName: inscription.apellido,
             value: inscription.coursePrice,
             contentName: inscription.courseTitle,
-            orderId: inscription._id.toString(),
+            orderId: `purchase_${inscription._id.toString()}`,
             fbc: inscription.metaFbc,
             fbp: inscription.metaFbp,
             clientIpAddress: inscription.clientIpAddress,
             clientUserAgent: inscription.clientUserAgent
           });
+          if (!capiSuccess) {
+            console.warn(`[Meta CAPI] Evento Purchase NO confirmado para inscripción: ${id}. Verificar META_ACCESS_TOKEN.`);
+          }
         } catch (capiError) {
-          console.error('[Meta CAPI Purchase Error in addPayment]:', capiError);
+          console.error('[Meta CAPI Purchase Error en addPayment]:', capiError);
         }
       }
     } else {

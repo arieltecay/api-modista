@@ -75,6 +75,26 @@ export const sendEmail = async ({ to, subject, templateName, data }: EmailOption
 };
 
 /**
+ * Agrega parámetros UTM a una URL de pago para atribución correcta.
+ * Cuando el usuario regresa desde el email para pagar, el dashboard
+ * y Meta lo reconocen como tráfico de email y no como direct.
+ */
+const appendPaymentUTMs = (paymentLink: string, courseTitle: string): string => {
+  if (!paymentLink) return paymentLink;
+  try {
+    const url = new URL(paymentLink);
+    url.searchParams.set('utm_source', 'email');
+    url.searchParams.set('utm_medium', 'email');
+    url.searchParams.set('utm_campaign', 'payment_reminder');
+    url.searchParams.set('utm_content', encodeURIComponent(courseTitle || 'curso'));
+    return url.toString();
+  } catch {
+    // Si la URL no es válida, retornar el original sin modificar
+    return paymentLink;
+  }
+};
+
+/**
  * Envía un correo de confirmación de seña.
  */
 export const sendDepositEmail = async (inscription: any): Promise<void> => {
@@ -84,6 +104,7 @@ export const sendDepositEmail = async (inscription: any): Promise<void> => {
 
   // Usar el monto del último pago si está disponible, si no, usar el total (para compatibilidad)
   const monto = inscription.lastPaymentAmount || inscription.depositAmount;
+  const paymentLink = appendPaymentUTMs(inscription.paymentLink, inscription.courseTitle);
 
   const data = {
     nombre: inscription.nombre,

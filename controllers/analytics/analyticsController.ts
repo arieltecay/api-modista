@@ -153,7 +153,16 @@ function classifyChannel(session: any): string {
   const hasUtm = !!session.utmMedium || !!session.utmSource;
   const hasReferrer = !!session.referrer;
 
-  if (['cpc', 'ppc', 'paid', 'paid_social'].some(p => medium.includes(p))) return 'paid';
+  // Medios que indican trfico pago (CPC, Paid Social, etc.)
+  const paidMediums = ['cpc', 'ppc', 'paid', 'paid_social', 'paidsocial', 'paid-social'];
+  // Fuentes que son inherentemente pagas (Meta, Google, TikTok, etc.)
+  const paidSources = [
+    'meta_ads', 'facebook_ads', 'instagram_ads', 'google_ads',
+    'facebook', 'instagram', 'tiktok', 'google'
+  ];
+
+  if (paidMediums.some(p => medium.includes(p))) return 'paid';
+  if (paidSources.some(s => source.includes(s))) return 'paid';
   if (medium === 'social') return 'social_organic';
   if (['organic', 'search'].includes(medium)) return 'organic_search';
   if (medium === 'email') return 'email';

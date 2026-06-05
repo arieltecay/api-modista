@@ -22,9 +22,13 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
   const inscription = await Inscription.create(inscriptionData);
 
   // --- Meta CAPI: Lead & InitiateCheckout ---
+  // IMPORTANTE: Cada evento debe tener un event_id único (prefijado por tipo)
+  // para que Meta pueda deduplicar correctamente entre el Pixel del navegador
+  // y el CAPI del servidor sin descartar eventos distintos.
+  const inscriptionId = inscription._id.toString();
   try {
     // Evento de Lead (Conversión principal para optimización de campañas de captación)
-    sendMetaConversionEvent({
+    await sendMetaConversionEvent({
       eventName: 'Lead',
       email: inscription.email,
       phone: inscription.celular,
@@ -32,15 +36,15 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
       lastName: inscription.apellido,
       value: inscription.coursePrice,
       contentName: inscription.courseTitle,
-      orderId: inscription._id.toString(),
+      orderId: `lead_${inscriptionId}`,
       fbc: inscription.metaFbc,
       fbp: inscription.metaFbp,
       clientIpAddress: inscription.clientIpAddress,
       clientUserAgent: inscription.clientUserAgent
     });
 
-    // Evento de InitiateCheckout (Progreso en el funnel)
-    sendMetaConversionEvent({
+    // Evento de InitiateCheckout (Progreso en el funnel hacia el pago)
+    await sendMetaConversionEvent({
       eventName: 'InitiateCheckout',
       email: inscription.email,
       phone: inscription.celular,
@@ -48,18 +52,25 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
       lastName: inscription.apellido,
       value: inscription.coursePrice,
       contentName: inscription.courseTitle,
-      orderId: inscription._id.toString(),
+      orderId: `checkout_${inscriptionId}`,
       fbc: inscription.metaFbc,
       fbp: inscription.metaFbp,
       clientIpAddress: inscription.clientIpAddress,
       clientUserAgent: inscription.clientUserAgent
     });
   } catch (capiError) {
-    console.error('[Meta CAPI Lead Error]:', capiError);
+    console.error('[Meta CAPI Lead/InitiateCheckout Error]:', capiError);
   }
 
   // Enviar email de confirmación con link de pago
+  // El link incluye UTMs para que si el usuario regresa desde el email,
+  // el sistema lo atribuya como tráfico de email y no como direct.
   try {
+    const rawPaymentLink = validation.resolvedCourse!.mpPaymentLink || '';
+    const trackedPaymentLink = rawPaymentLink
+      ? `${rawPaymentLink}${rawPaymentLink.includes('?') ? '&' : '?'}utm_source=email&utm_medium=email&utm_campaign=payment_reminder`
+      : rawPaymentLink;
+
     await sendEmail({
       to: inscription.email,
       subject: `Confirmación de tu Inscripción - ${inscription.courseTitle}`,
@@ -68,7 +79,7 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
         name: `${inscription.nombre} ${inscription.apellido}`,
         courseTitle: inscription.courseTitle,
         price: inscription.coursePrice.toString(),
-        paymentLink: validation.resolvedCourse!.mpPaymentLink || '',
+        paymentLink: trackedPaymentLink,
         year: new Date().getFullYear().toString(),
       },
     });
