@@ -218,15 +218,14 @@ export const getTrafficStats = async (req: Request, res: Response) => {
       }
     }
 
-    // Vincular inscripciones pagas con campañas
+    // Vincular inscripciones con campañas (Contamos TODOS los registros como Leads)
     const sessionIds = sessions.map(s => s.sessionId);
-    const paidInscriptions = await Inscription.find({
-      sessionId: { $in: sessionIds },
-      paymentStatus: { $ne: 'pending' },
+    const leadsInscriptions = await Inscription.find({
+      sessionId: { $in: sessionIds }
     }).select('sessionId').lean();
 
     const campaignLeads: Record<string, number> = {};
-    for (const ins of paidInscriptions) {
+    for (const ins of leadsInscriptions) {
       if (ins.sessionId) {
         const campaign = sessionToCampaign[ins.sessionId];
         if (campaign) {

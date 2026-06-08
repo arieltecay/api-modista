@@ -69,10 +69,24 @@ export const getGeneralStats = async (req: Request, res: Response) => {
             $sum: { $cond: [{ $eq: ['$paymentStatus', 'paid'] }, 1, 0] } 
           },
           organicInscriptions: { 
-            $sum: { $cond: [{ $ne: ['$marketingSource', 'instagram_paid'] }, 1, 0] } 
+            $sum: { 
+              $cond: [
+                { 
+                  $not: [
+                    { $in: ['$marketingSource', ['instagram_paid', 'meta_ads', 'facebook_ads', 'fb_ads', 'social_paid']] }
+                  ]
+                }, 
+                1, 0
+              ] 
+            } 
           },
           paidAdsInscriptions: { 
-            $sum: { $cond: [{ $eq: ['$marketingSource', 'instagram_paid'] }, 1, 0] } 
+            $sum: { 
+              $cond: [
+                { $in: ['$marketingSource', ['instagram_paid', 'meta_ads', 'facebook_ads', 'fb_ads', 'social_paid']] },
+                1, 0
+              ] 
+            } 
           }
         }
       }
