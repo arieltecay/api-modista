@@ -11,7 +11,16 @@ export const getChats = async (req: Request, res: Response) => {
         $group: {
           _id: { platform: '$platform', platform_id: '$platform_id' },
           lastMessage: { $first: '$body' },
-          lastTimestamp: { $first: '$timestamp' }
+          lastTimestamp: { $first: '$timestamp' },
+          unreadCount: {
+            $sum: {
+              $cond: [
+                { $and: [{ $eq: ['$direction', 'inbound'] }, { $eq: ['$isAdminRead', false] }] },
+                1,
+                0
+              ]
+            }
+          }
         }
       },
       { $sort: { lastTimestamp: -1 } }
@@ -94,6 +103,18 @@ export const deleteMessage = async (req: Request, res: Response) => {
     }
     
     res.json({ message: 'Mensaje eliminado correctamente' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const markAllAsRead = async (req: Request, res: Response) => {
+  try {
+    const result = await ConversationMessage.updateMany(
+      { direction: 'inbound', isAdminRead: false },
+      { $set: { isAdminRead: true } }
+    );
+    res.json({ message: 'Todos los mensajes marcados como leídos', modifiedCount: result.modifiedCount });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

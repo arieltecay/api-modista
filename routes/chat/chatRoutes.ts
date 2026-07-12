@@ -7,6 +7,7 @@ const router = Router();
 
 // Rutas de supervisión de chat
 router.get('/', authenticateToken, chatController.getChats);
+router.post('/read-all', authenticateToken, chatController.markAllAsRead);
 router.get('/:platform/:platform_id', authenticateToken, chatController.getMessagesByPlatform);
 router.post('/:platform/:platform_id/read', authenticateToken, chatController.markAsRead);
 router.post('/:platform/:platform_id/messages', authenticateToken, chatController.sendMessage);
