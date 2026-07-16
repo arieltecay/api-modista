@@ -11,7 +11,7 @@ import { CreateInscriptionBody, CreateLandingInscriptionBody, ExportInscriptions
 import { resolveCourseIdentifier } from '../courses/helper.js';
 import { getEffectiveStartDate } from '../../utils/dateUtils.js';
 import { createInscription as createInscriptionService } from '../../services/inscriptions/inscriptionService.js';
-import { sendMetaConversionEvent } from '../../services/meta-capi-service.js';
+import { fireMetaEvent, buildEventId } from '../../services/meta-capi-helpers/index.js';
 
 // --- Helpers ---
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -324,26 +324,32 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
             // --- Meta CAPI: Purchase ---
             // Se dispara cuando el admin marca manualmente la inscripción como 'paid'.
             // Este es el evento ms valioso para el algoritmo de Meta: le indica quién compra.
-            try {
-              const capiSuccess = await sendMetaConversionEvent({
-                eventName: 'Purchase',
-                email: inscription.email,
-                phone: inscription.celular,
-                firstName: inscription.nombre,
-                lastName: inscription.apellido,
-                value: inscription.coursePrice,
-                contentName: inscription.courseTitle,
-                orderId: `purchase_${inscription._id.toString()}`,
-                fbc: inscription.metaFbc,
-                fbp: inscription.metaFbp,
-                clientIpAddress: inscription.clientIpAddress,
-                clientUserAgent: inscription.clientUserAgent
-              });
-              if (!capiSuccess) {
-                console.warn(`[Meta CAPI] Evento Purchase NO confirmado para inscripción: ${id}. Verificar META_ACCESS_TOKEN.`);
+            if (inscription.metaPurchaseFiredAt) {
+              console.log(`[Admin] Purchase ya disparado para ${id}`);
+            } else {
+              try {
+                const capiSuccess = await fireMetaEvent({
+                  eventName: 'Purchase',
+                  email: inscription.email,
+                  phone: inscription.celular,
+                  firstName: inscription.nombre,
+                  lastName: inscription.apellido,
+                  value: inscription.coursePrice,
+                  contentName: inscription.courseTitle,
+                  contentIds: [inscription.courseId],
+                  eventId: buildEventId('purchase', id),
+                  fbc: inscription.metaFbc,
+                  fbp: inscription.metaFbp,
+                  clientIpAddress: inscription.clientIpAddress,
+                  clientUserAgent: inscription.clientUserAgent
+                });
+                if (capiSuccess) {
+                  inscription.metaPurchaseFiredAt = new Date();
+                  // save happens at the end of function
+                }
+              } catch (capiError) {
+                console.error('[Meta CAPI Purchase Error en updatePaymentStatus]:', capiError);
               }
-            } catch (capiError) {
-              console.error('[Meta CAPI Purchase Error en updatePaymentStatus]:', capiError);
             }
 
             // --- NOTIFICACIÓN WHATSAPP (Meta API) ---
@@ -548,9 +554,9 @@ export const addPayment = async (req: Request<{ id: string }, {}, { amount: numb
 
       // --- Meta CAPI: Purchase (va addPayment) ---
       // Se dispara cuando el total acumulado de pagos parciales alcanza el precio del curso.
-      if (!wasAlreadyPaid) {
+      if (!wasAlreadyPaid && !inscription.metaPurchaseFiredAt) {
         try {
-          const capiSuccess = await sendMetaConversionEvent({
+          const capiSuccess = await fireMetaEvent({
             eventName: 'Purchase',
             email: inscription.email,
             phone: inscription.celular,
@@ -558,14 +564,15 @@ export const addPayment = async (req: Request<{ id: string }, {}, { amount: numb
             lastName: inscription.apellido,
             value: inscription.coursePrice,
             contentName: inscription.courseTitle,
-            orderId: `purchase_${inscription._id.toString()}`,
+            contentIds: [inscription.courseId],
+            eventId: buildEventId('purchase', id),
             fbc: inscription.metaFbc,
             fbp: inscription.metaFbp,
             clientIpAddress: inscription.clientIpAddress,
             clientUserAgent: inscription.clientUserAgent
           });
-          if (!capiSuccess) {
-            console.warn(`[Meta CAPI] Evento Purchase NO confirmado para inscripción: ${id}. Verificar META_ACCESS_TOKEN.`);
+          if (capiSuccess) {
+            inscription.metaPurchaseFiredAt = new Date();
           }
         } catch (capiError) {
           console.error('[Meta CAPI Purchase Error en addPayment]:', capiError);

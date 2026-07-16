@@ -4,8 +4,7 @@ import dotenv from 'dotenv';
 import Inscription from '../../models/Inscription.js';
 import Turno from '../../models/Turno.js';
 import { logError } from '../../services/logger.js';
-import { sendMetaConversionEvent } from '../../services/meta-capi-service.js';
-import { Types } from 'mongoose';
+import { fireMetaEvent, buildEventId } from '../../services/meta-capi-helpers/index.js';import { Types } from 'mongoose';
 
 dotenv.config();
 
@@ -115,24 +114,33 @@ export const getVerifiedPaymentData = async (req: Request, res: Response): Promi
         await inscription.save();
 
         if (inscription.paymentStatus === 'paid') {
-          try {
-            await sendMetaConversionEvent({
-              eventName: 'Purchase',
-              email: inscription.email,
-              phone: inscription.celular,
-              firstName: inscription.nombre,
-              lastName: inscription.apellido,
-              value: totalPaid,
-              contentName: inscription.courseTitle,
-              orderId: `purchase_mp_${inscriptionId}`,
-              fbc: inscription.metaFbc,
-              fbp: inscription.metaFbp,
-              clientIpAddress: inscription.clientIpAddress,
-              clientUserAgent: inscription.clientUserAgent,
-              eventSourceUrl: 'https://modista-app.com/payment/success'
-            });
-          } catch (capiError) {
-            logError('[Meta CAPI Purchase Error en MercadoPago]', capiError instanceof Error ? capiError : new Error(String(capiError)));
+          if (inscription.metaPurchaseFiredAt) {
+            console.log(`[PaymentSuccess] Purchase ya disparado para ${inscriptionId} (${inscription.metaPurchaseFiredAt.toISOString()})`);
+          } else {
+            try {
+              const ok = await fireMetaEvent({
+                eventName: 'Purchase',
+                eventId: buildEventId('purchase', inscriptionId),
+                email: inscription.email,
+                phone: inscription.celular,
+                firstName: inscription.nombre,
+                lastName: inscription.apellido,
+                value: totalPaid,
+                contentName: inscription.courseTitle,
+                contentIds: [inscription.courseId],
+                fbc: inscription.metaFbc,
+                fbp: inscription.metaFbp,
+                clientIpAddress: inscription.clientIpAddress,
+                clientUserAgent: inscription.clientUserAgent,
+                eventSourceUrl: 'https://modista-app.com/payment/success'
+              });
+              if (ok) {
+                inscription.metaPurchaseFiredAt = new Date();
+                await inscription.save();
+              }
+            } catch (capiError) {
+              logError('[Meta CAPI Purchase Error en MercadoPago]', capiError instanceof Error ? capiError : new Error(String(capiError)));
+            }
           }
         }
       }

@@ -37,6 +37,9 @@ interface CapiEventData {
   clientIpAddress?: string;
   clientUserAgent?: string;
   eventSourceUrl?: string;
+  eventId?: string;
+  contentIds?: string[];
+  testEventCode?: string;
 }
 
 /**
@@ -68,10 +71,13 @@ export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boo
       value: event.value,
       currency: event.currency || 'ARS',
       content_name: event.contentName,
+      content_ids: event.contentIds,
       order_id: event.orderId,
     };
 
-    const payload = {
+    const eventId = event.eventId || event.orderId || `event_${eventTime}_${Math.random().toString(36).substr(2, 9)}`;
+
+    const payload: any = {
       data: [
         {
           event_name: event.eventName,
@@ -80,11 +86,13 @@ export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boo
           event_source_url: event.eventSourceUrl || 'https://modista-app.com',
           user_data: userData,
           custom_data: customData,
-          event_id: event.orderId || `event_${eventTime}_${Math.random().toString(36).substr(2, 9)}`,
+          event_id: eventId,
         },
       ],
       access_token: ACCESS_TOKEN,
     };
+
+    if (event.testEventCode) payload.test_event_code = event.testEventCode;
 
     const response = await axios.post(API_URL, payload);
 

@@ -17,11 +17,13 @@ import chatRoutes from './chat/chatRoutes.js';
 import dashboardRoutes from './dashboard/dashboardRoutes.js';
 import analyticsRoutes from './analytics/analyticsRoutes.js';
 import landingRoutes from './landing/landingRoutes.js';
+import funnelRoutes from './funnel.js';
 
 // Módulos de Venta y Campañas
 router.use('/landings', landingRoutes);
 router.use('/inscriptions', inscriptionsRoutes);
 router.use('/workshop-inscriptions', workshopInscriptionsRoutes);
+router.use('/funnel', funnelRoutes);
 
 // Módulos de Contenido
 router.use('/courses', coursesRoutes);

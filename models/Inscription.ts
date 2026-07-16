@@ -39,6 +39,10 @@ export interface IInscription extends Document {
   clientUserAgent?: string;
   recoveryMessageSent: boolean;
   recoveryMessageAt?: Date;
+  metaPurchaseFiredAt?: Date;
+  metaViewContentFiredAt?: Date;
+  metaInitiateCheckoutFiredAt?: Date;
+  metaLeadFiredAt?: Date;
 }
 
 // Interface para el modelo con paginación
@@ -173,6 +177,10 @@ const InscriptionSchema = new Schema<IInscription>({
     type: Date,
     default: null
   },
+  metaPurchaseFiredAt: { type: Date, default: null, index: true },
+  metaViewContentFiredAt: { type: Date, default: null },
+  metaInitiateCheckoutFiredAt: { type: Date, default: null },
+  metaLeadFiredAt: { type: Date, default: null },
   // Nuevo campo de historial de pagos
   paymentHistory: {
     type: [PaymentSchema],

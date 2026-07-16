@@ -2,8 +2,7 @@ import Inscription from '../../models/Inscription.js';
 import { validateInscriptionData } from './inscriptionValidator.js';
 import { sendEmail } from '../../services/emailServices.js';
 import { InscriptionBody, CreateInscriptionResult } from './types.js';
-import { sendMetaConversionEvent } from '../../services/meta-capi-service.js';
-
+import { fireMetaEvent, buildEventId } from '../../services/meta-capi-helpers/index.js';
 export const createInscription = async (body: InscriptionBody): Promise<CreateInscriptionResult> => {
   const validation = await validateInscriptionData(body);
   
@@ -27,37 +26,49 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
   // y el CAPI del servidor sin descartar eventos distintos.
   const inscriptionId = inscription._id.toString();
   try {
-    // Evento de Lead (Conversión principal para optimización de campañas de captación)
-    await sendMetaConversionEvent({
-      eventName: 'Lead',
-      email: inscription.email,
-      phone: inscription.celular,
-      firstName: inscription.nombre,
-      lastName: inscription.apellido,
-      value: inscription.coursePrice,
-      contentName: inscription.courseTitle,
-      orderId: `lead_${inscriptionId}`,
-      fbc: inscription.metaFbc,
-      fbp: inscription.metaFbp,
-      clientIpAddress: inscription.clientIpAddress,
-      clientUserAgent: inscription.clientUserAgent
-    });
+    if (!inscription.metaLeadFiredAt) {
+      const okLead = await fireMetaEvent({
+        eventName: 'Lead',
+        email: inscription.email,
+        phone: inscription.celular,
+        firstName: inscription.nombre,
+        lastName: inscription.apellido,
+        value: inscription.coursePrice,
+        contentName: inscription.courseTitle,
+        contentIds: [inscription.courseId],
+        eventId: buildEventId('lead', inscriptionId),
+        fbc: inscription.metaFbc,
+        fbp: inscription.metaFbp,
+        clientIpAddress: inscription.clientIpAddress,
+        clientUserAgent: inscription.clientUserAgent
+      });
+      if (okLead) {
+        inscription.metaLeadFiredAt = new Date();
+      }
+    }
 
-    // Evento de InitiateCheckout (Progreso en el funnel hacia el pago)
-    await sendMetaConversionEvent({
-      eventName: 'InitiateCheckout',
-      email: inscription.email,
-      phone: inscription.celular,
-      firstName: inscription.nombre,
-      lastName: inscription.apellido,
-      value: inscription.coursePrice,
-      contentName: inscription.courseTitle,
-      orderId: `checkout_${inscriptionId}`,
-      fbc: inscription.metaFbc,
-      fbp: inscription.metaFbp,
-      clientIpAddress: inscription.clientIpAddress,
-      clientUserAgent: inscription.clientUserAgent
-    });
+    if (!inscription.metaInitiateCheckoutFiredAt) {
+      const okCheck = await fireMetaEvent({
+        eventName: 'InitiateCheckout',
+        email: inscription.email,
+        phone: inscription.celular,
+        firstName: inscription.nombre,
+        lastName: inscription.apellido,
+        value: inscription.coursePrice,
+        contentName: inscription.courseTitle,
+        contentIds: [inscription.courseId],
+        eventId: buildEventId('checkout', inscriptionId),
+        fbc: inscription.metaFbc,
+        fbp: inscription.metaFbp,
+        clientIpAddress: inscription.clientIpAddress,
+        clientUserAgent: inscription.clientUserAgent
+      });
+      if (okCheck) {
+        inscription.metaInitiateCheckoutFiredAt = new Date();
+      }
+    }
+    
+    await inscription.save();
   } catch (capiError) {
     console.error('[Meta CAPI Lead/InitiateCheckout Error]:', capiError);
   }
