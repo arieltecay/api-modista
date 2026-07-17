@@ -30,4 +30,7 @@ export interface CreateInscriptionResult {
   success: boolean;
   data: any;
   mpPaymentLink: string | null;
+  mpInitPoint?: string | null;
+  sandboxInitPoint?: string | null;
+  mpPreferenceId?: string | null;
 }

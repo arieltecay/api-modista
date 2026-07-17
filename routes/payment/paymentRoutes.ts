@@ -1,16 +1,28 @@
 import express, { Router } from 'express';
-import { paymentSuccess, getVerifiedPaymentData } from '../../controllers/payment/paymentSuccess.js';
 import { createPreference } from '../../controllers/payment/paymentController.js';
+import { handleWebhook } from '../../controllers/payment/webhookController.js';
+import { getPaymentStatus } from '../../controllers/payment/paymentStatus.js';
+import { verifyWebhookSignature } from '../../middleware/webhookSignature.js';
 
 const router: Router = express.Router();
 
-// Ruta a la que Mercado Pago redirige tras un pago exitoso
-router.get('/success', paymentSuccess);
+/**
+ * Webhook de MercadoPago.
+ * - El webhook handler SOLO lee query params (topic, type, data.id),
+ *   no el body. Por eso no necesitamos express.raw() ni middleware de
+ *   re-parseo — el express.json() global es suficiente.
+ * - Se aplica verifyWebhookSignature antes del handler.
+ */
+router.post(
+  '/webhook',
+  verifyWebhookSignature,
+  handleWebhook
+);
 
-// Ruta segura para que el frontend obtenga los datos del pago verificado
-router.get('/data', getVerifiedPaymentData);
+// Endpoint público de polling para el front tras el redirect
+router.get('/status/:inscriptionId', getPaymentStatus);
 
-// Ruta para crear la preferencia de pago
+// Crear preference para una inscripción existente
 router.post('/create-preference', createPreference);
 
 export default router;

@@ -27,6 +27,9 @@ export interface IInscription extends Document {
   fechaInscripcion: Date;
   paymentHistory: IPayment[];
   totalPaid: number;
+  // MercadoPago
+  mpPreferenceId?: string;
+  paymentSource?: 'webhook' | 'manual' | 'link_static';
   marketingSource?: string;
   utmParams?: Record<string, any>;
   sessionId?: string;
@@ -185,6 +188,16 @@ const InscriptionSchema = new Schema<IInscription>({
   paymentHistory: {
     type: [PaymentSchema],
     default: [],
+  },
+  // MercadoPago
+  mpPreferenceId: {
+    type: String,
+    default: null,
+  },
+  paymentSource: {
+    type: String,
+    enum: ['webhook', 'manual', 'link_static'],
+    default: null,
   }
 }, {
   // Habilitar campos virtuales para que se incluyan en las respuestas JSON

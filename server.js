@@ -57,10 +57,10 @@ app.get(/^\/favicon\.(ico|png)$/, (req, res) => res.status(204).send());
 app.use(helmet());
 
 // Configuración de Mercado Pago
-const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
-if (!accessToken) {
-    logger.error('Error: El Access Token de Mercado Pago no está configurado.');
-    process.exit(1);
+// No matamos el proceso si falta el token: la ruta del webhook responde 503
+// y createPreference devuelve 503. Permite deploys sin MP configurado.
+if (!process.env.MERCADO_PAGO_ACCESS_TOKEN) {
+    logger.warn('MERCADO_PAGO_ACCESS_TOKEN no está configurado. Las rutas de pago no funcionarán hasta configurarlo.');
 }
 
 // Almacenamiento temporal para títulos de cursos (simula una sesión)

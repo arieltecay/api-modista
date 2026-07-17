@@ -1,7 +1,10 @@
 import { Router } from 'express';
-import { trackFunnelStep } from '../controllers/funnel/funnelController.js';
+import { authenticateToken, requireAdmin } from '../middleware/authMiddleware.js';
+import { trackFunnelEvent, getFunnelStats } from '../controllers/funnel/funnelController.js';
 
 const router = Router();
-router.post('/track', trackFunnelStep);
+
+router.post('/event', trackFunnelEvent);
+router.get('/stats', authenticateToken, requireAdmin, getFunnelStats);
 
 export default router;

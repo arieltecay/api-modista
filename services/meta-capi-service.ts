@@ -2,18 +2,11 @@ import axios from 'axios';
 import crypto from 'crypto';
 import { logger } from './logger.js';
 
-/**
- * Meta Conversions API (CAPI) Service
- */
-
 const PIXEL_ID = process.env.META_PIXEL_ID || '2480923435759693';
 const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const API_VERSION = 'v21.0';
 const API_URL = `https://graph.facebook.com/${API_VERSION}/${PIXEL_ID}/events`;
 
-/**
- * Hashes data using SHA256 as required by Meta
- */
 const hashData = (data: string | undefined): string | null => {
   if (!data) return null;
   return crypto
@@ -42,9 +35,6 @@ interface CapiEventData {
   testEventCode?: string;
 }
 
-/**
- * Sends a conversion event to Meta
- */
 export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boolean> => {
   if (!ACCESS_TOKEN) {
     logger.warn('[Meta CAPI] No se pudo enviar evento: Falta META_ACCESS_TOKEN');
@@ -53,8 +43,7 @@ export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boo
 
   try {
     const eventTime = Math.floor(Date.now() / 1000);
-    
-    // Preparar datos del usuario con hashing SHA256
+
     const userData = {
       em: [hashData(event.email)],
       ph: event.phone ? [hashData(event.phone)] : undefined,
@@ -66,7 +55,6 @@ export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boo
       fbp: event.fbp,
     };
 
-    // Preparar datos personalizados
     const customData = {
       value: event.value,
       currency: event.currency || 'ARS',
@@ -94,19 +82,21 @@ export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boo
 
     if (event.testEventCode) payload.test_event_code = event.testEventCode;
 
-    const response = await axios.post(API_URL, payload);
+    const response = await axios.post(API_URL, payload, {
+      timeout: 5000,
+    });
 
     if (response.data.fbtrace_id) {
-      logger.info(`[Meta CAPI OK] Evento '${event.eventName}' enviado con éxito. Trace ID: ${response.data.fbtrace_id}`);
+      logger.info(`[Meta CAPI OK] Evento '${event.eventName}' enviado con exito. Trace ID: ${response.data.fbtrace_id}`);
       return true;
     }
 
     return false;
   } catch (error: any) {
     const errorDetail = error.response?.data || error.message;
-    logger.error('[Meta CAPI Error] Fallo al enviar evento a Meta:', { 
-      eventName: event.eventName, 
-      detail: errorDetail 
+    logger.error('[Meta CAPI Error] Fallo al enviar evento a Meta:', {
+      eventName: event.eventName,
+      detail: errorDetail
     });
     return false;
   }

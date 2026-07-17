@@ -303,6 +303,7 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
     }
 
     // Solo actuar si hay un cambio de estado
+    const wasAlreadyPaid = inscription.paymentStatus === 'paid';
     if (inscription.paymentStatus !== paymentStatus) {
         if (paymentStatus === 'paid') {
             // Manejo de Cupos al pagar
@@ -320,6 +321,10 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
                     inscription.isReserved = true;
                 }
             }
+
+            // --- Side-effects solo en transición a 'paid' ---
+            // Si ya estaba paid (webhook previo) y el admin re-marca, no re-disparar CAPI/WhatsApp.
+            if (!wasAlreadyPaid) {
 
             // --- Meta CAPI: Purchase ---
             // Se dispara cuando el admin marca manualmente la inscripción como 'paid'.
@@ -397,6 +402,7 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
                 console.error('Error preparando notificación WhatsApp:', wsError);
               }
             }
+            } // cierra !wasAlreadyPaid
         }
         else if (paymentStatus === 'pending' && inscription.paymentStatus === 'paid') {
 
@@ -410,6 +416,11 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
 
     inscription.paymentStatus = paymentStatus;
     inscription.paymentDate = paymentStatus === 'paid' ? new Date() : undefined;
+    // Marcamos como 'manual' SOLO en transición a 'paid' (no en paid→pending, ni cuando ya estaba paid).
+    // Si ya estaba paid y se vuelve a marcar paid, no re-marcamos (mantiene el source original).
+    if (paymentStatus === 'paid' && !wasAlreadyPaid) {
+      inscription.paymentSource = 'manual';
+    }
     await inscription.save();
 
     res.status(200).json({
