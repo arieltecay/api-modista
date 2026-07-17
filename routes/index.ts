@@ -18,12 +18,16 @@ import dashboardRoutes from './dashboard/dashboardRoutes.js';
 import analyticsRoutes from './analytics/analyticsRoutes.js';
 import landingRoutes from './landing/landingRoutes.js';
 import funnelRoutes from './funnel.js';
+import uploadRoutes from './upload/index.js';
 
 // Módulos de Venta y Campañas
 router.use('/landings', landingRoutes);
 router.use('/inscriptions', inscriptionsRoutes);
 router.use('/workshop-inscriptions', workshopInscriptionsRoutes);
 router.use('/funnel', funnelRoutes);
+
+// Módulo de Upload (genérico para todos los recursos)
+router.use('/upload', uploadRoutes);
 
 // Módulos de Contenido
 router.use('/courses', coursesRoutes);
