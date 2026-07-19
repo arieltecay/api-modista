@@ -179,20 +179,23 @@ const firePaymentApprovedSideEffects = async (
     }
   }
 
-  // Email de confirmación
+  // Email unificado: confirmacion de pago + link de acceso al curso
   try {
+    const course = await Course.findOne({ title: inscription.courseTitle });
+    const coursePaidLink = course?.coursePaid || 'https://modista-app.com/cursos';
+
     await sendEmail({
       to: inscription.email,
-      subject: `¡Confirmación de tu lugar! ${inscription.courseTitle}`,
-      templateName: 'paymentSuccess',
+      subject: `¡Pago confirmado! Accedé a "${inscription.courseTitle}"`,
+      templateName: 'paymentCourseAccess',
       data: {
         name: `${inscription.nombre} ${inscription.apellido}`,
         courseTitle: inscription.courseTitle,
-        details: 'Accedé al contenido del curso desde tu email o contactanos por WhatsApp.',
+        coursePaid: coursePaidLink,
         year: new Date().getFullYear().toString(),
       },
     });
   } catch (err) {
-    logger.error('[WebhookProcessor] Error enviando email de confirmación', err);
+    logger.error('[WebhookProcessor] Error enviando email unificado post-pago', err);
   }
 };
