@@ -43,10 +43,10 @@ export const verifyWebhookSignature = (req: Request, res: Response, next: NextFu
     return;
   }
 
-  const dataId = req.query['data.id'];
+  const dataId = req.query['data.id'] || req.query.id;
   if (!dataId || typeof dataId !== 'string') {
-    logger.warn('[Webhook] data.id faltante en query params');
-    res.status(400).json({ error: 'Missing data.id' });
+    logger.warn('[Webhook] data.id/id faltante en query params');
+    res.status(400).json({ error: 'Missing payment ID' });
     return;
   }
 
