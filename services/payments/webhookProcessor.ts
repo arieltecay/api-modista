@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import Inscription from '../../models/Inscription.js';
 import Turno from '../../models/Turno.js';
 import Course from '../../models/Course.js';
-import { sendMetaConversionEvent } from '../meta-capi-service.js';
+import { fireMetaEvent, buildEventId } from '../meta-capi-helpers/index.js';
 import { sendWhatsAppTemplate } from '../whatsapp-official-service.js';
 import { sendEmail } from '../emailServices.js';
 import { logger } from '../logger.js';
@@ -129,21 +129,26 @@ const firePaymentApprovedSideEffects = async (
 
   // Meta CAPI: Purchase
   try {
-    const ok = await sendMetaConversionEvent({
+    const ok = await fireMetaEvent({
       eventName: 'Purchase',
+      eventId: buildEventId('purchase', inscriptionId),
       email: inscription.email,
       phone: inscription.celular,
       firstName: inscription.nombre,
       lastName: inscription.apellido,
       value: totalPaid,
+      currency: 'ARS',
       contentName: inscription.courseTitle,
-      orderId: `purchase_${inscriptionId}`,
+      contentIds: [inscription.courseId],
       fbc: inscription.metaFbc,
       fbp: inscription.metaFbp,
       clientIpAddress: inscription.clientIpAddress,
       clientUserAgent: inscription.clientUserAgent,
     });
-    if (!ok) {
+    if (ok) {
+      inscription.metaPurchaseFiredAt = new Date();
+      await inscription.save();
+    } else {
       logger.warn(`[WebhookProcessor] CAPI Purchase no confirmado para ${inscriptionId}`);
     }
   } catch (err) {
