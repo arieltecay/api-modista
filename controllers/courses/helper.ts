@@ -1,62 +1,61 @@
 import { randomUUID } from 'crypto';
-import { isValidObjectId } from 'mongoose';
+import { isValidObjectId, LeanDocument } from 'mongoose';
 import Course, { ICourse } from '../../models/Course.js';
+
+// Tipo para documentos planos retornados por .lean()
+type CourseLean = LeanDocument<ICourse>;
 
 // Función helper para generar UUID único verificando unicidad en BD
 export const generateUniqueUUID = async (): Promise<string> => {
   let uuid: string;
   let attempts = 0;
-  const maxAttempts = 10; // Límite de intentos para evitar bucles infinitos
+  const maxAttempts = 10;
 
   do {
     uuid = randomUUID();
     attempts++;
 
-    // Verificar si el UUID ya existe en la BD
-    const existingCourse = await Course.findOne({ uuid });
+    const existingCourse = await Course.findOne({ uuid }).select('_id').lean();
 
     if (!existingCourse) {
-      return uuid; // UUID único encontrado
+      return uuid;
     }
   } while (attempts < maxAttempts);
 
-  // Si después de varios intentos no encontramos un UUID único, lanzamos error
   throw new Error('No se pudo generar un UUID único después de varios intentos');
 };
 
 /**
  * Resuelve un identificador (UUID, ObjectId o Posición Legacy) a un documento de Curso.
  * Prioridad: UUID > ObjectId > Posición Legacy.
- * Filtra cursos de test en producción.
+ * Solo devuelve cursos activos.
  */
-export const resolveCourseIdentifier = async (identifier: string): Promise<ICourse | null> => {
-  // 1. Filtro base sin exclusión de tests
-  const queryBase = {};
+export const resolveCourseIdentifier = async (identifier: string): Promise<CourseLean | null> => {
+  const queryBase = { status: 'active' };
 
-  let course: ICourse | null = null;
+  let course: CourseLean | null = null;
 
-  // 2. Estrategia A: Buscar por UUID (Prioridad Máxima y Estándar Actual)
-  // Los UUIDs v4 tienen 36 caracteres y contienen guiones.
+  // Estrategia A: Buscar por UUID (Prioridad Máxima)
   if (identifier.length === 36 && identifier.includes('-')) {
-    course = await Course.findOne({ uuid: identifier, ...queryBase });
+    course = await Course.findOne({ uuid: identifier, ...queryBase }).lean();
     if (course) return course;
   }
 
-  // 3. Estrategia B: Buscar por ObjectId (Compatibilidad Backend/Legacy)
-  // Solo intentamos si el string es un ObjectId válido de 24 caracteres hex.
+  // Estrategia B: Buscar por ObjectId
   if (isValidObjectId(identifier)) {
-    course = await Course.findOne({ _id: identifier, ...queryBase });
+    course = await Course.findOne({ _id: identifier, ...queryBase }).lean();
     if (course) return course;
   }
 
-  // 4. Estrategia C: Buscar por Posición Numérica (Legacy - DEPRECATED)
-  // Solo si es un número entero positivo.
+  // Estrategia C: Posición Numérica (Legacy - DEPRECATED)
   const numericId = parseInt(identifier);
   if (!isNaN(numericId) && numericId > 0 && String(numericId) === identifier) {
-    // Para resolver por posición, necesitamos todos los cursos ordenados igual que en el listado
-    const courses = await Course.find(queryBase).sort({ createdAt: -1, updatedAt: -1 });
+    const courses = await Course.find(queryBase)
+      .select('-longDescription')
+      .sort({ createdAt: -1 })
+      .lean();
     if (numericId <= courses.length) {
-      course = courses[numericId - 1]; // Array es 0-indexed
+      course = courses[numericId - 1];
     }
   }
 

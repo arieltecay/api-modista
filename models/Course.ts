@@ -61,11 +61,17 @@ const courseSchema = new Schema<ICourse>({
     default: null
   },
 }, {
-  timestamps: true  // Agrega createdAt y updatedAt automáticamente
+  timestamps: true
 });
 
 // Agregar plugin de paginación
 courseSchema.plugin(mongoosePaginate);
+
+// Índices compuestos para optimizar queries frecuentes
+// Nota: uuid ya tiene índice único por "unique: true" en el schema
+courseSchema.index({ status: 1, createdAt: -1 });
+courseSchema.index({ category: 1, status: 1 });
+courseSchema.index({ title: 'text', shortDescription: 'text' });
 
 const Course = model<ICourse, ICourseModel>('Course', courseSchema);
 

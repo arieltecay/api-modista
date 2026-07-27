@@ -1,10 +1,13 @@
 import { Request, Response } from 'express';
 import { logError } from '../../services/logger.js';
-import Course from '../../models/Course.js';
+import Course, { ICourse } from '../../models/Course.js';
 import cloudinary from '../../config/cloudinaryConfig.js';
 import { generateUniqueUUID, resolveCourseIdentifier } from './helper.js';
 import { CreateCourseBody, GetCoursesQuery, UpdateCourseBody } from './types.js';
 import { cache } from '../../utils/cache.js';
+import { LeanDocument } from 'mongoose';
+
+type CourseLean = LeanDocument<ICourse>;
 
 export const getCourses = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -18,32 +21,36 @@ export const getCourses = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    // Obtener todos los cursos sin filtros de entorno local
-    const query = {};
+    // Obtener cursos activos, excluyendo longDescription para reducir payload
+    const query = { status: 'active' };
+    const projection = '-longDescription -__v -lastMonthlyClosureDate -currentPaymentCycleStartDate';
 
-    let courses;
+    let courses: CourseLean[];
     if (limit) {
       const limitNum = parseInt(limit as string, 10);
       const pageNum = parseInt(page as string, 10);
       const skip = (pageNum - 1) * limitNum;
       
       courses = await Course.find(query)
-        .sort({ createdAt: -1, updatedAt: -1 })
+        .select(projection)
+        .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limitNum);
+        .limit(limitNum)
+        .lean() as CourseLean[];
     } else {
       // Si no hay límite, establecer uno máximo razonable para proteger el servidor (ej. 100)
       courses = await Course.find(query)
-        .sort({ createdAt: -1, updatedAt: -1 })
-        .limit(100);
+        .select(projection)
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .lean() as CourseLean[];
     }
 
     // Usar UUID como id principal, mantener compatibilidad backward
-    const coursesWithId: any[] = courses.map((course, index) => ({
-      ...course.toObject(),
-      id: course.uuid, // UUID único como id principal
-      courseId: (course._id as any).toString(), // _id de MongoDB como respaldo
-      // Mantener posición como campo adicional para compatibilidad
+    const coursesWithId = courses.map((course, index) => ({
+      ...course,
+      id: course.uuid,
+      courseId: course._id?.toString(),
       position: (index + 1).toString()
     }));
 
@@ -79,9 +86,9 @@ export const getCourseById = async (req: Request<{ id: string }>, res: Response)
     }
 
     const courseData = {
-      ...course.toObject(),
-      id: course.uuid, // UUID como id principal
-      courseId: (course._id as any).toString(), // _id como respaldo
+      ...course,
+      id: course.uuid,
+      courseId: course._id?.toString(),
     };
 
     // Guardar en caché por 5 minutos

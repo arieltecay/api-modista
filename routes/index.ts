@@ -1,4 +1,5 @@
 import express from 'express';
+import { rateLimit } from 'express-rate-limit';
 const router = express.Router();
 
 import notificationRoutes from './notification/index.js';
@@ -20,8 +21,24 @@ import landingRoutes from './landing/landingRoutes.js';
 import funnelRoutes from './funnel.js';
 import uploadRoutes from './upload/index.js';
 
+// Rate limiter para endpoints públicos (lectura)
+const publicLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: 'Demasiadas solicitudes, intentá de nuevo en 15 minutos' }
+});
+
+// Aplicar rate limiting a rutas públicas de lectura
+router.use('/courses', publicLimiter, coursesRoutes);
+router.use('/faq', publicLimiter, faqRoutes);
+router.use('/testimonials', publicLimiter, testimonialsRoute);
+router.use('/carousel', publicLimiter, carouselRoutes);
+router.use('/tariffs', publicLimiter, tariffRoutes);
+router.use('/landings', publicLimiter, landingRoutes);
+
 // Módulos de Venta y Campañas
-router.use('/landings', landingRoutes);
 router.use('/inscriptions', inscriptionsRoutes);
 router.use('/workshop-inscriptions', workshopInscriptionsRoutes);
 router.use('/funnel', funnelRoutes);
@@ -29,20 +46,13 @@ router.use('/funnel', funnelRoutes);
 // Módulo de Upload (genérico para todos los recursos)
 router.use('/upload', uploadRoutes);
 
-// Módulos de Contenido
-router.use('/courses', coursesRoutes);
-router.use('/faq', faqRoutes);
-router.use('/testimonials', testimonialsRoute);
-router.use('/carousel', carouselRoutes);
-
 // Módulos de Usuario y Autenticación
 router.use('/auth', authRoutes);
 router.use('/turnos', turnosRoutes);
-router.use('/tariffs', tariffRoutes);
 
 // Módulos de Operaciones y Servicios
 router.use('/notifications', notificationRoutes);
-router.use('/notification', notificationRoutes); // Alias para compatibilidad con Meta Webhook y consistencia interna
+router.use('/notification', notificationRoutes);
 router.use('/payment', paymentRoutes);
 router.use('/email', emailRoutes);
 router.use('/dashboard', dashboardRoutes);
