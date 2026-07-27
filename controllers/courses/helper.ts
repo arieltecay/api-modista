@@ -1,9 +1,9 @@
 import { randomUUID } from 'crypto';
-import { isValidObjectId, LeanDocument } from 'mongoose';
+import { isValidObjectId, Document } from 'mongoose';
 import Course, { ICourse } from '../../models/Course.js';
 
-// Tipo para documentos planos retornados por .lean()
-type CourseLean = LeanDocument<ICourse>;
+// Tipo para documentos planos retornados por .lean() en Mongoose 8
+type CourseLean = Omit<ICourse, keyof Document> & { _id: any };
 
 // Función helper para generar UUID único verificando unicidad en BD
 export const generateUniqueUUID = async (): Promise<string> => {

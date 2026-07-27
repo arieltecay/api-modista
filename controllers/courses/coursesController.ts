@@ -5,9 +5,10 @@ import cloudinary from '../../config/cloudinaryConfig.js';
 import { generateUniqueUUID, resolveCourseIdentifier } from './helper.js';
 import { CreateCourseBody, GetCoursesQuery, UpdateCourseBody } from './types.js';
 import { cache } from '../../utils/cache.js';
-import { LeanDocument } from 'mongoose';
+import { Document } from 'mongoose';
 
-type CourseLean = LeanDocument<ICourse>;
+// Tipo para documentos planos retornados por .lean() en Mongoose 8
+type CourseLean = Omit<ICourse, keyof Document> & { _id: any };
 
 export const getCourses = async (req: Request, res: Response): Promise<void> => {
   try {
