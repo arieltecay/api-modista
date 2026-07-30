@@ -31,7 +31,7 @@ export const generateUniqueUUID = async (): Promise<string> => {
  * Solo devuelve cursos activos.
  */
 export const resolveCourseIdentifier = async (identifier: string): Promise<CourseLean | null> => {
-  const queryBase = { status: 'active' };
+  const queryBase = { status: { $ne: 'inactive' } };
 
   let course: CourseLean | null = null;
 

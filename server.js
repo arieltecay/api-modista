@@ -5,7 +5,6 @@ import routes from './routes/index.js';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import compression from 'compression';
-import { rateLimit } from 'express-rate-limit';
 import { logger } from './services/logger.js';
 import connectDB from './config/db.js';
 import path from 'path';
@@ -60,23 +59,6 @@ app.use(helmet());
 
 // Compresión Gzip/Brotli para reducir tamaño de respuestas (~70%)
 app.use(compression());
-
-// Rate limiting para endpoints públicos (protección contra abuso)
-const publicApiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 100, // 100 requests por IP por ventana
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { success: false, message: 'Demasiadas solicitudes, intentá de nuevo en 15 minutos' }
-});
-
-const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 20, // Más restrictivo para auth
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { success: false, message: 'Demasiados intentos, intentá de nuevo en 15 minutos' }
-});
 
 // Configuración de Mercado Pago
 // No matamos el proceso si falta el token: la ruta del webhook responde 503

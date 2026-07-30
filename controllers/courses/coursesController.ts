@@ -23,7 +23,7 @@ export const getCourses = async (req: Request, res: Response): Promise<void> => 
     }
 
     // Obtener cursos activos, excluyendo longDescription para reducir payload
-    const query = { status: 'active' };
+    const query = { status: { $ne: 'inactive' } };
     const projection = '-longDescription -__v -lastMonthlyClosureDate -currentPaymentCycleStartDate';
 
     let courses: CourseLean[];
