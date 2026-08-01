@@ -234,11 +234,28 @@ export const getTrafficStats = async (req: Request, res: Response) => {
       }
     }
 
+    // Vincular inscripciones pagadas con campañas (Compras)
+    const purchaseInscriptions = await Inscription.find({
+      sessionId: { $in: sessionIds },
+      paymentStatus: { $in: ['paid', 'partial'] }
+    }).select('sessionId').lean();
+
+    const campaignPurchases: Record<string, number> = {};
+    for (const ins of purchaseInscriptions) {
+      if (ins.sessionId) {
+        const campaign = sessionToCampaign[ins.sessionId];
+        if (campaign) {
+          campaignPurchases[campaign] = (campaignPurchases[campaign] || 0) + 1;
+        }
+      }
+    }
+
     const topCampaigns = Object.entries(campaignVisits)
       .map(([campaign, visits]) => ({
         campaign,
         visits,
         leads: campaignLeads[campaign] || 0,
+        purchases: campaignPurchases[campaign] || 0,
       }))
       .sort((a, b) => b.visits - a.visits)
       .slice(0, 10);
