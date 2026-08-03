@@ -140,10 +140,13 @@ const firePaymentApprovedSideEffects = async (
       currency: 'ARS',
       contentName: inscription.courseTitle,
       contentIds: [inscription.courseId],
+      contentType: 'product',
+      externalId: inscriptionId,
       fbc: inscription.metaFbc,
       fbp: inscription.metaFbp,
       clientIpAddress: inscription.clientIpAddress,
       clientUserAgent: inscription.clientUserAgent,
+      eventSourceUrl: inscription.eventSourceUrl || 'https://modista-app.com/payment/success',
     });
     if (ok) {
       inscription.metaPurchaseFiredAt = new Date();

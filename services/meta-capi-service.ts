@@ -15,7 +15,12 @@ const hashData = (data: string | undefined): string | null => {
     .digest('hex');
 };
 
-interface CapiEventData {
+const hashField = (value: string | undefined): string[] | undefined => {
+  const hashed = hashData(value);
+  return hashed ? [hashed] : undefined;
+};
+
+export interface CapiEventData {
   eventName: 'InitiateCheckout' | 'Purchase' | 'Lead';
   email: string;
   phone?: string;
@@ -24,7 +29,9 @@ interface CapiEventData {
   value?: number;
   currency?: string;
   contentName?: string;
+  contentType?: string;
   orderId?: string;
+  externalId?: string;
   fbc?: string;
   fbp?: string;
   clientIpAddress?: string;
@@ -33,6 +40,54 @@ interface CapiEventData {
   eventId?: string;
   contentIds?: string[];
   testEventCode?: string;
+}
+
+interface CapiUserData {
+  em?: string[] | null;
+  ph?: string[] | null;
+  fn?: string[] | null;
+  ln?: string[] | null;
+  client_ip_address?: string;
+  client_user_agent?: string;
+  fbc?: string;
+  fbp?: string;
+  external_id?: string;
+}
+
+interface CapiCustomData {
+  value?: number;
+  currency?: string;
+  content_name?: string;
+  content_ids?: string[];
+  content_type?: string;
+  order_id?: string;
+}
+
+interface CapiEventPayload {
+  event_name: 'InitiateCheckout' | 'Purchase' | 'Lead';
+  event_time: number;
+  action_source: string;
+  event_source_url: string;
+  user_data: CapiUserData;
+  custom_data: CapiCustomData;
+  event_id: string;
+}
+
+interface CapiRequestPayload {
+  data: CapiEventPayload[];
+  access_token: string;
+  test_event_code?: string;
+}
+
+interface CapiResponsePayload {
+  events_received?: number;
+  messages?: string[];
+  fbtrace_id?: string;
+}
+
+interface CapiErrorResponse {
+  response?: { data?: unknown };
+  message?: string;
 }
 
 export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boolean> => {
@@ -44,28 +99,30 @@ export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boo
   try {
     const eventTime = Math.floor(Date.now() / 1000);
 
-    const userData = {
-      em: event.email ? [hashData(event.email)] : undefined,
-      ph: event.phone ? [hashData(event.phone)] : undefined,
-      fn: event.firstName ? [hashData(event.firstName)] : undefined,
-      ln: event.lastName ? [hashData(event.lastName)] : undefined,
+    const userData: CapiUserData = {
+      em: hashField(event.email),
+      ph: hashField(event.phone),
+      fn: hashField(event.firstName),
+      ln: hashField(event.lastName),
       client_ip_address: event.clientIpAddress,
       client_user_agent: event.clientUserAgent,
       fbc: event.fbc,
       fbp: event.fbp,
     };
+    if (event.externalId) userData.external_id = event.externalId;
 
-    const customData = {
+    const customData: CapiCustomData = {
       value: event.value,
       currency: event.currency || 'ARS',
       content_name: event.contentName,
       content_ids: event.contentIds,
+      content_type: event.contentType,
       order_id: event.orderId,
     };
 
-    const eventId = event.eventId || event.orderId || `event_${eventTime}_${Math.random().toString(36).substr(2, 9)}`;
+    const eventId = event.eventId || event.orderId || `event_${eventTime}_${Math.random().toString(36).slice(2, 11)}`;
 
-    const payload: any = {
+    const payload: CapiRequestPayload = {
       data: [
         {
           event_name: event.eventName,
@@ -82,7 +139,7 @@ export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boo
 
     if (event.testEventCode) payload.test_event_code = event.testEventCode;
 
-    const response = await axios.post(API_URL, payload, {
+    const response = await axios.post<CapiResponsePayload>(API_URL, payload, {
       timeout: 5000,
     });
 
@@ -92,8 +149,9 @@ export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boo
     }
 
     return false;
-  } catch (error: any) {
-    const errorDetail = error.response?.data || error.message;
+  } catch (error: unknown) {
+    const axiosError = error as CapiErrorResponse;
+    const errorDetail = axiosError.response?.data || axiosError.message;
     logger.error('[Meta CAPI Error] Fallo al enviar evento a Meta:', {
       eventName: event.eventName,
       detail: errorDetail

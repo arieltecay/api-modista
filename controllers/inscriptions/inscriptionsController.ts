@@ -350,11 +350,14 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
                   value: inscription.coursePrice,
                   contentName: inscription.courseTitle,
                   contentIds: [inscription.courseId],
+                  contentType: 'product',
+                  externalId: id,
                   eventId: buildEventId('purchase', id),
                   fbc: inscription.metaFbc,
                   fbp: inscription.metaFbp,
                   clientIpAddress: inscription.clientIpAddress,
-                  clientUserAgent: inscription.clientUserAgent
+                  clientUserAgent: inscription.clientUserAgent,
+                  eventSourceUrl: inscription.eventSourceUrl || 'https://modista-app.com/payment/success'
                 });
                 if (capiSuccess) {
                   inscription.metaPurchaseFiredAt = new Date();
@@ -575,21 +578,24 @@ export const addPayment = async (req: Request<{ id: string }, {}, { amount: numb
       // Se dispara cuando el total acumulado de pagos parciales alcanza el precio del curso.
       if (!wasAlreadyPaid && !inscription.metaPurchaseFiredAt) {
         try {
-          const capiSuccess = await fireMetaEvent({
-            eventName: 'Purchase',
-            email: inscription.email,
-            phone: inscription.celular,
-            firstName: inscription.nombre,
-            lastName: inscription.apellido,
-            value: inscription.coursePrice,
-            contentName: inscription.courseTitle,
-            contentIds: [inscription.courseId],
-            eventId: buildEventId('purchase', id),
-            fbc: inscription.metaFbc,
-            fbp: inscription.metaFbp,
-            clientIpAddress: inscription.clientIpAddress,
-            clientUserAgent: inscription.clientUserAgent
-          });
+            const capiSuccess = await fireMetaEvent({
+              eventName: 'Purchase',
+              email: inscription.email,
+              phone: inscription.celular,
+              firstName: inscription.nombre,
+              lastName: inscription.apellido,
+              value: inscription.coursePrice,
+              contentName: inscription.courseTitle,
+              contentIds: [inscription.courseId],
+              contentType: 'product',
+              externalId: id,
+              eventId: buildEventId('purchase', id),
+              fbc: inscription.metaFbc,
+              fbp: inscription.metaFbp,
+              clientIpAddress: inscription.clientIpAddress,
+              clientUserAgent: inscription.clientUserAgent,
+              eventSourceUrl: inscription.eventSourceUrl || 'https://modista-app.com/payment/success'
+            });
           if (capiSuccess) {
             inscription.metaPurchaseFiredAt = new Date();
           }

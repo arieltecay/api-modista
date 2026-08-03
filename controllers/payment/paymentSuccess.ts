@@ -128,11 +128,13 @@ export const getVerifiedPaymentData = async (req: Request, res: Response): Promi
                 value: totalPaid,
                 contentName: inscription.courseTitle,
                 contentIds: [inscription.courseId],
+                contentType: 'product',
+                externalId: inscriptionId,
                 fbc: inscription.metaFbc,
                 fbp: inscription.metaFbp,
                 clientIpAddress: inscription.clientIpAddress,
                 clientUserAgent: inscription.clientUserAgent,
-                eventSourceUrl: 'https://modista-app.com/payment/success'
+                eventSourceUrl: inscription.eventSourceUrl || 'https://modista-app.com/payment/success'
               });
               if (ok) {
                 inscription.metaPurchaseFiredAt = new Date();
@@ -154,6 +156,7 @@ export const getVerifiedPaymentData = async (req: Request, res: Response): Promi
 
     res.status(200).json({
       course: courseData,
+      courseId: inscription?.courseId,
       payment: {
         id: paymentId,
         status: paymentStatus,

@@ -15,6 +15,7 @@ export interface MetaFireContext {
   contentName?: string;
   contentIds?: string[];
   contentType?: string;
+  externalId?: string;
   fbc?: string;
   fbp?: string;
   clientIpAddress?: string;
@@ -35,6 +36,8 @@ export const fireMetaEvent = async (ctx: MetaFireContext): Promise<boolean> => {
     currency: ctx.currency,
     contentName: ctx.contentName,
     contentIds: ctx.contentIds,
+    contentType: ctx.contentType,
+    externalId: ctx.externalId,
     fbc: ctx.fbc,
     fbp: ctx.fbp,
     clientIpAddress: ctx.clientIpAddress,
