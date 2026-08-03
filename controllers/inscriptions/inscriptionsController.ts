@@ -15,6 +15,10 @@ import { fireMetaEvent, buildEventId } from '../../services/meta-capi-helpers/in
 
 // --- Helpers ---
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const getHeaderString = (header: string | string[] | undefined): string | undefined => {
+  if (Array.isArray(header)) return header[0];
+  return header;
+};
 
 // --- Controlador ---
 
@@ -25,11 +29,13 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
   try {
     const clientIpAddress = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString();
     const clientUserAgent = req.headers['user-agent'] || '';
+    const eventSourceUrl = req.body.eventSourceUrl || getHeaderString(req.headers['referer']) || getHeaderString(req.headers['referrer']) || '';
 
     const result = await createInscriptionService({
       ...req.body,
       clientIpAddress,
-      clientUserAgent
+      clientUserAgent,
+      eventSourceUrl
     });
     res.status(201).json(result);
   } catch (error: any) {
@@ -52,6 +58,7 @@ export const createLandingInscription = async (req: Request<{}, {}, CreateLandin
     const { fullName, ...rest } = req.body;
     const clientIpAddress = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString();
     const clientUserAgent = req.headers['user-agent'] || '';
+    const eventSourceUrl = req.body.eventSourceUrl || getHeaderString(req.headers['referer']) || getHeaderString(req.headers['referrer']) || '';
     
     // Split inteligente del nombre
     const nameParts = fullName.trim().split(/\s+/);
@@ -64,7 +71,8 @@ export const createLandingInscription = async (req: Request<{}, {}, CreateLandin
       apellido,
       sourceType: 'landing' as const,
       clientIpAddress,
-      clientUserAgent
+      clientUserAgent,
+      eventSourceUrl
     };
 
     const result = await createInscriptionService(inscriptionData);

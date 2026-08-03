@@ -20,6 +20,7 @@ export interface CreateInscriptionBody {
   metaFbp?: string;
   clientIpAddress?: string;
   clientUserAgent?: string;
+  eventSourceUrl?: string;
 }
 
 export interface CreateLandingInscriptionBody {
@@ -37,6 +38,7 @@ export interface CreateLandingInscriptionBody {
   metaFbp?: string;
   clientIpAddress?: string;
   clientUserAgent?: string;
+  eventSourceUrl?: string;
 }
 
 export interface GetInscriptionsQuery {

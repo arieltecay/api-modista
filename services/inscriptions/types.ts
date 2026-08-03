@@ -24,6 +24,7 @@ export interface InscriptionBody {
   metaFbp?: string;
   clientIpAddress?: string;
   clientUserAgent?: string;
+  eventSourceUrl?: string;
 }
 
 export interface CreateInscriptionResult {

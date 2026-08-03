@@ -31,6 +31,7 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
     ...body,
     courseId: validation.finalCourseId,
   };
+  const eventSourceUrl = body.eventSourceUrl;
 
   const inscription = await Inscription.create(inscriptionData);
   const inscriptionId = inscription._id.toString();
@@ -52,7 +53,8 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
           fbc: inscription.metaFbc,
           fbp: inscription.metaFbp,
           clientIpAddress: inscription.clientIpAddress,
-          clientUserAgent: inscription.clientUserAgent
+          clientUserAgent: inscription.clientUserAgent,
+          eventSourceUrl: eventSourceUrl || inscription.eventSourceUrl
         });
         if (okLead) {
           inscription.metaLeadFiredAt = new Date();
@@ -73,7 +75,8 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
           fbc: inscription.metaFbc,
           fbp: inscription.metaFbp,
           clientIpAddress: inscription.clientIpAddress,
-          clientUserAgent: inscription.clientUserAgent
+          clientUserAgent: inscription.clientUserAgent,
+          eventSourceUrl: eventSourceUrl || inscription.eventSourceUrl
         });
         if (okCheck) {
           inscription.metaInitiateCheckoutFiredAt = new Date();

@@ -45,7 +45,7 @@ export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boo
     const eventTime = Math.floor(Date.now() / 1000);
 
     const userData = {
-      em: [hashData(event.email)],
+      em: event.email ? [hashData(event.email)] : undefined,
       ph: event.phone ? [hashData(event.phone)] : undefined,
       fn: event.firstName ? [hashData(event.firstName)] : undefined,
       ln: event.lastName ? [hashData(event.lastName)] : undefined,

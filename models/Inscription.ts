@@ -40,6 +40,7 @@ export interface IInscription extends Document {
   metaFbp?: string;
   clientIpAddress?: string;
   clientUserAgent?: string;
+  eventSourceUrl?: string;
   recoveryMessageSent: boolean;
   recoveryMessageAt?: Date;
   metaPurchaseFiredAt?: Date;
@@ -169,6 +170,10 @@ const InscriptionSchema = new Schema<IInscription>({
     default: null
   },
   clientUserAgent: {
+    type: String,
+    default: null
+  },
+  eventSourceUrl: {
     type: String,
     default: null
   },
