@@ -54,6 +54,9 @@ app.get('/robots.txt', (req, res) => {
 // Middleware para manejar solicitudes de favicon (cualquier extensión)
 app.get(/^\/favicon\.(ico|png)$/, (req, res) => res.status(204).send());
 
+// Confiar en el proxy para obtener IP real del cliente (X-Forwarded-For)
+app.set('trust proxy', 1);
+
 // Usar Helmet para mejorar la seguridad de las cabeceras HTTP
 app.use(helmet());
 
