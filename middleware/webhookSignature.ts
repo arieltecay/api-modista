@@ -25,7 +25,13 @@ export const verifyWebhookSignature = (req: Request, res: Response, next: NextFu
   const xRequestId = req.header('x-request-id');
 
   if (!xSignature || !xRequestId) {
-    logger.warn('[Webhook] Faltan headers x-signature o x-request-id');
+    logger.warn('[Webhook] Faltan headers x-signature o x-request-id', {
+      url: req.originalUrl,
+      method: req.method,
+      headers: req.headers,
+      query: req.query,
+      ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+    });
     res.status(401).json({ error: 'Missing signature headers' });
     return;
   }
@@ -58,10 +64,21 @@ export const verifyWebhookSignature = (req: Request, res: Response, next: NextFu
     .digest('hex');
 
   if (expected !== v1) {
-    logger.warn('[Webhook] Firma inválida', { expected, received: v1 });
+    logger.warn('[Webhook] Firma inválida', {
+      expected,
+      received: v1,
+      url: req.originalUrl,
+      method: req.method,
+      dataId,
+      xRequestId,
+      topic: req.query.topic || req.query.type,
+      ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+      userAgent: req.headers['user-agent'],
+    });
     res.status(401).json({ error: 'Invalid signature' });
     return;
   }
 
+  logger.info('[Webhook] Firma válida', { dataId, xRequestId, topic: req.query.topic || req.query.type });
   next();
 };

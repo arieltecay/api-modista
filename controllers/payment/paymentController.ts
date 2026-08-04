@@ -16,7 +16,9 @@ const getFrontendUrl = (): string => {
 
 const getNotificationUrl = (): string => {
   const base = process.env.MP_NOTIFICATION_URL || process.env.VITE_API_URL || 'http://localhost:3001';
-  return `${base.replace(/\/+$/, '')}/api/payment/webhook`;
+  // Normalizar: quitar slashes finales y el path del webhook si alguien lo incluyó en la env.
+  const cleanBase = base.replace(/\/+$/, '').replace(/\/api\/payment\/webhook$/, '');
+  return `${cleanBase}/api/payment/webhook`;
 };
 
 /**
