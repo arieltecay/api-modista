@@ -3,6 +3,7 @@ import Inscription from '../../models/Inscription.js';
 import Turno from '../../models/Turno.js';
 import Course from '../../models/Course.js';
 import { fireMetaEvent, buildEventId } from '../meta-capi-helpers/index.js';
+import { getGeoLocationFromIp } from '../geolocation/index.js';
 import { sendWhatsAppTemplate } from '../whatsapp-official-service.js';
 import { sendEmail } from '../emailServices.js';
 import { logger } from '../logger.js';
@@ -135,6 +136,7 @@ const firePaymentApprovedSideEffects = async (
 
   // Meta CAPI: Purchase
   try {
+    const geo = getGeoLocationFromIp(inscription.clientIpAddress || '');
     const ok = await fireMetaEvent({
       eventName: 'Purchase',
       eventId: buildEventId('purchase', inscriptionId),
@@ -152,6 +154,8 @@ const firePaymentApprovedSideEffects = async (
       fbp: inscription.metaFbp,
       clientIpAddress: inscription.clientIpAddress,
       clientUserAgent: inscription.clientUserAgent,
+      city: geo.city,
+      country: geo.country,
       eventSourceUrl: inscription.eventSourceUrl || 'https://modista-app.com/payment/success',
     });
     if (ok) {

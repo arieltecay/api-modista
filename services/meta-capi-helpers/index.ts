@@ -20,6 +20,8 @@ export interface MetaFireContext {
   fbp?: string;
   clientIpAddress?: string;
   clientUserAgent?: string;
+  city?: string;
+  country?: string;
   eventSourceUrl?: string;
   eventTime?: number;
 }
@@ -43,6 +45,8 @@ export const fireMetaEvent = async (ctx: MetaFireContext): Promise<boolean> => {
     fbp: ctx.fbp,
     clientIpAddress: ctx.clientIpAddress,
     clientUserAgent: ctx.clientUserAgent,
+    city: ctx.city,
+    country: ctx.country,
     eventSourceUrl: ctx.eventSourceUrl,
     eventId: ctx.eventId,
     eventTime: ctx.eventTime,

@@ -38,6 +38,8 @@ export interface CapiEventData {
   fbp?: string;
   clientIpAddress?: string;
   clientUserAgent?: string;
+  city?: string;
+  country?: string;
   eventSourceUrl?: string;
   eventId?: string;
   eventTime?: number;
@@ -50,6 +52,8 @@ interface CapiUserData {
   ph?: string[] | null;
   fn?: string[] | null;
   ln?: string[] | null;
+  ct?: string[] | null;
+  country?: string[] | null;
   client_ip_address?: string;
   client_user_agent?: string;
   fbc?: string;
@@ -110,6 +114,8 @@ export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boo
       ph: hashField(event.phone),
       fn: hashField(event.firstName),
       ln: hashField(event.lastName),
+      ct: hashField(event.city),
+      country: hashField(event.country),
       client_ip_address: event.clientIpAddress,
       client_user_agent: event.clientUserAgent,
       fbc: event.fbc,

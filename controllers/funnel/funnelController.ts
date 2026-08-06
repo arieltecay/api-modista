@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import FunnelEvent from '../../models/FunnelEvent.js';
 import { logError } from '../../services/logger.js';
+import { getGeoLocationFromRequest } from '../../services/geolocation/index.js';
 import { fireMetaEvent, buildEventId } from '../../services/meta-capi-helpers/index.js';
 
 /**
@@ -57,6 +58,8 @@ export const trackFunnelEvent = async (req: Request, res: Response) => {
     // ViewContent server-side para recuperar eventos que el navegador bloquea.
     // Importante para la optimización de campañas de conversión (ej: abrigos).
     if (step === 'course_detail_view' && courseId) {
+      const geo = getGeoLocationFromRequest(req);
+
       fireMetaEvent({
         eventName: 'ViewContent',
         eventId: buildEventId('view_content', String(courseId)),
@@ -70,6 +73,8 @@ export const trackFunnelEvent = async (req: Request, res: Response) => {
         fbp,
         clientIpAddress,
         clientUserAgent,
+        city: geo.city,
+        country: geo.country,
         eventSourceUrl: String(eventSourceUrl),
       }).catch((err) => {
         logError('trackFunnelEvent ViewContent CAPI', err instanceof Error ? err : new Error(String(err)));
