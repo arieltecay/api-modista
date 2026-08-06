@@ -127,6 +127,12 @@ const firePaymentApprovedSideEffects = async (
 ): Promise<void> => {
   const inscriptionId = inscription._id.toString();
 
+  // Evitar re-envío si el Purchase ya fue disparado (por redirect de MP o admin manual)
+  if (inscription.metaPurchaseFiredAt) {
+    logger.info(`[WebhookProcessor] Purchase CAPI ya fue enviado para ${inscriptionId}, omitiendo.`);
+    return;
+  }
+
   // Meta CAPI: Purchase
   try {
     const ok = await fireMetaEvent({

@@ -20,9 +20,11 @@ const hashField = (value: string | undefined): string[] | undefined => {
   return hashed ? [hashed] : undefined;
 };
 
+export type CapiEventName = 'PageView' | 'ViewContent' | 'InitiateCheckout' | 'Purchase' | 'Lead';
+
 export interface CapiEventData {
-  eventName: 'InitiateCheckout' | 'Purchase' | 'Lead';
-  email: string;
+  eventName: CapiEventName;
+  email?: string;
   phone?: string;
   firstName?: string;
   lastName?: string;
@@ -38,6 +40,7 @@ export interface CapiEventData {
   clientUserAgent?: string;
   eventSourceUrl?: string;
   eventId?: string;
+  eventTime?: number;
   contentIds?: string[];
   testEventCode?: string;
 }
@@ -64,7 +67,7 @@ interface CapiCustomData {
 }
 
 interface CapiEventPayload {
-  event_name: 'InitiateCheckout' | 'Purchase' | 'Lead';
+  event_name: CapiEventName;
   event_time: number;
   action_source: string;
   event_source_url: string;
@@ -97,7 +100,10 @@ export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boo
   }
 
   try {
-    const eventTime = Math.floor(Date.now() / 1000);
+    const now = Math.floor(Date.now() / 1000);
+    const eventTime = event.eventTime && !isNaN(event.eventTime) && event.eventTime > 0
+      ? event.eventTime
+      : now;
 
     const userData: CapiUserData = {
       em: hashField(event.email),
@@ -110,6 +116,10 @@ export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boo
       fbp: event.fbp,
     };
     if (event.externalId) userData.external_id = event.externalId;
+
+    const eventSourceUrl = event.eventSourceUrl && event.eventSourceUrl.trim().length > 0
+      ? event.eventSourceUrl
+      : 'https://modista-app.com';
 
     const customData: CapiCustomData = {
       value: event.value,
@@ -128,7 +138,7 @@ export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boo
           event_name: event.eventName,
           event_time: eventTime,
           action_source: 'website',
-          event_source_url: event.eventSourceUrl || 'https://modista-app.com',
+          event_source_url: eventSourceUrl,
           user_data: userData,
           custom_data: customData,
           event_id: eventId,

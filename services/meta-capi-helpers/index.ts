@@ -21,14 +21,15 @@ export interface MetaFireContext {
   clientIpAddress?: string;
   clientUserAgent?: string;
   eventSourceUrl?: string;
+  eventTime?: number;
 }
 
 export const fireMetaEvent = async (ctx: MetaFireContext): Promise<boolean> => {
   const testEventCode = process.env.META_TEST_EVENT_CODE;
 
   const ok = await sendRaw({
-    eventName: ctx.eventName as any,
-    email: ctx.email || '', // legacy fallback
+    eventName: ctx.eventName,
+    email: ctx.email,
     phone: ctx.phone,
     firstName: ctx.firstName,
     lastName: ctx.lastName,
@@ -44,6 +45,7 @@ export const fireMetaEvent = async (ctx: MetaFireContext): Promise<boolean> => {
     clientUserAgent: ctx.clientUserAgent,
     eventSourceUrl: ctx.eventSourceUrl,
     eventId: ctx.eventId,
+    eventTime: ctx.eventTime,
     testEventCode,
   });
 
@@ -51,5 +53,7 @@ export const fireMetaEvent = async (ctx: MetaFireContext): Promise<boolean> => {
   return ok;
 };
 
-export const buildEventId = (kind: 'pageview' | 'view_content' | 'checkout' | 'lead' | 'purchase', id: string): string =>
-  `${kind}_${id}`;
+export const buildEventId = (
+  kind: 'pageview' | 'view_content' | 'checkout' | 'lead' | 'purchase',
+  id: string
+): string => `${kind}_${id}`;

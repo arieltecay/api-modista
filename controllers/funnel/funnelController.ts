@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import FunnelEvent from '../../models/FunnelEvent.js';
 import { logError } from '../../services/logger.js';
+import { fireMetaEvent, buildEventId } from '../../services/meta-capi-helpers/index.js';
 
 /**
  * POST /api/funnel/event
@@ -15,6 +16,7 @@ export const trackFunnelEvent = async (req: Request, res: Response) => {
     courseTitle,
     inscriptionId,
     value,
+    eventTime,
     utmSource,
     utmCampaign,
     utmMedium,
@@ -31,6 +33,7 @@ export const trackFunnelEvent = async (req: Request, res: Response) => {
 
   const clientIpAddress = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString();
   const clientUserAgent = req.headers['user-agent'] || '';
+  const eventSourceUrl = req.body.eventSourceUrl || req.body.referrer || req.headers.referer || req.headers.referrer || 'https://modista-app.com';
 
   try {
     await FunnelEvent.create({
@@ -50,6 +53,28 @@ export const trackFunnelEvent = async (req: Request, res: Response) => {
       clientIpAddress,
       clientUserAgent,
     });
+
+    // ViewContent server-side para recuperar eventos que el navegador bloquea.
+    // Importante para la optimización de campañas de conversión (ej: abrigos).
+    if (step === 'course_detail_view' && courseId) {
+      fireMetaEvent({
+        eventName: 'ViewContent',
+        eventId: buildEventId('view_content', String(courseId)),
+        eventTime: typeof eventTime === 'number' && eventTime > 0 ? eventTime : Math.floor(Date.now() / 1000),
+        contentIds: [String(courseId)],
+        contentName: courseTitle,
+        contentType: 'product',
+        value: typeof value === 'number' ? value : undefined,
+        currency: 'ARS',
+        fbc,
+        fbp,
+        clientIpAddress,
+        clientUserAgent,
+        eventSourceUrl: String(eventSourceUrl),
+      }).catch((err) => {
+        logError('trackFunnelEvent ViewContent CAPI', err instanceof Error ? err : new Error(String(err)));
+      });
+    }
 
     res.status(200).json({ success: true });
   } catch (err) {
