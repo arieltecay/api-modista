@@ -3,6 +3,7 @@ import { validateInscriptionData } from './inscriptionValidator.js';
 import { sendEmail } from '../../services/emailServices.js';
 import { fireMetaEvent, buildEventId } from '../../services/meta-capi-helpers/index.js';
 import { mpPreference, isMercadoPagoConfigured } from '../../services/payments/mpClient.js';
+import { getGeoLocationFromIp } from '../geolocation/index.js';
 import { logger } from '../../services/logger.js';
 import { InscriptionBody, CreateInscriptionResult } from './types.js';
 
@@ -41,6 +42,8 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
   // --- Meta CAPI: Lead & InitiateCheckout (fire-and-forget, NO bloquean la respuesta) ---
   const fireCapiEvents = async () => {
     try {
+      const geo = getGeoLocationFromIp(inscription.clientIpAddress || '');
+
       if (!inscription.metaLeadFiredAt) {
         const okLead = await fireMetaEvent({
           eventName: 'Lead',
@@ -51,11 +54,14 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
           value: inscription.coursePrice,
           contentName: inscription.courseTitle,
           contentIds: [inscription.courseId],
+          externalId: inscriptionId,
           eventId: buildEventId('lead', inscriptionId),
           fbc: inscription.metaFbc,
           fbp: inscription.metaFbp,
           clientIpAddress: inscription.clientIpAddress,
           clientUserAgent: inscription.clientUserAgent,
+          city: geo.city,
+          country: geo.country,
           eventSourceUrl: eventSourceUrl || inscription.eventSourceUrl
         });
         if (okLead) {
@@ -73,11 +79,14 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
           value: inscription.coursePrice,
           contentName: inscription.courseTitle,
           contentIds: [inscription.courseId],
+          externalId: inscriptionId,
           eventId: buildEventId('checkout', inscriptionId),
           fbc: inscription.metaFbc,
           fbp: inscription.metaFbp,
           clientIpAddress: inscription.clientIpAddress,
           clientUserAgent: inscription.clientUserAgent,
+          city: geo.city,
+          country: geo.country,
           eventSourceUrl: eventSourceUrl || inscription.eventSourceUrl
         });
         if (okCheck) {

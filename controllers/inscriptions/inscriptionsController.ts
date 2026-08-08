@@ -12,6 +12,7 @@ import { resolveCourseIdentifier } from '../courses/helper.js';
 import { getEffectiveStartDate } from '../../utils/dateUtils.js';
 import { createInscription as createInscriptionService } from '../../services/inscriptions/inscriptionService.js';
 import { fireMetaEvent, buildEventId } from '../../services/meta-capi-helpers/index.js';
+import { getGeoLocationFromIp } from '../../services/geolocation/index.js';
 
 // --- Helpers ---
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -341,6 +342,7 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
               console.log(`[Admin] Purchase ya disparado para ${id}`);
             } else {
               try {
+                const geo = getGeoLocationFromIp(inscription.clientIpAddress || '');
                 const capiSuccess = await fireMetaEvent({
                   eventName: 'Purchase',
                   email: inscription.email,
@@ -357,6 +359,8 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
                   fbp: inscription.metaFbp,
                   clientIpAddress: inscription.clientIpAddress,
                   clientUserAgent: inscription.clientUserAgent,
+                  city: geo.city,
+                  country: geo.country,
                   eventSourceUrl: inscription.eventSourceUrl || 'https://modista-app.com/payment/success'
                 });
                 if (capiSuccess) {
@@ -578,6 +582,7 @@ export const addPayment = async (req: Request<{ id: string }, {}, { amount: numb
       // Se dispara cuando el total acumulado de pagos parciales alcanza el precio del curso.
       if (!wasAlreadyPaid && !inscription.metaPurchaseFiredAt) {
         try {
+            const geo = getGeoLocationFromIp(inscription.clientIpAddress || '');
             const capiSuccess = await fireMetaEvent({
               eventName: 'Purchase',
               email: inscription.email,
@@ -594,6 +599,8 @@ export const addPayment = async (req: Request<{ id: string }, {}, { amount: numb
               fbp: inscription.metaFbp,
               clientIpAddress: inscription.clientIpAddress,
               clientUserAgent: inscription.clientUserAgent,
+              city: geo.city,
+              country: geo.country,
               eventSourceUrl: inscription.eventSourceUrl || 'https://modista-app.com/payment/success'
             });
           if (capiSuccess) {

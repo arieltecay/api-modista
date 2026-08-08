@@ -69,6 +69,7 @@ export const trackFunnelEvent = async (req: Request, res: Response) => {
         contentType: 'product',
         value: typeof value === 'number' ? value : undefined,
         currency: 'ARS',
+        externalId: sessionId,
         fbc,
         fbp,
         clientIpAddress,

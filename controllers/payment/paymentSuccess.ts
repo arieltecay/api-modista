@@ -4,7 +4,9 @@ import dotenv from 'dotenv';
 import Inscription from '../../models/Inscription.js';
 import Turno from '../../models/Turno.js';
 import { logError } from '../../services/logger.js';
-import { fireMetaEvent, buildEventId } from '../../services/meta-capi-helpers/index.js';import { Types } from 'mongoose';
+import { fireMetaEvent, buildEventId } from '../../services/meta-capi-helpers/index.js';
+import { getGeoLocationFromIp } from '../../services/geolocation/index.js';
+import { Types } from 'mongoose';
 
 dotenv.config();
 
@@ -118,6 +120,7 @@ export const getVerifiedPaymentData = async (req: Request, res: Response): Promi
             console.log(`[PaymentSuccess] Purchase ya disparado para ${inscriptionId} (${inscription.metaPurchaseFiredAt.toISOString()})`);
           } else {
             try {
+              const geo = getGeoLocationFromIp(inscription.clientIpAddress || '');
               const ok = await fireMetaEvent({
                 eventName: 'Purchase',
                 eventId: buildEventId('purchase', inscriptionId),
@@ -134,6 +137,8 @@ export const getVerifiedPaymentData = async (req: Request, res: Response): Promi
                 fbp: inscription.metaFbp,
                 clientIpAddress: inscription.clientIpAddress,
                 clientUserAgent: inscription.clientUserAgent,
+                city: geo.city,
+                country: geo.country,
                 eventSourceUrl: inscription.eventSourceUrl || 'https://modista-app.com/payment/success'
               });
               if (ok) {
