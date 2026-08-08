@@ -9,6 +9,7 @@ import { logger } from './services/logger.js';
 import connectDB from './config/db.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { processDlqBatch } from './services/meta-capi-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -151,3 +152,13 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
     logger.info(`🚀 Servidor de API corriendo en http://localhost:${PORT}`);
 });
+
+// Worker de Dead-Letter Queue para eventos CAPI fallidos.
+// Reintenta cada 60s los eventos que no se pudieron enviar (timeouts, 5xx transitorios).
+const DLQ_INTERVAL_MS = Number(process.env.META_DLQ_INTERVAL_MS ?? 60_000);
+const dlqTimer = setInterval(() => {
+    processDlqBatch(50).catch((err) => {
+        logger.error('[Meta CAPI DLQ] Worker error:', err);
+    });
+}, DLQ_INTERVAL_MS);
+dlqTimer.unref();

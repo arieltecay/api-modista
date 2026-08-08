@@ -6,6 +6,8 @@ import { generateUniqueUUID, resolveCourseIdentifier } from './helper.js';
 import { CreateCourseBody, GetCoursesQuery, UpdateCourseBody } from './types.js';
 import { cache } from '../../utils/cache.js';
 import { Document } from 'mongoose';
+import { trackCourseViewServerSide } from '../../services/courses/courseTrackingService.js';
+import { buildTrackingContextFromRequest } from '../../utils/trackingContext.js';
 
 // Tipo para documentos planos retornados por .lean() en Mongoose 8
 type CourseLean = Omit<ICourse, keyof Document> & { _id: any };
@@ -73,6 +75,12 @@ export const getCourseById = async (req: Request<{ id: string }>, res: Response)
     // Intentar obtener del caché
     const cachedData = cache.get(cacheKey);
     if (cachedData) {
+      const trackingCtx = buildTrackingContextFromRequest(req, 'https://modista-app.com');
+      trackCourseViewServerSide(trackingCtx, {
+        courseId: (cachedData as { id?: string }).id ?? id,
+        courseTitle: (cachedData as { title?: string }).title ?? 'unknown',
+        price: (cachedData as { price?: number }).price,
+      });
       res.status(200).json(cachedData);
       return;
     }
@@ -94,6 +102,13 @@ export const getCourseById = async (req: Request<{ id: string }>, res: Response)
 
     // Guardar en caché por 5 minutos
     cache.set(cacheKey, courseData, 300);
+
+    const trackingCtx = buildTrackingContextFromRequest(req, 'https://modista-app.com');
+    trackCourseViewServerSide(trackingCtx, {
+      courseId: course.uuid ?? (course._id?.toString() ?? id),
+      courseTitle: course.title,
+      price: course.price,
+    });
 
     res.status(200).json(courseData);
   } catch (error) {
