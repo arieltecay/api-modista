@@ -4,6 +4,7 @@ export interface CourseViewContext {
   courseId: string;
   courseTitle: string;
   price?: number;
+  externalId?: string;
 }
 
 export interface TrackingHttpContext {
@@ -28,6 +29,7 @@ export const trackCourseViewServerSide = (
     contentType: 'product',
     value: typeof course.price === 'number' ? course.price : undefined,
     currency: 'ARS',
+    externalId: course.externalId,
     fbc: ctx.fbc,
     fbp: ctx.fbp,
     clientIpAddress: ctx.clientIpAddress,

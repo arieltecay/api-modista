@@ -55,33 +55,6 @@ export const trackFunnelEvent = async (req: Request, res: Response) => {
       clientUserAgent,
     });
 
-    // ViewContent server-side para recuperar eventos que el navegador bloquea.
-    // Importante para la optimización de campañas de conversión (ej: abrigos).
-    if (step === 'course_detail_view' && courseId) {
-      const geo = getGeoLocationFromRequest(req);
-
-      fireMetaEvent({
-        eventName: 'ViewContent',
-        eventId: buildEventId('view_content', String(courseId)),
-        eventTime: typeof eventTime === 'number' && eventTime > 0 ? eventTime : Math.floor(Date.now() / 1000),
-        contentIds: [String(courseId)],
-        contentName: courseTitle,
-        contentType: 'product',
-        value: typeof value === 'number' ? value : undefined,
-        currency: 'ARS',
-        externalId: sessionId,
-        fbc,
-        fbp,
-        clientIpAddress,
-        clientUserAgent,
-        city: geo.city,
-        country: geo.country,
-        eventSourceUrl: String(eventSourceUrl),
-      }).catch((err) => {
-        logError('trackFunnelEvent ViewContent CAPI', err instanceof Error ? err : new Error(String(err)));
-      });
-    }
-
     res.status(200).json({ success: true });
   } catch (err) {
     logError('trackFunnelEvent', err instanceof Error ? err : new Error(String(err)));
