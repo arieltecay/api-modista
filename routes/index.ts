@@ -20,6 +20,7 @@ import analyticsRoutes from './analytics/analyticsRoutes.js';
 import landingRoutes from './landing/landingRoutes.js';
 import funnelRoutes from './funnel.js';
 import uploadRoutes from './upload/index.js';
+import metaDlqRoutes from './admin/meta-dlq.js';
 
 // Rate limiter para endpoints públicos (lectura)
 const publicLimiter = rateLimit({
@@ -58,5 +59,8 @@ router.use('/email', emailRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/chat', chatRoutes);
+
+// Admin: Meta CAPI DLQ management
+router.use('/admin/meta-dlq', metaDlqRoutes);
 
 export default router;
