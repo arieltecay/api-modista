@@ -22,6 +22,9 @@ export const buildTrackingContextFromRequest = (req: Request, fallbackUrl: strin
     const fbc = getHeader(req, 'x-meta-fbc') || getCookieFromRequest(req, '_fbc');
     const fbp = getHeader(req, 'x-meta-fbp') || getCookieFromRequest(req, '_fbp');
 
+    // sessionId para event_id unico por usuario en CAPI (dedup)
+    const sessionId = getHeader(req, 'x-session-id');
+
     return {
         clientIpAddress,
         clientUserAgent,
@@ -30,5 +33,6 @@ export const buildTrackingContextFromRequest = (req: Request, fallbackUrl: strin
         fbp,
         city: geo.city,
         country: geo.country,
+        sessionId,
     };
 };
