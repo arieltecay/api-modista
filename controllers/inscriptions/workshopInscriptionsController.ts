@@ -6,6 +6,7 @@ import { logError } from '../../services/logger.js';
 import { GetInscriptionsQuery, ExportInscriptionsQuery } from './types.js';
 import mongoose from 'mongoose';
 import ExcelJS from 'exceljs';
+import { sendEmail } from '../../services/emailServices.js';
 
 /**
  * @desc    Obtener inscripciones exclusivas de un taller presencial
@@ -478,5 +479,122 @@ export const deleteWorkshopInscription = async (req: Request<{ inscriptionId: st
     session.endSession();
     logError('deleteWorkshopInscription', error instanceof Error ? error : new Error(String(error)));
     res.status(500).json({ message: 'Error interno del servidor al eliminar la inscripción.' });
+  }
+};
+
+
+/**
+ * @desc    Actualizar datos personales de una inscripción de taller y reenviar mail de confirmación
+ * @route   PATCH /api/workshop-inscriptions/:inscriptionId/personal-data
+ * @access  Private (Admin)
+ */
+export const updateInscriptionPersonalData = async (
+  req: Request<{ inscriptionId: string }, {}, { nombre: string; apellido: string; email: string; celular: string }>,
+  res: ExpressResponse
+) => {
+  const { inscriptionId } = req.params;
+  const { nombre, apellido, email, celular } = req.body;
+
+  // 1. Validar ObjectId
+  if (!mongoose.Types.ObjectId.isValid(inscriptionId)) {
+    return res.status(400).json({ message: 'ID de inscripción inválido.' });
+  }
+
+  // 2. Validar campos obligatorios
+  const trimmedNombre = nombre?.trim();
+  const trimmedApellido = apellido?.trim();
+  const trimmedEmail = email?.trim().toLowerCase();
+  const trimmedCelular = celular?.trim();
+
+  if (!trimmedNombre || !trimmedApellido || !trimmedEmail || !trimmedCelular) {
+    return res.status(400).json({ message: 'Todos los campos son obligatorios' });
+  }
+
+  // 3. Validar email con la regex del modelo
+  const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
+  if (!emailRegex.test(trimmedEmail)) {
+    return res.status(400).json({ message: 'Por favor, introduce un email válido' });
+  }
+
+  try {
+    // 4. Buscar inscripción con populate de turnoId
+    const inscription = await Inscription.findById(inscriptionId).populate('turnoId');
+
+    if (!inscription) {
+      return res.status(404).json({ message: 'Inscripción no encontrada.' });
+    }
+
+    // 5. Chequear duplicado de email para el mismo curso (excluyendo la inscripción actual)
+    const existingInscription = await Inscription.findOne({
+      email: trimmedEmail,
+      courseId: inscription.courseId,
+      _id: { $ne: inscriptionId }
+    });
+
+    if (existingInscription) {
+      return res.status(409).json({ message: 'Ya existe una inscripción con ese email para este curso.' });
+    }
+
+    // 6. Actualizar los 4 campos
+    inscription.nombre = trimmedNombre;
+    inscription.apellido = trimmedApellido;
+    inscription.email = trimmedEmail;
+    inscription.celular = trimmedCelular;
+
+    await inscription.save();
+
+    // 7. Construir link de pago (misma prioridad que el flujo original)
+    let effectiveLink = '';
+    if (inscription.mpPreferenceId) {
+      effectiveLink = `https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=${inscription.mpPreferenceId}`;
+    } else {
+      // Resolver Course por courseId (soporta UUID u ObjectId)
+      let course = null;
+      if (mongoose.Types.ObjectId.isValid(inscription.courseId)) {
+        course = await Course.findById(inscription.courseId);
+      }
+      if (!course) {
+        course = await Course.findOne({ uuid: inscription.courseId });
+      }
+      if (course?.mpPaymentLink) {
+        effectiveLink = course.mpPaymentLink;
+      }
+    }
+
+    // Agregar UTMs
+    const trackedPaymentLink = effectiveLink
+      ? `${effectiveLink}${effectiveLink.includes('?') ? '&' : '?'}utm_source=email&utm_medium=email&utm_campaign=payment_reminder`
+      : '';
+
+    // 8. Disparar mail en fire-and-forget (sin bloquear la respuesta)
+    sendEmail({
+      to: inscription.email,
+      subject: `Confirmacion de tu Inscripcion - ${inscription.courseTitle}`,
+      templateName: 'teamplate',
+      data: {
+        name: `${inscription.nombre} ${inscription.apellido}`,
+        courseTitle: inscription.courseTitle,
+        price: inscription.coursePrice.toString(),
+        paymentLink: trackedPaymentLink,
+        year: new Date().getFullYear().toString(),
+      },
+    }).catch(() => {});
+
+    // 9. Responder 200
+    res.status(200).json({
+      success: true,
+      data: inscription,
+      message: 'Datos actualizados y mail de confirmación reenviado'
+    });
+
+  } catch (error) {
+    logError('updateInscriptionPersonalData', error instanceof Error ? error : new Error(String(error)));
+    
+    // Manejar error de índice único duplicado (código 11000)
+    if (error instanceof Error && 'code' in error && (error as any).code === 11000) {
+      return res.status(409).json({ message: 'Ya existe una inscripción con ese email para este curso.' });
+    }
+    
+    res.status(500).json({ message: 'Error al actualizar los datos de la inscripción.' });
   }
 };

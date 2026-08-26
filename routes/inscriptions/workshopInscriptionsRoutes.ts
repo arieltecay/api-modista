@@ -5,7 +5,8 @@ import {
   getWorkshopDetails,
   getAvailableTurnosForReschedule,
   updateInscriptionSchedule,
-  deleteWorkshopInscription
+  deleteWorkshopInscription,
+  updateInscriptionPersonalData
 } from '../../controllers/inscriptions/workshopInscriptionsController.js';
 import { authenticateToken, requireAdmin } from '../../middleware/authMiddleware.js';
 
@@ -52,5 +53,12 @@ router.get('/inscription/:inscriptionId/available-turnos', authenticateToken, re
  * @access  Private (Admin)
  */
 router.put('/:inscriptionId/schedule', authenticateToken, requireAdmin, updateInscriptionSchedule);
+
+/**
+ * @route   PATCH /api/workshop-inscriptions/:inscriptionId/personal-data
+ * @desc    Actualizar datos personales de una inscripción y reenviar mail de confirmación
+ * @access  Private (Admin)
+ */
+router.patch('/:inscriptionId/personal-data', authenticateToken, requireAdmin, updateInscriptionPersonalData);
 
 export default router;
