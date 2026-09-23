@@ -3,10 +3,14 @@ import crypto from 'crypto';
 import { logger } from './logger.js';
 import MetaEventDlq from '../models/MetaEventDlq.js';
 
-const PIXEL_ID = process.env.META_PIXEL_ID || '912068635271914';
-const ACCESS_TOKEN = process.env.META_CAPI_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN;
+// Lectura LAZY de env vars: en ESM los módulos pueden evaluarse antes de que
+// dotenv.config() cargue el .env, así que leer process.env a nivel de módulo es
+// frágil. Getters garantizan el valor correcto en el momento de cada llamada.
+const getPixelId = (): string | undefined => process.env.META_PIXEL_ID;
+const getAccessToken = (): string | undefined =>
+  process.env.META_CAPI_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN;
 const API_VERSION = 'v21.0';
-const API_URL = `https://graph.facebook.com/${API_VERSION}/${PIXEL_ID}/events`;
+const buildApiUrl = (pixelId: string) => `https://graph.facebook.com/${API_VERSION}/${pixelId}/events`;
 
 const MAX_ATTEMPTS = 5;
 const BASE_BACKOFF_MS = 30_000;
@@ -148,7 +152,7 @@ const buildPayload = (event: CapiEventData) => {
         event_id: eventId,
       },
     ],
-    access_token: ACCESS_TOKEN ?? '',
+    access_token: getAccessToken() ?? '',
   };
 
   if (event.testEventCode) payload.test_event_code = event.testEventCode;
@@ -159,12 +163,19 @@ const sendOnce = async (
   payload: CapiRequestPayload,
   eventName: CapiEventName
 ): Promise<{ ok: boolean; error?: string }> => {
-  if (!ACCESS_TOKEN) {
+  const accessToken = getAccessToken();
+  const pixelId = getPixelId();
+
+  if (!accessToken) {
     return { ok: false, error: 'META_ACCESS_TOKEN no configurado' };
+  }
+  if (!pixelId) {
+    return { ok: false, error: 'META_PIXEL_ID no configurado' };
   }
 
   try {
-    const response = await axios.post<CapiResponsePayload>(API_URL, payload, { timeout: 15_000 });
+    const requestPayload: CapiRequestPayload = { ...payload, access_token: accessToken };
+    const response = await axios.post<CapiResponsePayload>(buildApiUrl(pixelId), requestPayload, { timeout: 15_000 });
     return { ok: !!response.data.fbtrace_id };
   } catch (err: unknown) {
     const axiosError = err as CapiErrorResponse;
@@ -212,8 +223,8 @@ export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boo
 };
 
 export const processDlqBatch = async (limit = 50): Promise<{ sent: number; failed: number }> => {
-  if (!ACCESS_TOKEN) {
-    logger.warn('[Meta CAPI DLQ] No se puede procesar: ACCESS_TOKEN no configurado');
+  if (!getAccessToken() || !getPixelId()) {
+    logger.warn('[Meta CAPI DLQ] No se puede procesar: credenciales de Meta no configuradas');
     return { sent: 0, failed: 0 };
   }
 

@@ -1,10 +1,26 @@
-export interface ValidationResult {
-  valid: boolean;
-  error?: { status: number; message: string };
-  resolvedCourse?: any;
-  turnoData?: any;
-  finalCourseId?: string;
+import type { ICourse } from '../../models/Course.js';
+
+interface ValidationFailure {
+  valid: false;
+  error: { status: number; message: string };
 }
+
+interface ValidationSuccess {
+  valid: true;
+  resolvedCourse: ICourse;
+  turnoData: unknown;
+  finalCourseId: string;
+  /** Valores tomados de la DB (nunca del body del cliente) — anti price-tampering */
+  trustedCourseTitle: string;
+  trustedCoursePrice: number;
+  normalizedEmail: string;
+}
+
+/**
+ * Discriminated union: si `valid` es true, TS garantiza la presencia de los
+ * datos resueltos; si es false, garantiza `error`. Sin casts `as` en el service.
+ */
+export type ValidationResult = ValidationSuccess | ValidationFailure;
 
 export interface InscriptionBody {
   nombre: string;
@@ -18,7 +34,7 @@ export interface InscriptionBody {
   sourceType?: 'app' | 'landing';
   landingPageId?: string;
   marketingSource?: string;
-  utmParams?: any;
+  utmParams?: Record<string, unknown>;
   sessionId?: string;
   metaFbc?: string;
   metaFbp?: string;
@@ -29,7 +45,7 @@ export interface InscriptionBody {
 
 export interface CreateInscriptionResult {
   success: boolean;
-  data: any;
+  data: unknown;
   mpPaymentLink: string | null;
   mpInitPoint?: string | null;
   sandboxInitPoint?: string | null;

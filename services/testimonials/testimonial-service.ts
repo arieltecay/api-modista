@@ -5,17 +5,23 @@ import Testimonial, { ITestimonial } from '../../models/Testimonial.js';
  */
 export const testimonialService = {
   /**
-   * Obtiene todos los testimonios activos para el frontend
+   * Obtiene testimonios activos para el frontend.
+   * Si se pasa courseId (uuid del curso), devuelve los específicos de ese curso
+   * MÁS los genéricos (courseId vacío) — así cada landing puede combinar ambos.
    */
-  async getActiveTestimonials(): Promise<ITestimonial[]> {
-    return await Testimonial.find({ isActive: true }).sort({ createdAt: -1 });
+  async getActiveTestimonials(courseId?: string): Promise<ITestimonial[]> {
+    const filter: Record<string, unknown> = courseId
+      ? { isActive: true, $or: [{ courseId }, { courseId: '' }, { courseId: null }] }
+      : { isActive: true };
+
+    return await Testimonial.find(filter).sort({ order: 1, createdAt: -1 });
   },
 
   /**
    * Obtiene todos los testimonios para el admin
    */
   async getAllTestimonials(): Promise<ITestimonial[]> {
-    return await Testimonial.find().sort({ createdAt: -1 });
+    return await Testimonial.find().sort({ order: 1, createdAt: -1 });
   },
 
   /**

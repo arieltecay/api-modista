@@ -13,12 +13,14 @@ import {
 } from '../../controllers/inscriptions/inscriptionsController.js';
 import { triggerInscriptionsRecovery } from '../../controllers/inscriptions/recoveryController.js';
 import { authenticateToken, requireAdmin } from '../../middleware/authMiddleware.js';
+import { inscriptionLimiter } from '../../middleware/rateLimiters.js';
 
 const router: Router = express.Router();
 
-// Ruta pública - cualquier usuario puede inscribirse
-router.post('/', createInscription);
-router.post('/landing', createLandingInscription);
+// Rutas públicas - cualquier usuario puede inscribirse
+// Protegidas con rate limit: un Lead/Inscription falso ensucia la optimización de Meta Ads.
+router.post('/', inscriptionLimiter, createInscription);
+router.post('/landing', inscriptionLimiter, createLandingInscription);
 
 // Ruta para disparar la recuperación (protegida para evitar spam)
 router.post('/run-recovery', authenticateToken, requireAdmin, triggerInscriptionsRecovery);

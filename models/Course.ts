@@ -16,6 +16,8 @@ export interface ICourse extends Document {
   imagePublicId?: string;
   uuid?: string; // UUID único para reemplazar IDs posicionales (opcional durante migración)
   isPresencial?: boolean;
+  /** Badge "Top Ventas": lo marca la admin desde el panel (contenido real, no automático) */
+  isTopSeller?: boolean;
   status?: 'active' | 'inactive';
   lastMonthlyClosureDate?: Date;
   currentPaymentCycleStartDate?: Date;
@@ -44,6 +46,10 @@ const courseSchema = new Schema<ICourse>({
     unique: true
   },
   isPresencial: {
+    type: Boolean,
+    default: false
+  },
+  isTopSeller: {
     type: Boolean,
     default: false
   },

@@ -9,7 +9,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon --exec node --loader ts-node/esm server.js",
     "clean": "rm -rf ./node_modules && rm package-lock.json && npm cache clean --force && npm install",
-    "seed": "nodemon --exec node --loader ts-node/esm scripts/seedTariffData.ts"
+    "seed": "nodemon --exec node --loader ts-node/esm scripts/seedTariffData.ts",
+    "test:e2e:payment": "node scripts/test-e2e-payment.mjs"
   },
   "keywords": [],
   "author": "",

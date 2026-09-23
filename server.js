@@ -155,10 +155,15 @@ app.listen(PORT, () => {
 
 // Worker de Dead-Letter Queue para eventos CAPI fallidos.
 // Reintenta cada 60s los eventos que no se pudieron enviar (timeouts, 5xx transitorios).
-const DLQ_INTERVAL_MS = Number(process.env.META_DLQ_INTERVAL_MS ?? 60_000);
-const dlqTimer = setInterval(() => {
-    processDlqBatch(50).catch((err) => {
-        logger.error('[Meta CAPI DLQ] Worker error:', err);
-    });
-}, DLQ_INTERVAL_MS);
-dlqTimer.unref();
+// NOTA: en Vercel serverless el setInterval NO corre (el runtime no es persistente).
+// Allí los reintentos los dispara Vercel Cron → GET /api/cron/meta-dlq (ver vercel.json).
+// Este worker local queda activo solo fuera de Vercel (dev on-premises).
+if (!process.env.VERCEL) {
+    const DLQ_INTERVAL_MS = Number(process.env.META_DLQ_INTERVAL_MS ?? 60_000);
+    const dlqTimer = setInterval(() => {
+        processDlqBatch(50).catch((err) => {
+            logger.error('[Meta CAPI DLQ] Worker error:', err);
+        });
+    }, DLQ_INTERVAL_MS);
+    dlqTimer.unref();
+}

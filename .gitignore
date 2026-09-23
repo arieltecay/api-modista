@@ -8,3 +8,5 @@ whatsapp_qr.png
 
 # Ignorar los correos generados localmente
 /sent_emails/
+*.tsbuildinfo
+sent_emails*

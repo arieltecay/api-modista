@@ -13,6 +13,7 @@ import { getEffectiveStartDate } from '../../utils/dateUtils.js';
 import { createInscription as createInscriptionService } from '../../services/inscriptions/inscriptionService.js';
 import { fireMetaEvent, buildEventId } from '../../services/meta-capi-helpers/index.js';
 import { getGeoLocationFromIp } from '../../services/geolocation/index.js';
+import { isHoneypotTriggered, respondFakeSuccess } from './honeypot.js';
 
 // --- Helpers ---
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -28,6 +29,10 @@ const getHeaderString = (header: string | string[] | undefined): string | undefi
 // @access  Public
 export const createInscription = async (req: Request<{}, {}, CreateInscriptionBody>, res: Response) => {
   try {
+    if (isHoneypotTriggered(req.body)) {
+      return respondFakeSuccess(res);
+    }
+
     const clientIpAddress = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString();
     const clientUserAgent = req.headers['user-agent'] || '';
     const eventSourceUrl = req.body.eventSourceUrl || getHeaderString(req.headers['referer']) || getHeaderString(req.headers['referrer']) || '';
@@ -56,6 +61,10 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
 // @access  Public
 export const createLandingInscription = async (req: Request<{}, {}, CreateLandingInscriptionBody>, res: Response) => {
   try {
+    if (isHoneypotTriggered(req.body)) {
+      return respondFakeSuccess(res);
+    }
+
     const { fullName, ...rest } = req.body;
     const clientIpAddress = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString();
     const clientUserAgent = req.headers['user-agent'] || '';

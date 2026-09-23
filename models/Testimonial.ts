@@ -8,6 +8,10 @@ export interface ITestimonial extends Document {
   description: string;
   role?: string;
   avatarUrl?: string;
+  /** uuid del curso al que aplica. Vacío/null = testimonio genérico (aparece en todas las landings) */
+  courseId?: string;
+  /** Orden de aparición (menor = primero) */
+  order: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -33,6 +37,16 @@ const testimonialSchema = new Schema<ITestimonial>({
     type: String, 
     trim: true,
     default: '' 
+  },
+  courseId: {
+    type: String,
+    trim: true,
+    default: '',
+    index: true,
+  },
+  order: {
+    type: Number,
+    default: 0,
   },
   isActive: { 
     type: Boolean, 

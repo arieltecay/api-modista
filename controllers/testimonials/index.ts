@@ -3,11 +3,15 @@ import { logError } from '../../services/logger.js';
 import { testimonialService } from '../../services/testimonials/testimonial-service.js';
 
 /**
- * Obtiene los testimonios activos para el frontend
+ * Obtiene los testimonios activos para el frontend.
+ * Query opcional: ?courseId=<uuid> filtra por curso + genéricos.
  */
 export const getTestimonials = async (req: Request, res: Response): Promise<void> => {
   try {
-    const testimonials = await testimonialService.getActiveTestimonials();
+    const courseId = typeof req.query.courseId === 'string' && req.query.courseId.trim()
+      ? req.query.courseId.trim()
+      : undefined;
+    const testimonials = await testimonialService.getActiveTestimonials(courseId);
     res.status(200).json(testimonials);
   } catch (error) {
     logError("getTestimonials", error instanceof Error ? error : new Error(String(error)));
