@@ -33,7 +33,8 @@ const corsOptions = {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token', 'x-meta-fbc', 'x-meta-fbp', 'x-session-id'],
     credentials: true,
-    optionsSuccessStatus: 200
+    optionsSuccessStatus: 200,
+    maxAge: 86400
 };
 
 // Middleware para manejar la ruta raíz

@@ -8,6 +8,7 @@ import {
   updateLandingPage,
   deleteLandingPage
 } from '../../controllers/landing/landingController.js';
+import { getLandingFull } from '../../controllers/landing/index.js';
 
 const router = express.Router();
 
@@ -18,6 +19,9 @@ const router = express.Router();
 
 // Pública: Obtener por slug para el frontend
 router.get('/slug/:slug', getLandingPageBySlug);
+
+// Pública: landing + curso + testimonios en una llamada (dispara CAPI ViewContent; sin caché de CDN)
+router.get('/slug/:slug/full', getLandingFull);
 
 // Admin: CRUD de campañas
 router.post('/', authenticateToken, requireAdmin, createLandingPage);
