@@ -13,6 +13,7 @@ import {
   getMonthlyReports
 } from '../../controllers/course/monthly-closure-controller.js';
 import { authenticateToken, requireAdmin } from '../../middleware/authMiddleware.js';
+import { publicCache } from '../../middleware/publicCache.js';
 
 const router: Router = express.Router();
 
@@ -27,8 +28,9 @@ router.delete('/:id', authenticateToken, requireAdmin, deleteCourse);
 router.post('/:id/process-closure', authenticateToken, requireAdmin, processMonthlyClosure);
 router.get('/:id/reports', authenticateToken, requireAdmin, getMonthlyReports);
 
-// Rutas públicas (ID dinámico al final)
-router.get('/', getCourses);
+// Rutas públicas (ID dinámico al final). La lista es GET puro cacheable en borde;
+// el detalle /:id dispara CAPI ViewContent → NUNCA cachearlo.
+router.get('/', publicCache(), getCourses);
 router.get('/:id', getCourseById);
 
 export default router;
