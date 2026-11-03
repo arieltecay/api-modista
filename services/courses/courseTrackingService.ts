@@ -8,7 +8,7 @@ export interface CourseViewContext {
 }
 
 export interface TrackingHttpContext {
-  clientIpAddress: string;
+  clientIpAddress?: string;
   clientUserAgent: string;
   eventSourceUrl: string;
   fbc?: string;

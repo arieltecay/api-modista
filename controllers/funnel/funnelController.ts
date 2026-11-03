@@ -3,6 +3,7 @@ import FunnelEvent from '../../models/FunnelEvent.js';
 import { logError } from '../../services/logger.js';
 import { getGeoLocationFromRequest } from '../../services/geolocation/index.js';
 import { fireMetaEvent, buildEventId } from '../../services/meta-capi-helpers/index.js';
+import { getClientIpAddress } from '../../utils/clientIpAddress.js';
 
 /**
  * POST /api/funnel/event
@@ -32,7 +33,7 @@ export const trackFunnelEvent = async (req: Request, res: Response) => {
     return;
   }
 
-  const clientIpAddress = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString();
+  const clientIpAddress = getClientIpAddress(req);
   const clientUserAgent = req.headers['user-agent'] || '';
   const eventSourceUrl = req.body.eventSourceUrl || req.body.referrer || req.headers.referer || req.headers.referrer || 'https://modista-app.com';
 

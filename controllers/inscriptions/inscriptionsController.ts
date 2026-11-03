@@ -14,6 +14,7 @@ import { createInscription as createInscriptionService } from '../../services/in
 import { fireMetaEvent, buildEventId } from '../../services/meta-capi-helpers/index.js';
 import { getGeoLocationFromIp } from '../../services/geolocation/index.js';
 import { isHoneypotTriggered, respondFakeSuccess } from './honeypot.js';
+import { getClientIpAddress } from '../../utils/clientIpAddress.js';
 
 // --- Helpers ---
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -33,7 +34,7 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
       return respondFakeSuccess(res);
     }
 
-    const clientIpAddress = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString();
+    const clientIpAddress = getClientIpAddress(req);
     const clientUserAgent = req.headers['user-agent'] || '';
     const eventSourceUrl = req.body.eventSourceUrl || getHeaderString(req.headers['referer']) || getHeaderString(req.headers['referrer']) || '';
 
@@ -66,7 +67,7 @@ export const createLandingInscription = async (req: Request<{}, {}, CreateLandin
     }
 
     const { fullName, ...rest } = req.body;
-    const clientIpAddress = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString();
+    const clientIpAddress = getClientIpAddress(req);
     const clientUserAgent = req.headers['user-agent'] || '';
     const eventSourceUrl = req.body.eventSourceUrl || getHeaderString(req.headers['referer']) || getHeaderString(req.headers['referrer']) || '';
     

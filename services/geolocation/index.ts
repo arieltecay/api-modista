@@ -2,6 +2,7 @@ import geoip from 'geoip-lite';
 import type { Request } from 'express';
 import { logger } from '../logger.js';
 import type { GeoLocationCacheEntry, GeoLocationResult } from './types.js';
+import { getClientIpAddress } from '../../utils/clientIpAddress.js';
 
 const CACHE_TTL_MS = Number(process.env.GEOLOCATION_CACHE_TTL_MS ?? 24 * 60 * 60 * 1000);
 const MAX_CACHE_ENTRIES = 5000;
@@ -82,8 +83,7 @@ export const getGeoLocationFromRequest = (req: Request): GeoLocationResult => {
     return vercel;
   }
 
-  const rawIp = (req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress || '').toString();
-  return getGeoLocationFromIp(rawIp);
+  return getGeoLocationFromIp(getClientIpAddress(req) ?? '');
 };
 
 export const clearGeoLocationCache = (): void => {
