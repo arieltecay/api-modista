@@ -2,6 +2,7 @@ import axios from 'axios';
 import crypto from 'crypto';
 import { logger } from './logger.js';
 import MetaEventDlq from '../models/MetaEventDlq.js';
+import { normalizeClientIpAddress } from '../utils/clientIpAddress.js';
 
 // Lectura LAZY de env vars: en ESM los módulos pueden evaluarse antes de que
 // dotenv.config() cargue el .env, así que leer process.env a nivel de módulo es
@@ -118,7 +119,7 @@ const buildPayload = (event: CapiEventData) => {
     ln: hashField(event.lastName),
     ct: hashField(event.city),
     country: hashField(event.country),
-    client_ip_address: event.clientIpAddress,
+    client_ip_address: normalizeClientIpAddress(event.clientIpAddress),
     client_user_agent: event.clientUserAgent,
     fbc: event.fbc,
     fbp: event.fbp,

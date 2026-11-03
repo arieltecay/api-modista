@@ -2,6 +2,7 @@ import type { Request } from 'express';
 import { getCookieFromRequest } from './requestUtils.js';
 import { getGeoLocationFromRequest } from '../services/geolocation/index.js';
 import type { TrackingHttpContext } from '../services/courses/courseTrackingService.js';
+import { getClientIpAddress } from './clientIpAddress.js';
 
 const getHeader = (req: Request, name: string): string | undefined => {
     const value = req.headers[name.toLowerCase()];
@@ -10,7 +11,7 @@ const getHeader = (req: Request, name: string): string | undefined => {
 };
 
 export const buildTrackingContextFromRequest = (req: Request, fallbackUrl: string): TrackingHttpContext => {
-    const clientIpAddress = (req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress || '').toString();
+    const clientIpAddress = getClientIpAddress(req);
     const clientUserAgent = req.headers['user-agent'] || '';
     const referer = req.headers.referer ?? req.headers.referrer;
     const refererStr = Array.isArray(referer) ? referer[0] : referer;
