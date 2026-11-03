@@ -124,7 +124,7 @@ const buildPayload = (event: CapiEventData) => {
     fbc: event.fbc,
     fbp: event.fbp,
   };
-  if (event.externalId) userData.external_id = event.externalId;
+  if (event.externalId) userData.external_id = hashData(event.externalId) ?? undefined;
 
   const eventSourceUrl = event.eventSourceUrl && event.eventSourceUrl.trim().length > 0
     ? event.eventSourceUrl

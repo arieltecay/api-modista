@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import test from 'node:test';
 import axios from 'axios';
 import { sendMetaConversionEvent } from './meta-capi-service.js';
 
-test('sends the browser session UUID as external_id without changing its format', async () => {
+test('sends the SHA-256 browser session UUID as external_id', async () => {
   const previousPixelId = process.env.META_PIXEL_ID;
   const previousAccessToken = process.env.META_CAPI_ACCESS_TOKEN;
   const previousLegacyAccessToken = process.env.META_ACCESS_TOKEN;
   const previousPost = axios.post;
-  const expectedExternalId = 'dcbdf4d8-40f3-46d9-bd7c-915ab926e455';
+  const sessionId = 'dcbdf4d8-40f3-46d9-bd7c-915ab926e455';
+  const expectedExternalId = crypto.createHash('sha256').update(sessionId).digest('hex');
   let sentPayload: { data: Array<{ user_data: { external_id?: string } }> } | undefined;
 
   process.env.META_PIXEL_ID = 'test-pixel';
@@ -23,7 +25,7 @@ test('sends the browser session UUID as external_id without changing its format'
     const sent = await sendMetaConversionEvent({
       eventName: 'Purchase',
       eventId: 'purchase_test',
-      externalId: expectedExternalId,
+      externalId: sessionId,
     });
 
     assert.equal(sent, true);
