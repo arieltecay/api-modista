@@ -80,7 +80,6 @@ export const getCourseById = async (req: Request<{ id: string }>, res: Response)
         courseId: (cachedData as { id?: string }).id ?? id,
         courseTitle: (cachedData as { title?: string }).title ?? 'unknown',
         price: (cachedData as { price?: number }).price,
-        externalId: (cachedData as { id?: string }).id ?? id,
       });
       res.status(200).json(cachedData);
       return;
@@ -109,7 +108,6 @@ export const getCourseById = async (req: Request<{ id: string }>, res: Response)
       courseId: course.uuid ?? (course._id?.toString() ?? id),
       courseTitle: course.title,
       price: course.price,
-      externalId: course.uuid ?? (course._id?.toString() ?? id),
     });
 
     res.status(200).json(courseData);

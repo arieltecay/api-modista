@@ -202,7 +202,7 @@ const sendPurchaseCapiEvent = async (
       contentName: inscription.courseTitle,
       contentIds: [inscription.courseId],
       contentType: 'product',
-      externalId: inscriptionId,
+      externalId: inscription.sessionId,
       fbc: inscription.metaFbc,
       fbp: inscription.metaFbp,
       clientIpAddress: inscription.clientIpAddress,

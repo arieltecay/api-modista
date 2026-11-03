@@ -132,7 +132,7 @@ export const getVerifiedPaymentData = async (req: Request, res: Response): Promi
                 contentName: inscription.courseTitle,
                 contentIds: [inscription.courseId],
                 contentType: 'product',
-                externalId: inscriptionId,
+                externalId: inscription.sessionId,
                 fbc: inscription.metaFbc,
                 fbp: inscription.metaFbp,
                 clientIpAddress: inscription.clientIpAddress,

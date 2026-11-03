@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node dist/server.js",
     "build": "tsc",
-    "test": "npm run build && node --test dist/utils/clientIpAddress.test.js",
+    "test": "npm run build && node --test dist/utils/clientIpAddress.test.js dist/services/meta-capi-service.test.js",
     "dev": "nodemon --exec node --loader ts-node/esm server.js",
     "clean": "rm -rf ./node_modules && rm package-lock.json && npm cache clean --force && npm install",
     "seed": "nodemon --exec node --loader ts-node/esm scripts/seedTariffData.ts",

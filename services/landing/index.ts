@@ -46,7 +46,6 @@ export const getLandingFull = async (
       courseId: course.id ?? identifier,
       courseTitle: course.title ?? 'unknown',
       price: course.price,
-      externalId: course.id ?? identifier,
     });
   } else {
     const found = await resolveCourseIdentifier(identifier);
@@ -59,7 +58,6 @@ export const getLandingFull = async (
       courseId: found.uuid ?? (found._id?.toString() ?? identifier),
       courseTitle: found.title,
       price: found.price,
-      externalId: found.uuid ?? (found._id?.toString() ?? identifier),
     });
   }
 

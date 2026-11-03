@@ -43,7 +43,7 @@ const buildInscriptionCapiContext = (
     value: coursePrice,
     contentName: courseTitle,
     contentIds: [inscription.courseId] as string[],
-    externalId: inscriptionId,
+    externalId: inscription.sessionId,
     fbc: inscription.metaFbc,
     fbp: inscription.metaFbp,
     clientIpAddress: inscription.clientIpAddress,
