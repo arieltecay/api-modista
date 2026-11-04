@@ -1,36 +1,47 @@
 import axios from 'axios';
 import ConversationMessage from '../../models/ConversationMessage.js';
 import { logger } from '../logger.js';
-import { 
-  InstagramSendMessageRequest, 
-  InstagramMessageTag 
+import {
+  InstagramSendMessageRequest,
+  InstagramMessageTag,
 } from '../../types/instagram-official.js';
 
 /**
  * Instagram Messaging Service (Meta Graph API)
  *
- * IMPORTANTE: Usa un System User Token (META_ACCESS_TOKEN) con permisos:
+ * IMPORTANTE: Usa un System User Token (META_INSTAGRAM_ACCESS_TOKEN) con permisos:
  * - instagram_basic
  * - instagram_manage_messages
- * - whatsapp_business_management
- * - whatsapp_business_messaging
  *
  * El endpoint de envío usa META_INSTAGRAM_USER_ID (ID del IG Business Account),
  * NO '/me', porque los System User Tokens no soportan ese endpoint.
  */
 
-const API_VERSION = 'v21.0';
+const API_VERSION = process.env.META_INSTAGRAM_API_VERSION ?? 'v27.0';
 const BASE_URL = `https://graph.facebook.com/${API_VERSION}`;
+const RESPONSE_WINDOW_MS = 24 * 60 * 60 * 1000;
+const HUMAN_AGENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+async function getElapsedSinceLatestInboundMessage(recipientId: string): Promise<number> {
+  const latestInboundMessage = await ConversationMessage.findOne({
+    platform: 'instagram',
+    platform_id: recipientId,
+    direction: 'inbound',
+  }).sort({ timestamp: -1 }).select('timestamp').lean();
+
+  const lastInboundAt = latestInboundMessage?.timestamp?.getTime();
+  return lastInboundAt ? Date.now() - lastInboundAt : Infinity;
+}
 
 /**
  * Obtiene las credenciales de Instagram desde las variables de entorno
  */
 function getCredentials() {
-  const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
+  const ACCESS_TOKEN = process.env.META_INSTAGRAM_ACCESS_TOKEN;
   const IG_USER_ID = process.env.META_INSTAGRAM_USER_ID;
 
   if (!ACCESS_TOKEN || !IG_USER_ID) {
-    logger.error('[Instagram] Credenciales faltantes: META_ACCESS_TOKEN o META_INSTAGRAM_USER_ID no definidos');
+    logger.error('[Instagram] Credenciales faltantes: META_INSTAGRAM_ACCESS_TOKEN o META_INSTAGRAM_USER_ID no definidos');
     return null;
   }
 
@@ -42,11 +53,11 @@ function getCredentials() {
  *
  * @param recipientId  - IGSID del usuario de Instagram (scoped ID recibido en webhook)
  * @param message      - Contenido del mensaje
- * @param isAdminManual - true cuando el envío viene del panel admin (usa HUMAN_AGENT siempre)
+ * @param isAdminManual - true cuando el envío viene del panel admin
  * @returns boolean    - true si se envió correctamente
  */
 export const sendInstagramMessage = async (
-  recipientId: string, 
+  recipientId: string,
   message: string,
   isAdminManual: boolean = false
 ): Promise<boolean> => {
@@ -54,11 +65,10 @@ export const sendInstagramMessage = async (
   if (!creds) return false;
 
   const { ACCESS_TOKEN, IG_USER_ID } = creds;
-  // CORRECTO: usar el ID de la cuenta de Instagram para mensajería Instagram Direct
   const API_URL = `${BASE_URL}/${IG_USER_ID}/messages`;
 
-  const postRequest = async (messagingType: 'RESPONSE' | 'MESSAGE_TAG', tag?: string) => {
-    const payload: any = {
+  const postRequest = async (messagingType: 'RESPONSE' | 'MESSAGE_TAG', tag?: InstagramMessageTag) => {
+    const payload: InstagramSendMessageRequest = {
       recipient: { id: recipientId },
       message: { text: message },
       messaging_type: messagingType,
@@ -81,35 +91,27 @@ export const sendInstagramMessage = async (
   };
 
   try {
-    // Envíos manuales del admin → siempre HUMAN_AGENT (no hay restricción de ventana de 24h)
+    let messagingType: 'RESPONSE' | 'MESSAGE_TAG' = 'RESPONSE';
+
     if (isAdminManual) {
-      logger.info(`[Instagram Manual] Envío por Admin con HUMAN_AGENT a ${recipientId}`);
-      const response = await postRequest('MESSAGE_TAG', 'HUMAN_AGENT');
-      logger.info(`[Instagram Manual OK] Enviado a ${recipientId}. ID: ${response.data.message_id}`);
-      return true;
-    }
+      const elapsedSinceInbound = await getElapsedSinceLatestInboundMessage(recipientId);
 
-    // Respuesta del bot → intentar con RESPONSE (ventana de 24h abierta)
-    try {
-      const response = await postRequest('RESPONSE');
-      logger.info(`[Instagram Bot OK] Enviado a ${recipientId}. ID: ${response.data.message_id}`);
-      return true;
-    } catch (apiError: any) {
-      // Si la ventana de 24h cerró, reintentar con HUMAN_AGENT
-      const metaError = apiError.response?.data?.error;
-      const isWindowError = 
-        metaError?.code === 10 || 
-        metaError?.error_subcode === 2018307 || 
-        String(metaError?.message ?? '').toLowerCase().includes('window');
-
-      if (isWindowError) {
-        logger.warn(`[Instagram Fallback] Ventana cerrada para ${recipientId}. Reintentando con HUMAN_AGENT...`);
-        const fallbackResponse = await postRequest('MESSAGE_TAG', 'HUMAN_AGENT');
-        logger.info(`[Instagram Fallback OK] Enviado a ${recipientId}. ID: ${fallbackResponse.data.message_id}`);
-        return true;
+      if (elapsedSinceInbound < 0 || elapsedSinceInbound > HUMAN_AGENT_WINDOW_MS) {
+        logger.warn(`[Instagram Manual] No se envió a ${recipientId}: no hay un mensaje entrante dentro de la ventana de 7 días`);
+        return false;
       }
-      throw apiError;
+
+      if (elapsedSinceInbound > RESPONSE_WINDOW_MS) {
+        messagingType = 'MESSAGE_TAG';
+      }
     }
+
+    const tag: InstagramMessageTag | undefined = messagingType === 'MESSAGE_TAG'
+      ? 'HUMAN_AGENT'
+      : undefined;
+    const response = await postRequest(messagingType, tag);
+    logger.info(`[Instagram ${isAdminManual ? 'Manual' : 'Bot'} OK] Enviado a ${recipientId}. ID: ${response.data.message_id}`);
+    return true;
   } catch (error: any) {
     logger.error('[Instagram Error] Detalle API Meta:', {
       status: error.response?.status,
@@ -140,6 +142,14 @@ export const sendInstagramTaggedMessage = async (
   const API_URL = `${BASE_URL}/${IG_USER_ID}/messages`;
 
   try {
+    if (tag === 'HUMAN_AGENT') {
+      const elapsedSinceInbound = await getElapsedSinceLatestInboundMessage(recipientId);
+      if (elapsedSinceInbound < 0 || elapsedSinceInbound > HUMAN_AGENT_WINDOW_MS) {
+        logger.warn(`[Instagram Tagged] No se envió a ${recipientId}: no hay un mensaje entrante dentro de la ventana de 7 días`);
+        return false;
+      }
+    }
+
     await axios.post(
       API_URL,
       {

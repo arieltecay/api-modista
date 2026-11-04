@@ -1,0 +1,2 @@
+- Instagram requiere `META_INSTAGRAM_ACCESS_TOKEN`, `META_INSTAGRAM_APP_SECRET` y `META_INSTAGRAM_VERIFY_TOKEN`; no reutiliza credenciales de WhatsApp. Evidencia: `services/instagram/instagram-official-service.ts`, `controllers/notification/instagram-controller.ts`.
+- El bot solo responde dentro de la ventana estándar; `HUMAN_AGENT` es exclusivamente para respuesta manual dentro de siete días. Evidencia: `services/instagram/instagram-official-service.ts`.
