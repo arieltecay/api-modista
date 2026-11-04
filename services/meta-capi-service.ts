@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import { logger } from './logger.js';
 import MetaEventDlq from '../models/MetaEventDlq.js';
 import { normalizeClientIpAddress } from '../utils/clientIpAddress.js';
+import { hasCurrentMetaMarketingConsent } from './privacy/marketingConsent.js';
+import { META_MARKETING_CONSENT_VERSION } from '../utils/metaMarketingConsent.js';
 
 // Lectura LAZY de env vars: en ESM los módulos pueden evaluarse antes de que
 // dotenv.config() cargue el .env, así que leer process.env a nivel de módulo es
@@ -33,6 +35,7 @@ export type CapiEventName = 'PageView' | 'ViewContent' | 'InitiateCheckout' | 'P
 
 export interface CapiEventData {
   eventName: CapiEventName;
+  marketingConsent?: boolean;
   email?: string;
   phone?: string;
   firstName?: string;
@@ -210,6 +213,8 @@ const enqueueDlq = async (event: CapiEventData, eventId: string, errorMessage: s
 };
 
 export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boolean> => {
+  if (event.marketingConsent !== true) return false;
+
   const { payload, eventId } = buildPayload(event);
   const result = await sendOnce(payload, event.eventName);
 
@@ -241,6 +246,22 @@ export const processDlqBatch = async (limit = 50): Promise<{ sent: number; faile
 
   for (const doc of pending) {
     const event = doc.payload as unknown as CapiEventData;
+    const consentIsCurrent = event.marketingConsent === true
+      && await hasCurrentMetaMarketingConsent(event.externalId, META_MARKETING_CONSENT_VERSION);
+    if (!consentIsCurrent) {
+      await MetaEventDlq.updateOne(
+        { _id: doc._id },
+        {
+          $set: {
+            status: 'exhausted',
+            lastError: 'Evento descartado: no hay consentimiento publicitario vigente',
+          },
+          $unset: { payload: '' },
+        },
+      );
+      continue;
+    }
+
     const { payload } = buildPayload(event);
     const result = await sendOnce(payload, doc.eventName as CapiEventName);
 

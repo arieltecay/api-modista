@@ -31,7 +31,7 @@ const corsOptions = {
         }
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token', 'x-meta-fbc', 'x-meta-fbp', 'x-session-id'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token', 'x-meta-fbc', 'x-meta-fbp', 'x-session-id', 'x-meta-consent', 'x-meta-consent-version'],
     credentials: true,
     optionsSuccessStatus: 200,
     maxAge: 86400

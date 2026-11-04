@@ -1,11 +1,14 @@
 import { sendMetaConversionEvent as sendRaw } from '../meta-capi-service.js';
 import { logger } from '../logger.js';
+import { hasCurrentMetaMarketingConsent } from '../privacy/marketingConsent.js';
+import { META_MARKETING_CONSENT_VERSION } from '../../utils/metaMarketingConsent.js';
 
 export type MetaEventName = 'PageView' | 'ViewContent' | 'InitiateCheckout' | 'Lead' | 'Purchase';
 
 export interface MetaFireContext {
   eventName: MetaEventName;
   eventId: string;
+  marketingConsent: boolean;
   email?: string;
   phone?: string;
   firstName?: string;
@@ -27,10 +30,16 @@ export interface MetaFireContext {
 }
 
 export const fireMetaEvent = async (ctx: MetaFireContext): Promise<boolean> => {
+  if (
+    !ctx.marketingConsent ||
+    !await hasCurrentMetaMarketingConsent(ctx.externalId, META_MARKETING_CONSENT_VERSION)
+  ) return false;
+
   const testEventCode = process.env.META_TEST_EVENT_CODE;
 
   const ok = await sendRaw({
     eventName: ctx.eventName,
+    marketingConsent: ctx.marketingConsent,
     email: ctx.email,
     phone: ctx.phone,
     firstName: ctx.firstName,

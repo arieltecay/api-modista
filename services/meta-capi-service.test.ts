@@ -24,6 +24,7 @@ test('sends the SHA-256 browser session UUID as external_id', async () => {
   try {
     const sent = await sendMetaConversionEvent({
       eventName: 'Purchase',
+      marketingConsent: true,
       eventId: 'purchase_test',
       externalId: sessionId,
     });

@@ -3,6 +3,8 @@ import multer from 'multer';
 import { parse } from 'csv-parse/sync';
 import Session from '../../models/Session.js';
 import Inscription from '../../models/Inscription.js';
+import { hasCurrentMetaMarketingConsent } from '../../services/privacy/marketingConsent.js';
+import { isMetaMarketingConsentGranted } from '../../utils/metaMarketingConsent.js';
 
 const csvUpload = multer({
   storage: multer.memoryStorage(),
@@ -106,6 +108,15 @@ export const importCsv = async (req: Request, res: Response) => {
 export { csvUpload };
 
 export const trackSession = async (req: Request, res: Response) => {
+  const consentVersion = req.headers['x-meta-consent-version'];
+  const consentSessionId = req.body?.sessionId;
+  const marketingConsent = isMetaMarketingConsentGranted(req.headers['x-meta-consent'], consentVersion)
+    && await hasCurrentMetaMarketingConsent(consentSessionId, Array.isArray(consentVersion) ? consentVersion[0] : consentVersion);
+  if (!marketingConsent) {
+    res.status(204).end();
+    return;
+  }
+
   try {
     const {
       sessionId, utmSource, utmMedium, utmCampaign,

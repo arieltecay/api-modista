@@ -3,6 +3,8 @@ import { getCookieFromRequest } from './requestUtils.js';
 import { getGeoLocationFromRequest } from '../services/geolocation/index.js';
 import type { TrackingHttpContext } from '../services/courses/courseTrackingService.js';
 import { getClientIpAddress } from './clientIpAddress.js';
+import { isMetaMarketingConsentGranted } from './metaMarketingConsent.js';
+import { hasCurrentMetaMarketingConsent } from '../services/privacy/marketingConsent.js';
 
 const getHeader = (req: Request, name: string): string | undefined => {
     const value = req.headers[name.toLowerCase()];
@@ -10,7 +12,7 @@ const getHeader = (req: Request, name: string): string | undefined => {
     return Array.isArray(value) ? value[0] : value;
 };
 
-export const buildTrackingContextFromRequest = (req: Request, fallbackUrl: string): TrackingHttpContext => {
+export const buildTrackingContextFromRequest = async (req: Request, fallbackUrl: string): Promise<TrackingHttpContext> => {
     const clientIpAddress = getClientIpAddress(req);
     const clientUserAgent = req.headers['user-agent'] || '';
     const referer = req.headers.referer ?? req.headers.referrer;
@@ -20,11 +22,22 @@ export const buildTrackingContextFromRequest = (req: Request, fallbackUrl: strin
     const geo = getGeoLocationFromRequest(req);
 
     // Prioridad: headers custom (frontend cross-origin) > cookies (mismo dominio)
-    const fbc = getHeader(req, 'x-meta-fbc') || getCookieFromRequest(req, '_fbc');
-    const fbp = getHeader(req, 'x-meta-fbp') || getCookieFromRequest(req, '_fbp');
+    const consentHeader = getHeader(req, 'x-meta-consent');
+    const consentVersion = getHeader(req, 'x-meta-consent-version');
+    const consentSessionId = getHeader(req, 'x-session-id');
+    const marketingConsent = isMetaMarketingConsentGranted(
+        consentHeader,
+        consentVersion,
+    ) && await hasCurrentMetaMarketingConsent(consentSessionId, consentVersion);
+    const fbc = marketingConsent
+        ? getHeader(req, 'x-meta-fbc') || getCookieFromRequest(req, '_fbc')
+        : undefined;
+    const fbp = marketingConsent
+        ? getHeader(req, 'x-meta-fbp') || getCookieFromRequest(req, '_fbp')
+        : undefined;
 
-    // sessionId para event_id unico por usuario en CAPI (dedup)
-    const sessionId = getHeader(req, 'x-session-id');
+    // El identificador solo forma parte del contexto de eventos con consentimiento vigente.
+    const sessionId = marketingConsent ? consentSessionId : undefined;
 
     return {
         clientIpAddress,
@@ -35,5 +48,6 @@ export const buildTrackingContextFromRequest = (req: Request, fallbackUrl: strin
         city: geo.city,
         country: geo.country,
         sessionId,
+        marketingConsent,
     };
 };

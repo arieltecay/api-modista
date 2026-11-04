@@ -15,6 +15,7 @@ export interface TrackingHttpContext {
   city?: string;
   country?: string;
   sessionId?: string;
+  marketingConsent: boolean;
 }
 
 export const trackCourseViewServerSide = (
@@ -28,6 +29,7 @@ export const trackCourseViewServerSide = (
 
   fireMetaEvent({
     eventName: 'ViewContent',
+    marketingConsent: ctx.marketingConsent,
     eventId,
     contentName: course.courseTitle,
     contentIds: [course.courseId],
