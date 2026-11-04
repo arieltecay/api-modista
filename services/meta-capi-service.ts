@@ -229,6 +229,23 @@ export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boo
 };
 
 export const processDlqBatch = async (limit = 50): Promise<{ sent: number; failed: number }> => {
+  // Retain delivery metadata for operations, but remove CAPI payloads once an
+  // event is terminal. This also scrubs terminal records created by older code.
+  await MetaEventDlq.updateMany(
+    { status: { $in: ['sent', 'failed', 'exhausted'] }, payload: { $exists: true } },
+    { $unset: { payload: '' } },
+  );
+  await MetaEventDlq.updateMany(
+    { status: 'pending', attempts: { $gte: MAX_ATTEMPTS } },
+    {
+      $set: {
+        status: 'exhausted',
+        lastError: 'Evento descartado: límite de reintentos alcanzado',
+      },
+      $unset: { payload: '' },
+    },
+  );
+
   if (!getAccessToken() || !getPixelId()) {
     logger.warn('[Meta CAPI DLQ] No se puede procesar: credenciales de Meta no configuradas');
     return { sent: 0, failed: 0 };
@@ -238,7 +255,6 @@ export const processDlqBatch = async (limit = 50): Promise<{ sent: number; faile
   const pending = await MetaEventDlq.find({
     status: 'pending',
     nextRetryAt: { $lte: now },
-    attempts: { $lt: MAX_ATTEMPTS },
   }).limit(limit);
 
   let sent = 0;
@@ -266,18 +282,31 @@ export const processDlqBatch = async (limit = 50): Promise<{ sent: number; faile
     const result = await sendOnce(payload, doc.eventName as CapiEventName);
 
     if (result.ok) {
-      doc.status = 'sent';
-      doc.lastError = undefined;
-      await doc.save();
+      await MetaEventDlq.updateOne(
+        { _id: doc._id },
+        {
+          $set: { status: 'sent' },
+          $unset: { payload: '', lastError: '' },
+        },
+      );
       sent++;
       logger.info(`[Meta CAPI DLQ] Reenviado OK: ${doc.eventName} (${doc.eventId})`);
     } else {
-      doc.attempts += 1;
-      doc.lastError = result.error;
-      const backoff = BASE_BACKOFF_MS * Math.pow(2, doc.attempts);
-      doc.nextRetryAt = new Date(Date.now() + backoff);
-      if (doc.attempts >= MAX_ATTEMPTS) doc.status = 'exhausted';
-      await doc.save();
+      const attempts = doc.attempts + 1;
+      const exhausted = attempts >= MAX_ATTEMPTS;
+      const backoff = BASE_BACKOFF_MS * Math.pow(2, attempts);
+      await MetaEventDlq.updateOne(
+        { _id: doc._id },
+        {
+          $set: {
+            attempts,
+            lastError: result.error,
+            nextRetryAt: new Date(Date.now() + backoff),
+            ...(exhausted ? { status: 'exhausted' } : {}),
+          },
+          ...(exhausted ? { $unset: { payload: '' } } : {}),
+        },
+      );
       failed++;
     }
   }

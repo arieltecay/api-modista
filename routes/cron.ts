@@ -8,9 +8,10 @@ const router = Router();
  * Cron: procesa la DLQ de eventos de Meta CAPI.
  *
  * En Vercel serverless el setInterval del server.js NO corre (el runtime no es
- * persistente), por lo que los eventos CAPI fallidos quedaban pendientes para
- * siempre. Este endpoint es invocado por Vercel Cron (ver vercel.json > crons)
- * cada 5 minutos y procesa los reintentos.
+ * persistente), por lo que los reintentos en producción dependen de este cron.
+ * Este endpoint es invocado por Vercel Cron (ver vercel.json > crons)
+ * diariamente a las 06:00 UTC y procesa los reintentos. La frecuencia puede
+ * aumentarse según el plan de Vercel del proyecto.
  *
  * Protegido con CRON_SECRET (Vercel lo inyecta como `Authorization: Bearer <secret>`
  * cuando está configurado en las env vars del proyecto).
