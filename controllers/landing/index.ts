@@ -8,7 +8,7 @@ import { getLandingFull as getLandingFullData } from '../../services/landing/ind
  * CAPI (igual que GET /api/courses/:id) → la respuesta NO debe cachearse en CDN.
  */
 export const getLandingFull = async (req: Request<{ slug: string }>, res: Response): Promise<void> => {
-  const ctx = buildTrackingContextFromRequest(req, 'https://modista-app.com');
+  const ctx = await buildTrackingContextFromRequest(req, 'https://modista-app.com');
   const result = await getLandingFullData(req.params.slug, ctx);
 
   res.set('Cache-Control', 'no-store');

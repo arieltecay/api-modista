@@ -41,6 +41,9 @@ export interface InscriptionBody {
   clientIpAddress?: string;
   clientUserAgent?: string;
   eventSourceUrl?: string;
+  metaMarketingConsent?: boolean;
+  metaMarketingConsentAt?: Date;
+  metaMarketingConsentVersion?: string;
 }
 
 export interface CreateInscriptionResult {

@@ -192,6 +192,7 @@ const sendPurchaseCapiEvent = async (
     const geo = getGeoLocationFromIp(inscription.clientIpAddress || '');
     const ok = await fireMetaEvent({
       eventName: 'Purchase',
+      marketingConsent: inscription.metaMarketingConsent === true,
       eventId: buildEventId('purchase', inscriptionId),
       email: inscription.email,
       phone: inscription.celular,
@@ -202,7 +203,7 @@ const sendPurchaseCapiEvent = async (
       contentName: inscription.courseTitle,
       contentIds: [inscription.courseId],
       contentType: 'product',
-      externalId: inscriptionId,
+      externalId: inscription.sessionId,
       fbc: inscription.metaFbc,
       fbp: inscription.metaFbp,
       clientIpAddress: inscription.clientIpAddress,

@@ -6,6 +6,7 @@ import { mpPreference, isMercadoPagoConfigured } from '../../services/payments/m
 import { getGeoLocationFromIp } from '../geolocation/index.js';
 import { logger } from '../../services/logger.js';
 import { InscriptionBody, CreateInscriptionResult } from './types.js';
+import { META_MARKETING_CONSENT_VERSION } from '../../utils/metaMarketingConsent.js';
 
 const getFrontendUrl = (): string => {
   if (process.env.FRONTEND_URL) return process.env.FRONTEND_URL.replace(/\/+$/, '');
@@ -36,6 +37,7 @@ const buildInscriptionCapiContext = (
 ) => {
   const geo = getGeoLocationFromIp(inscription.clientIpAddress || '');
   return {
+    marketingConsent: inscription.metaMarketingConsent === true,
     email: inscription.email,
     phone: inscription.celular,
     firstName: inscription.nombre,
@@ -43,7 +45,7 @@ const buildInscriptionCapiContext = (
     value: coursePrice,
     contentName: courseTitle,
     contentIds: [inscription.courseId] as string[],
-    externalId: inscriptionId,
+    externalId: inscription.sessionId,
     fbc: inscription.metaFbc,
     fbp: inscription.metaFbp,
     clientIpAddress: inscription.clientIpAddress,
@@ -66,6 +68,7 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
   // Fuente de verdad: precio/título del curso vienen de la DB (anti price-tampering),
   // email normalizado a lowercase para deduplicación correcta.
   const { trustedCoursePrice: coursePrice, trustedCourseTitle: courseTitle, normalizedEmail } = validation;
+  const metaMarketingConsent = body.metaMarketingConsent === true;
 
   const inscriptionData: InscriptionBody = {
     ...body,
@@ -73,6 +76,15 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
     courseTitle,
     coursePrice,
     courseId: validation.finalCourseId,
+    metaMarketingConsent,
+    metaMarketingConsentAt: metaMarketingConsent ? body.metaMarketingConsentAt ?? new Date() : undefined,
+    metaMarketingConsentVersion: metaMarketingConsent ? META_MARKETING_CONSENT_VERSION : undefined,
+    sessionId: metaMarketingConsent ? body.sessionId : undefined,
+    metaFbc: metaMarketingConsent ? body.metaFbc : undefined,
+    metaFbp: metaMarketingConsent ? body.metaFbp : undefined,
+    clientIpAddress: metaMarketingConsent ? body.clientIpAddress : undefined,
+    clientUserAgent: metaMarketingConsent ? body.clientUserAgent : undefined,
+    eventSourceUrl: metaMarketingConsent ? body.eventSourceUrl : undefined,
   };
   const eventSourceUrl = body.eventSourceUrl;
 
@@ -92,6 +104,8 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
   // Los flags se persisten con updateOne (NUNCA save() sobre el doc en memoria):
   // evita el VersionError por concurrencia con el save() que persiste mpPreferenceId.
   const fireCapiEvents = async (): Promise<void> => {
+    if (!inscription.metaMarketingConsent) return;
+
     const base = buildInscriptionCapiContext(inscription, coursePrice, courseTitle, inscriptionId, eventSourceUrl);
     const flagsToSet: Record<string, Date> = {};
 

@@ -4,7 +4,6 @@ export interface CourseViewContext {
   courseId: string;
   courseTitle: string;
   price?: number;
-  externalId?: string;
 }
 
 export interface TrackingHttpContext {
@@ -16,6 +15,7 @@ export interface TrackingHttpContext {
   city?: string;
   country?: string;
   sessionId?: string;
+  marketingConsent: boolean;
 }
 
 export const trackCourseViewServerSide = (
@@ -29,13 +29,14 @@ export const trackCourseViewServerSide = (
 
   fireMetaEvent({
     eventName: 'ViewContent',
+    marketingConsent: ctx.marketingConsent,
     eventId,
     contentName: course.courseTitle,
     contentIds: [course.courseId],
     contentType: 'product',
     value: typeof course.price === 'number' ? course.price : undefined,
     currency: 'ARS',
-    externalId: course.externalId,
+    externalId: ctx.sessionId,
     fbc: ctx.fbc,
     fbp: ctx.fbp,
     clientIpAddress: ctx.clientIpAddress,

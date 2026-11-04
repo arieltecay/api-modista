@@ -22,6 +22,7 @@ import funnelRoutes from './funnel.js';
 import uploadRoutes from './upload/index.js';
 import cronRoutes from './cron.js';
 import metaDlqRoutes from './admin/meta-dlq.js';
+import privacyRoutes from './privacy/privacyRoutes.js';
 
 // Rate limiter para endpoints públicos (lectura)
 const publicLimiter = rateLimit({
@@ -59,6 +60,7 @@ router.use('/payment', paymentRoutes);
 router.use('/email', emailRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/analytics', analyticsRoutes);
+router.use('/privacy', privacyRoutes);
 router.use('/chat', chatRoutes);
 
 // Admin: Meta CAPI DLQ management

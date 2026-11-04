@@ -123,6 +123,7 @@ export const getVerifiedPaymentData = async (req: Request, res: Response): Promi
               const geo = getGeoLocationFromIp(inscription.clientIpAddress || '');
               const ok = await fireMetaEvent({
                 eventName: 'Purchase',
+                marketingConsent: inscription.metaMarketingConsent === true,
                 eventId: buildEventId('purchase', inscriptionId),
                 email: inscription.email,
                 phone: inscription.celular,
@@ -132,7 +133,7 @@ export const getVerifiedPaymentData = async (req: Request, res: Response): Promi
                 contentName: inscription.courseTitle,
                 contentIds: [inscription.courseId],
                 contentType: 'product',
-                externalId: inscriptionId,
+                externalId: inscription.sessionId,
                 fbc: inscription.metaFbc,
                 fbp: inscription.metaFbp,
                 clientIpAddress: inscription.clientIpAddress,

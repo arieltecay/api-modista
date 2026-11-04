@@ -15,6 +15,8 @@ import { fireMetaEvent, buildEventId } from '../../services/meta-capi-helpers/in
 import { getGeoLocationFromIp } from '../../services/geolocation/index.js';
 import { isHoneypotTriggered, respondFakeSuccess } from './honeypot.js';
 import { getClientIpAddress } from '../../utils/clientIpAddress.js';
+import { META_MARKETING_CONSENT_VERSION, isMetaMarketingConsentGranted } from '../../utils/metaMarketingConsent.js';
+import { hasCurrentMetaMarketingConsent } from '../../services/privacy/marketingConsent.js';
 
 // --- Helpers ---
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -34,12 +36,28 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
       return respondFakeSuccess(res);
     }
 
-    const clientIpAddress = getClientIpAddress(req);
-    const clientUserAgent = req.headers['user-agent'] || '';
-    const eventSourceUrl = req.body.eventSourceUrl || getHeaderString(req.headers['referer']) || getHeaderString(req.headers['referrer']) || '';
+    const consentVersion = getHeaderString(req.headers['x-meta-consent-version']);
+    const consentSessionId = req.body.sessionId || getHeaderString(req.headers['x-session-id']);
+    const metaMarketingConsent = isMetaMarketingConsentGranted(
+      req.headers['x-meta-consent'],
+      consentVersion,
+    ) && await hasCurrentMetaMarketingConsent(consentSessionId, consentVersion);
+    const clientIpAddress = metaMarketingConsent ? getClientIpAddress(req) : undefined;
+    const clientUserAgent = metaMarketingConsent ? req.headers['user-agent'] || '' : undefined;
+    const eventSourceUrl = metaMarketingConsent
+      ? req.body.eventSourceUrl || getHeaderString(req.headers['referer']) || getHeaderString(req.headers['referrer']) || ''
+      : undefined;
 
     const result = await createInscriptionService({
       ...req.body,
+      metaMarketingConsent,
+      metaMarketingConsentAt: metaMarketingConsent ? new Date() : undefined,
+      metaMarketingConsentVersion: metaMarketingConsent ? META_MARKETING_CONSENT_VERSION : undefined,
+      sessionId: metaMarketingConsent ? consentSessionId : undefined,
+      metaFbc: metaMarketingConsent ? req.body.metaFbc : undefined,
+      metaFbp: metaMarketingConsent ? req.body.metaFbp : undefined,
+      marketingSource: metaMarketingConsent ? req.body.marketingSource : 'organic',
+      utmParams: metaMarketingConsent ? req.body.utmParams : undefined,
       clientIpAddress,
       clientUserAgent,
       eventSourceUrl
@@ -67,9 +85,17 @@ export const createLandingInscription = async (req: Request<{}, {}, CreateLandin
     }
 
     const { fullName, ...rest } = req.body;
-    const clientIpAddress = getClientIpAddress(req);
-    const clientUserAgent = req.headers['user-agent'] || '';
-    const eventSourceUrl = req.body.eventSourceUrl || getHeaderString(req.headers['referer']) || getHeaderString(req.headers['referrer']) || '';
+    const consentVersion = getHeaderString(req.headers['x-meta-consent-version']);
+    const consentSessionId = req.body.sessionId || getHeaderString(req.headers['x-session-id']);
+    const metaMarketingConsent = isMetaMarketingConsentGranted(
+      req.headers['x-meta-consent'],
+      consentVersion,
+    ) && await hasCurrentMetaMarketingConsent(consentSessionId, consentVersion);
+    const clientIpAddress = metaMarketingConsent ? getClientIpAddress(req) : undefined;
+    const clientUserAgent = metaMarketingConsent ? req.headers['user-agent'] || '' : undefined;
+    const eventSourceUrl = metaMarketingConsent
+      ? req.body.eventSourceUrl || getHeaderString(req.headers['referer']) || getHeaderString(req.headers['referrer']) || ''
+      : undefined;
     
     // Split inteligente del nombre
     const nameParts = fullName.trim().split(/\s+/);
@@ -78,6 +104,14 @@ export const createLandingInscription = async (req: Request<{}, {}, CreateLandin
 
     const inscriptionData = {
       ...rest,
+      metaMarketingConsent,
+      metaMarketingConsentAt: metaMarketingConsent ? new Date() : undefined,
+      metaMarketingConsentVersion: metaMarketingConsent ? META_MARKETING_CONSENT_VERSION : undefined,
+      sessionId: metaMarketingConsent ? consentSessionId : undefined,
+      metaFbc: metaMarketingConsent ? req.body.metaFbc : undefined,
+      metaFbp: metaMarketingConsent ? req.body.metaFbp : undefined,
+      marketingSource: metaMarketingConsent ? req.body.marketingSource : 'organic',
+      utmParams: metaMarketingConsent ? req.body.utmParams : undefined,
       nombre,
       apellido,
       sourceType: 'landing' as const,
@@ -355,6 +389,7 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
                 const geo = getGeoLocationFromIp(inscription.clientIpAddress || '');
                 const capiSuccess = await fireMetaEvent({
                   eventName: 'Purchase',
+                  marketingConsent: inscription.metaMarketingConsent === true,
                   email: inscription.email,
                   phone: inscription.celular,
                   firstName: inscription.nombre,
@@ -363,7 +398,7 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
                   contentName: inscription.courseTitle,
                   contentIds: [inscription.courseId],
                   contentType: 'product',
-                  externalId: id,
+                  externalId: inscription.sessionId,
                   eventId: buildEventId('purchase', id),
                   fbc: inscription.metaFbc,
                   fbp: inscription.metaFbp,
@@ -595,6 +630,7 @@ export const addPayment = async (req: Request<{ id: string }, {}, { amount: numb
             const geo = getGeoLocationFromIp(inscription.clientIpAddress || '');
             const capiSuccess = await fireMetaEvent({
               eventName: 'Purchase',
+              marketingConsent: inscription.metaMarketingConsent === true,
               email: inscription.email,
               phone: inscription.celular,
               firstName: inscription.nombre,
@@ -603,7 +639,7 @@ export const addPayment = async (req: Request<{ id: string }, {}, { amount: numb
               contentName: inscription.courseTitle,
               contentIds: [inscription.courseId],
               contentType: 'product',
-              externalId: id,
+              externalId: inscription.sessionId,
               eventId: buildEventId('purchase', id),
               fbc: inscription.metaFbc,
               fbp: inscription.metaFbp,

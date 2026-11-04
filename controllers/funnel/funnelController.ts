@@ -4,6 +4,8 @@ import { logError } from '../../services/logger.js';
 import { getGeoLocationFromRequest } from '../../services/geolocation/index.js';
 import { fireMetaEvent, buildEventId } from '../../services/meta-capi-helpers/index.js';
 import { getClientIpAddress } from '../../utils/clientIpAddress.js';
+import { hasCurrentMetaMarketingConsent } from '../../services/privacy/marketingConsent.js';
+import { isMetaMarketingConsentGranted } from '../../utils/metaMarketingConsent.js';
 
 /**
  * POST /api/funnel/event
@@ -30,6 +32,16 @@ export const trackFunnelEvent = async (req: Request, res: Response) => {
 
   if (!sessionId || !step) {
     res.status(400).json({ success: false, message: 'sessionId y step son requeridos' });
+    return;
+  }
+
+  const consentHeader = req.headers['x-meta-consent'];
+  const consentVersionHeader = req.headers['x-meta-consent-version'];
+  const consentVersion = Array.isArray(consentVersionHeader) ? consentVersionHeader[0] : consentVersionHeader;
+  const hasMarketingConsent = isMetaMarketingConsentGranted(consentHeader, consentVersionHeader)
+    && await hasCurrentMetaMarketingConsent(sessionId, consentVersion);
+  if (!hasMarketingConsent) {
+    res.status(204).end();
     return;
   }
 

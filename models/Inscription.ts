@@ -36,6 +36,9 @@ export interface IInscription extends Document {
   sourceType: 'app' | 'landing';
   landingPageId?: Types.ObjectId;
   // Meta Conversions API (CAPI) Tracking
+  metaMarketingConsent: boolean;
+  metaMarketingConsentAt?: Date;
+  metaMarketingConsentVersion?: string;
   metaFbc?: string;
   metaFbp?: string;
   clientIpAddress?: string;
@@ -157,6 +160,18 @@ const InscriptionSchema = new Schema<IInscription>({
     index: true,
   },
   // Meta Conversions API (CAPI) Tracking
+  metaMarketingConsent: {
+    type: Boolean,
+    default: false,
+  },
+  metaMarketingConsentAt: {
+    type: Date,
+    default: null,
+  },
+  metaMarketingConsentVersion: {
+    type: String,
+    default: null,
+  },
   metaFbc: {
     type: String,
     default: null

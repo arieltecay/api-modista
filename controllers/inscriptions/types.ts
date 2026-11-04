@@ -21,6 +21,7 @@ export interface CreateInscriptionBody {
   clientIpAddress?: string;
   clientUserAgent?: string;
   eventSourceUrl?: string;
+  metaMarketingConsent?: boolean;
 }
 
 export interface CreateLandingInscriptionBody {
@@ -39,6 +40,7 @@ export interface CreateLandingInscriptionBody {
   clientIpAddress?: string;
   clientUserAgent?: string;
   eventSourceUrl?: string;
+  metaMarketingConsent?: boolean;
 }
 
 export interface GetInscriptionsQuery {
