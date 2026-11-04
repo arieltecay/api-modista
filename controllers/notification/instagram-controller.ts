@@ -23,9 +23,15 @@ export const verifyWebhook = (req: Request, res: Response) => {
   const mode = req.query['hub.mode'] as string;
   const token = req.query['hub.verify_token'] as string;
   const challenge = req.query['hub.challenge'] as string;
+  const verifyToken = process.env.META_INSTAGRAM_VERIFY_TOKEN;
+
+  if (!verifyToken) {
+    logger.error('[Instagram Webhook] META_INSTAGRAM_VERIFY_TOKEN no configurado');
+    return res.sendStatus(503);
+  }
 
   if (mode && token) {
-    if (mode === 'subscribe' && token === process.env.META_VERIFY_TOKEN) {
+    if (mode === 'subscribe' && token === verifyToken) {
       logger.info('[Instagram Webhook] Verificado con éxito');
       res.status(200).send(challenge);
     } else {
@@ -43,28 +49,34 @@ export const verifyWebhook = (req: Request, res: Response) => {
  */
 export const handleWebhook = async (req: Request, res: Response) => {
   try {
-    // 1. Validación de firma HMAC por seguridad
-    const signature = req.headers['x-hub-signature-256'] as string;
-    
-    if (process.env.META_APP_SECRET && signature) {
-      const elements = signature.split('=');
-      const signatureHash = elements[1];
-      
-      // CORRECTO: Usar req.rawBody (Buffer raw del body) para calcular HMAC.
-      // JSON.stringify(req.body) puede diferir del payload original de Meta por orden de claves.
-      // El Buffer raw garantiza que el hash coincide exactamente con lo que Meta firmó.
-      // @ts-ignore
-      const rawPayload: Buffer | string = req.rawBody ?? JSON.stringify(req.body);
-      
-      const expectedHash = crypto
-        .createHmac('sha256', process.env.META_APP_SECRET)
-        .update(rawPayload)
-        .digest('hex');
+    const appSecret = process.env.META_INSTAGRAM_APP_SECRET;
+    const signature = req.headers['x-hub-signature-256'];
 
-      if (signatureHash !== expectedHash) {
-        logger.warn('⚠️ Validación de firma HMAC fallida en Webhook de Instagram');
-        // Opcionalmente podrías retornar 403 aquí para mayor seguridad
-      }
+    if (!appSecret) {
+      logger.error('[Instagram Webhook] META_INSTAGRAM_APP_SECRET no configurado');
+      return res.sendStatus(503);
+    }
+
+    if (!req.rawBody || typeof signature !== 'string') {
+      logger.warn('[Instagram Webhook] Firma o cuerpo original ausente');
+      return res.sendStatus(401);
+    }
+
+    const [algorithm, signatureHash] = signature.split('=');
+    if (algorithm !== 'sha256' || !signatureHash || !/^[a-f0-9]{64}$/i.test(signatureHash)) {
+      logger.warn('[Instagram Webhook] Formato de firma inválido');
+      return res.sendStatus(401);
+    }
+
+    const receivedHash = Buffer.from(signatureHash, 'hex');
+    const expectedHash = crypto
+      .createHmac('sha256', appSecret)
+      .update(req.rawBody)
+      .digest();
+
+    if (receivedHash.length !== expectedHash.length || !crypto.timingSafeEqual(receivedHash, expectedHash)) {
+      logger.warn('⚠️ Validación de firma HMAC fallida en Webhook de Instagram');
+      return res.sendStatus(401);
     }
 
     const body: InstagramWebhookPayload = req.body;
