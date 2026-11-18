@@ -157,13 +157,14 @@ export const processWebhookPayment = async (mpPayment: MPPaymentPayload): Promis
 
   // 7. Side-effects solo en transición a 'paid' (no en webhook duplicado ni en pagos extra)
   if (inscription.paymentStatus === 'paid' && !wasAlreadyPaid) {
-    await firePaymentApprovedSideEffects(inscription, totalPaid);
+    await firePaymentApprovedSideEffects(inscription, totalPaid, paymentDate);
   }
 };
 
 const firePaymentApprovedSideEffects = async (
   inscription: any,
-  totalPaid: number
+  totalPaid: number,
+  paymentDate: Date,
 ): Promise<void> => {
   const inscriptionId = inscription._id.toString();
 
@@ -173,7 +174,7 @@ const firePaymentApprovedSideEffects = async (
     return;
   }
 
-  await sendPurchaseCapiEvent(inscription, totalPaid, inscriptionId);
+  await sendPurchaseCapiEvent(inscription, totalPaid, inscriptionId, paymentDate);
 
   // Curso asociado una sola vez (por uuid; fallback título legacy)
   const coursePaidLink = await resolveCoursePaidLink(inscription);
@@ -186,14 +187,17 @@ const firePaymentApprovedSideEffects = async (
 const sendPurchaseCapiEvent = async (
   inscription: any,
   totalPaid: number,
-  inscriptionId: string
+  inscriptionId: string,
+  paymentDate: Date,
 ): Promise<void> => {
   try {
     const geo = getGeoLocationFromIp(inscription.clientIpAddress || '');
-    const ok = await fireMetaEvent({
+    const delivery = await fireMetaEvent({
       eventName: 'Purchase',
       marketingConsent: inscription.metaMarketingConsent === true,
       eventId: buildEventId('purchase', inscriptionId),
+      eventTime: Math.floor(paymentDate.getTime() / 1000),
+      orderId: inscriptionId,
       email: inscription.email,
       phone: inscription.celular,
       firstName: inscription.nombre,
@@ -210,13 +214,13 @@ const sendPurchaseCapiEvent = async (
       clientUserAgent: inscription.clientUserAgent,
       city: geo.city,
       country: geo.country,
-      eventSourceUrl: inscription.eventSourceUrl || 'https://modista-app.com/payment/success',
+      eventSourceUrl: 'https://modista-app.com/payment/success',
     });
-    if (ok) {
+    if (delivery.accepted) {
       inscription.metaPurchaseFiredAt = new Date();
       await inscription.save();
     } else {
-      logger.warn(`[WebhookProcessor] CAPI Purchase no confirmado para ${inscriptionId}`);
+      logger.warn(`[WebhookProcessor] CAPI Purchase no persistido para ${inscriptionId}`);
     }
   } catch (err) {
     logger.error('[WebhookProcessor] Error en CAPI Purchase', err);

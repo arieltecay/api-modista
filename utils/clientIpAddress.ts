@@ -10,5 +10,7 @@ export const normalizeClientIpAddress = (value: string | undefined): string | un
  * Express resolves the client address using the configured trusted proxy.
  * Do not forward the raw X-Forwarded-For chain to third-party services.
  */
-export const getClientIpAddress = (req: Pick<Request, 'ip' | 'socket'>): string | undefined =>
-  normalizeClientIpAddress(req.ip) ?? normalizeClientIpAddress(req.socket.remoteAddress);
+export const getClientIpAddress = (req: Pick<Request, 'ip' | 'ips' | 'socket'>): string | undefined =>
+  normalizeClientIpAddress(req.ips[0])
+  ?? normalizeClientIpAddress(req.ip)
+  ?? normalizeClientIpAddress(req.socket.remoteAddress);

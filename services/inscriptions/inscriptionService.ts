@@ -109,23 +109,25 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
     const base = buildInscriptionCapiContext(inscription, coursePrice, courseTitle, inscriptionId, eventSourceUrl);
     const flagsToSet: Record<string, Date> = {};
 
-    if (!inscription.metaLeadFiredAt) {
-      const okLead = await fireMetaEvent({
+    const leadPromise = inscription.metaLeadFiredAt
+      ? Promise.resolve(null)
+      : fireMetaEvent({
         eventName: 'Lead',
         eventId: buildEventId('lead', inscriptionId),
         ...base,
       });
-      if (okLead) flagsToSet.metaLeadFiredAt = new Date();
-    }
 
-    if (!inscription.metaInitiateCheckoutFiredAt) {
-      const okCheck = await fireMetaEvent({
+    const checkoutPromise = inscription.metaInitiateCheckoutFiredAt
+      ? Promise.resolve(null)
+      : fireMetaEvent({
         eventName: 'InitiateCheckout',
         eventId: buildEventId('checkout', inscriptionId),
         ...base,
       });
-      if (okCheck) flagsToSet.metaInitiateCheckoutFiredAt = new Date();
-    }
+
+    const [leadDelivery, checkoutDelivery] = await Promise.all([leadPromise, checkoutPromise]);
+    if (leadDelivery?.accepted) flagsToSet.metaLeadFiredAt = new Date();
+    if (checkoutDelivery?.accepted) flagsToSet.metaInitiateCheckoutFiredAt = new Date();
 
     if (Object.keys(flagsToSet).length > 0) {
       await Inscription.updateOne({ _id: inscription._id }, { $set: flagsToSet });

@@ -17,6 +17,8 @@ const buildApiUrl = (pixelId: string) => `https://graph.facebook.com/${API_VERSI
 
 const MAX_ATTEMPTS = 5;
 const BASE_BACKOFF_MS = 30_000;
+const DIRECT_SEND_TIMEOUT_MS = 2_500;
+const INITIAL_OUTBOX_LEASE_MS = DIRECT_SEND_TIMEOUT_MS + 5_000;
 
 const hashData = (data: string | undefined): string | null => {
   if (!data) return null;
@@ -109,6 +111,12 @@ interface CapiErrorResponse {
   message?: string;
 }
 
+export interface MetaDeliveryResult {
+  accepted: boolean;
+  delivered: boolean;
+  eventId: string;
+}
+
 const buildPayload = (event: CapiEventData) => {
   const now = Math.floor(Date.now() / 1000);
   const eventTime = event.eventTime && !isNaN(event.eventTime) && event.eventTime > 0
@@ -179,7 +187,9 @@ const sendOnce = async (
 
   try {
     const requestPayload: CapiRequestPayload = { ...payload, access_token: accessToken };
-    const response = await axios.post<CapiResponsePayload>(buildApiUrl(pixelId), requestPayload, { timeout: 15_000 });
+    const response = await axios.post<CapiResponsePayload>(buildApiUrl(pixelId), requestPayload, {
+      timeout: DIRECT_SEND_TIMEOUT_MS,
+    });
     return { ok: !!response.data.fbtrace_id };
   } catch (err: unknown) {
     const axiosError = err as CapiErrorResponse;
@@ -189,43 +199,83 @@ const sendOnce = async (
   }
 };
 
-const enqueueDlq = async (event: CapiEventData, eventId: string, errorMessage: string): Promise<void> => {
+const persistPendingEvent = async (
+  event: CapiEventData,
+  eventId: string,
+): Promise<{ persisted: boolean; alreadyDelivered: boolean; claimed: boolean }> => {
+  const directSendClaim = crypto.randomUUID();
   try {
-    const nextRetryAt = new Date(Date.now() + BASE_BACKOFF_MS);
-    await MetaEventDlq.findOneAndUpdate(
-      { eventId },
+    const stored = await MetaEventDlq.findOneAndUpdate(
+      { eventId, outboxVersion: 2 },
       {
-        $set: {
+        $setOnInsert: {
           eventName: event.eventName,
+          outboxVersion: 2,
           payload: event as unknown as Record<string, unknown>,
-          lastError: errorMessage,
           status: 'pending',
-          nextRetryAt,
+          attempts: 0,
+          nextRetryAt: new Date(Date.now() + INITIAL_OUTBOX_LEASE_MS),
+          directSendClaim,
         },
-        $inc: { attempts: 1 },
       },
       { upsert: true, new: true }
     );
-    logger.warn(`[Meta CAPI DLQ] Evento '${event.eventName}' (${eventId}) encolado para retry`);
+    return {
+      persisted: true,
+      alreadyDelivered: stored?.status === 'sent',
+      claimed: stored?.directSendClaim === directSendClaim,
+    };
   } catch (dlqError) {
-    logger.error('[Meta CAPI DLQ] No se pudo encolar el evento:', dlqError);
+    logger.error('[Meta CAPI Outbox] No se pudo persistir el evento:', dlqError);
+    return { persisted: false, alreadyDelivered: false, claimed: false };
   }
 };
 
-export const sendMetaConversionEvent = async (event: CapiEventData): Promise<boolean> => {
-  if (event.marketingConsent !== true) return false;
+export const sendMetaConversionEvent = async (event: CapiEventData): Promise<MetaDeliveryResult> => {
+  const fallbackEventId = event.eventId || event.orderId || 'event_rejected';
+  if (event.marketingConsent !== true) {
+    return { accepted: false, delivered: false, eventId: fallbackEventId };
+  }
 
   const { payload, eventId } = buildPayload(event);
+  const normalizedEvent: CapiEventData = {
+    ...event,
+    eventId,
+    eventTime: payload.data[0].event_time,
+  };
+  const persisted = await persistPendingEvent(normalizedEvent, eventId);
+  if (!persisted.persisted) return { accepted: false, delivered: false, eventId };
+  if (persisted.alreadyDelivered) return { accepted: true, delivered: true, eventId };
+  if (!persisted.claimed) return { accepted: true, delivered: false, eventId };
+
   const result = await sendOnce(payload, event.eventName);
 
   if (result.ok) {
+    await MetaEventDlq.updateOne(
+      { eventId, outboxVersion: 2 },
+      {
+        $set: { status: 'sent', attempts: 1, deliveryMode: 'direct' },
+        $unset: { payload: '', lastError: '', directSendClaim: '' },
+      },
+    );
     logger.info(`[Meta CAPI OK] Evento '${event.eventName}' enviado con exito. EventID: ${eventId}`);
-    return true;
+    return { accepted: true, delivered: true, eventId };
   }
 
   logger.warn(`[Meta CAPI] Fallo envio directo de '${event.eventName}' (${eventId}): ${result.error}`);
-  await enqueueDlq(event, eventId, result.error ?? 'unknown');
-  return false;
+  await MetaEventDlq.updateOne(
+    { eventId, outboxVersion: 2 },
+    {
+      $set: {
+        status: 'pending',
+        attempts: 1,
+        lastError: result.error ?? 'unknown',
+        nextRetryAt: new Date(Date.now() + BASE_BACKOFF_MS),
+      },
+      $unset: { directSendClaim: '' },
+    },
+  );
+  return { accepted: true, delivered: false, eventId };
 };
 
 export const processDlqBatch = async (limit = 50): Promise<{ sent: number; failed: number }> => {
@@ -261,6 +311,14 @@ export const processDlqBatch = async (limit = 50): Promise<{ sent: number; faile
   let failed = 0;
 
   for (const doc of pending) {
+    if (!doc.payload) {
+      await MetaEventDlq.updateOne(
+        { _id: doc._id },
+        { $set: { status: 'exhausted', lastError: 'Evento sin payload recuperable' } },
+      );
+      failed++;
+      continue;
+    }
     const event = doc.payload as unknown as CapiEventData;
     const consentIsCurrent = event.marketingConsent === true
       && await hasCurrentMetaMarketingConsent(event.externalId, META_MARKETING_CONSENT_VERSION);
@@ -285,7 +343,7 @@ export const processDlqBatch = async (limit = 50): Promise<{ sent: number; faile
       await MetaEventDlq.updateOne(
         { _id: doc._id },
         {
-          $set: { status: 'sent' },
+          $set: { status: 'sent', deliveryMode: 'retry' },
           $unset: { payload: '', lastError: '' },
         },
       );
