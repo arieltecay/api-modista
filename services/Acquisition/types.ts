@@ -114,3 +114,34 @@ export type ClassificationRule = (signals: Signals) => Classification | undefine
 
 /** Result of an idempotent write: first time, repeat, or an id owned by another visitor. */
 export type IngestOutcome = 'created' | 'updated' | 'conflict';
+
+export type ServerCapiStatus = 'accepted' | 'delivered' | 'pending' | 'retry' | 'exhausted';
+
+export interface ServerCapiSignalInput {
+  eventId: string;
+  status: ServerCapiStatus;
+  occurredAt: Date;
+  attempts?: number;
+  visitorId?: string;
+}
+
+/** Only the outbox fields the projection needs; payloads are never read. */
+export interface OutboxSnapshot {
+  status: string;
+  attempts: number;
+}
+
+/** What the Meta helper knows about an event it is about to send or has just sent. */
+export interface MetaProjectionInput {
+  eventName: string;
+  eventId: string;
+  occurredAt: Date;
+  visitorId?: string;
+  inscriptionId?: string;
+  courseId?: string;
+}
+
+export interface MetaDeliveryOutcome {
+  accepted: boolean;
+  delivered: boolean;
+}

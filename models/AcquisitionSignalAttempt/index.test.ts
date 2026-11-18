@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { after, before, beforeEach } from 'node:test';
 import AcquisitionSignalAttempt from './index.js';
-import { isStatusValidForChannel } from './types.js';
+import { isSignalTransitionAllowed, isStatusValidForChannel, statusesThatMayAdvanceTo } from './types.js';
 import { listIndexKeys, startTestDb } from '../../utils/testing/mongoMemoryServer.js';
 
 let stopDb: () => Promise<void>;
@@ -79,6 +79,22 @@ test('isStatusValidForChannel is the single source of truth for upserts, where s
     assert.equal(isStatusValidForChannel('server_capi', status), true, status);
   }
   assert.equal(isStatusValidForChannel('server_capi', 'invoked'), false);
+});
+
+test('status transitions only move forward and terminal states never regress', () => {
+  assert.deepEqual(statusesThatMayAdvanceTo('accepted'), ['accepted']);
+  assert.deepEqual(statusesThatMayAdvanceTo('pending'), ['accepted', 'pending']);
+  assert.deepEqual(statusesThatMayAdvanceTo('retry'), ['accepted', 'pending', 'retry']);
+  assert.deepEqual(statusesThatMayAdvanceTo('delivered'), ['accepted', 'pending', 'retry']);
+  assert.deepEqual(statusesThatMayAdvanceTo('exhausted'), ['accepted', 'pending', 'retry']);
+  assert.deepEqual(statusesThatMayAdvanceTo('invoked'), []);
+  assert.equal(isSignalTransitionAllowed('accepted', 'delivered'), true);
+  assert.equal(isSignalTransitionAllowed('retry', 'retry'), true);
+  assert.equal(isSignalTransitionAllowed('retry', 'pending'), false);
+  assert.equal(isSignalTransitionAllowed('delivered', 'accepted'), false);
+  assert.equal(isSignalTransitionAllowed('delivered', 'exhausted'), false);
+  assert.equal(isSignalTransitionAllowed('exhausted', 'delivered'), false);
+  assert.equal(isSignalTransitionAllowed('invoked', 'invoked'), true);
 });
 
 test('creates the planned indexes (unique { eventId, channel } plus revocation and health lookups)', async () => {

@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { processDlqBatch } from '../services/meta-capi-service.js';
 import { logger } from '../services/logger.js';
+import { isAcquisitionTrackingEnabled } from '../services/Acquisition/config.js';
+import { reconcileCapiSignals } from '../services/Acquisition/signals.js';
 
 const router = Router();
 
@@ -31,7 +33,14 @@ router.get('/meta-dlq', async (req, res) => {
 
   try {
     const result = await processDlqBatch(50);
-    return res.json({ success: true, ...result });
+    // Repairs the acquisition view of CAPI delivery; a failure here must not fail the retry cron.
+    const signals = isAcquisitionTrackingEnabled()
+      ? await reconcileCapiSignals({ since: new Date(Date.now() - 48 * 60 * 60 * 1000), limit: 2000 }).catch((error) => {
+        logger.error('[Cron] Error reconciliando señales de adquisición:', error);
+        return undefined;
+      })
+      : undefined;
+    return res.json({ success: true, ...result, signalsReconciled: signals?.processed });
   } catch (error) {
     logger.error('[Cron] Error procesando DLQ de Meta:', error);
     return res.status(500).json({ success: false, message: 'Error procesando DLQ' });

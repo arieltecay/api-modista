@@ -13,3 +13,7 @@
 - Para quitar el query de un path no uses `/[?#].*$/`: `.` no cruza saltos de línea y deja el query. Usar `split(/[?#]/, 1)` y rechazar caracteres de control. Evidencia: `services/Acquisition/sanitize.ts`.
 - El handler global de `server.js` loguea `req.body`; las rutas de Acquisition tienen su propio handler que registra solo nombre, código y frames. Evidencia: `controllers/Acquisition/index.ts` (`handleAcquisitionError`).
 - Un `eventId` ya tomado por otro visitante da 409 (filtro con `visitorId` + E11000); no se adopta. Evidencia: `services/Acquisition/index.ts`.
+- Lead, checkout y purchase se vinculan a la visita vigente al crearse la inscripción: el `ObjectId` embebe ese instante, así que no hay carrera entre los tres ni cruce entre visitantes. Con dos pestañas gana la visita iniciada más tarde. Sin visita enlazable no se crea evento (la conversión se cuenta desde inscripciones/pagos). Evidencia: `services/Acquisition/serverEvents.ts` (`resolveVisitId`).
+- Los eventos `purchase` de Acquisition no guardan `value`: los cuatro sitios de `fireMetaEvent` mandan precio de lista o total cobrado según el caso. El revenue sale siempre de los pagos.
+- La reconciliación solo avanza intentos existentes: crearlos resucitaría, sin `visitorId`, datos ya purgados por una revocación. Un evento cuyo espejo falló no tiene intento; la entrega CAPI se mide desde el outbox. Evidencia: `services/Acquisition/signals.ts`.
+- `MetaEventDlq` no indexa `updatedAt`: la reconciliación escanea la colección; hoy es chica (payloads depurados), indexar si crece.

@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Registra `lead`, `initiate_checkout` y `purchase` server-side en adquisición y el estado de entrega CAPI, con reconciliación desde el outbox.
 - Agrega la ingesta de visitas, eventos y señales de Pixel de adquisición (detrás de `ACQUISITION_TRACKING_ENABLED`) y su borrado al revocar el consentimiento.
 - Agrega los modelos de visitas, eventos e intentos de señal de adquisición (aún sin endpoints).
 - Agrega el clasificador puro de adquisición (plataforma, tipo y canal) que no marca como pago el tráfico orgánico de Instagram, Facebook o Google.
