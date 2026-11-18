@@ -3,6 +3,7 @@ import MetaEventDlq from '../../models/MetaEventDlq.js';
 import Inscription from '../../models/Inscription.js';
 import Session from '../../models/Session.js';
 import FunnelEvent from '../../models/FunnelEvent.js';
+import { purgeVisitorData } from '../Acquisition/index.js';
 import {
   isMetaMarketingConsentCurrent,
   META_MARKETING_CONSENT_VERSION,
@@ -61,6 +62,7 @@ export const recordMetaMarketingConsent = async (
       ),
       Session.deleteMany({ sessionId }),
       FunnelEvent.deleteMany({ sessionId }),
+      purgeVisitorData(sessionId),
       MetaEventDlq.updateMany(
         { status: 'pending', 'payload.externalId': sessionId },
         {

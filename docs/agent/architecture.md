@@ -1,0 +1,3 @@
+- `services/Acquisition/`: dominio de adquisición (plan: `docs/plan-acquisition-conversion-dashboard.md` en la raíz del workspace). `classifier.ts` + `taxonomy.ts` (tablas) + `types.ts`: puros, sin Express ni Mongoose.
+- `models/AcquisitionVisit|AcquisitionEvent|AcquisitionSignalAttempt/`: persistencia del dominio (`index.ts` + `types.ts`, tipos propios). Tests con `mongodb-memory-server` vía `utils/testing/mongoMemoryServer.ts`.
+- Ingesta: `routes/Acquisition` → `controllers/Acquisition` (flag, consentimiento, Zod, 201/200/409) → `services/Acquisition/{index,signals}.ts` (upserts idempotentes). `consent.ts`, `config.ts`, `sanitize.ts`, `schemas.ts` son helpers puros.

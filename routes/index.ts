@@ -23,6 +23,7 @@ import uploadRoutes from './upload/index.js';
 import cronRoutes from './cron.js';
 import metaDlqRoutes from './admin/meta-dlq.js';
 import privacyRoutes from './privacy/privacyRoutes.js';
+import acquisitionRoutes from './Acquisition/index.js';
 
 // Rate limiter para endpoints públicos (lectura)
 const publicLimiter = rateLimit({
@@ -45,6 +46,7 @@ router.use('/landings', publicLimiter, landingRoutes);
 router.use('/inscriptions', inscriptionsRoutes);
 router.use('/workshop-inscriptions', workshopInscriptionsRoutes);
 router.use('/funnel', funnelRoutes);
+router.use('/acquisition', acquisitionRoutes);
 
 // Módulo de Upload (genérico para todos los recursos)
 router.use('/upload', uploadRoutes);
