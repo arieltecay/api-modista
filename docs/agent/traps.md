@@ -25,3 +25,6 @@
 - Revenue legado sin historial: `depositAmount` es lo cobrado (como el dashboard actual); una seña pendiente cuenta como cobrada pero no como compra. Evidencia: tests de `channels.test.ts`.
 - `first_touch`/`last_non_direct` hacen un `$lookup` por visita (no por visitante) y usan `allowDiskUse`; sin medir con volumen real. Los empates de `startedAt` se desempatan por `visitId`.
 - Los errores de los reportes se mapean en `handleReportError` (400/504/500 con mensajes fijos); el handler global devolvería el texto crudo de Mongo. Evidencia: `controllers/AcquisitionReports/index.ts`.
+- El embudo de cohorte cuenta por paso más lejano: un evento faltante no rompe el embudo, pero tampoco se ve; `event_period` cuenta eventos por separado y puede dar un paso mayor que el anterior. Evidencia: `services/AcquisitionReports/funnel.ts`.
+- `live` y `TRACKING_STALE` miden por hora de recepción del servidor (`receivedAt`/`updatedAt`/`startedAt`), no por la hora del navegador. Evidencia: `services/AcquisitionReports/live.ts`, `quality.ts`.
+- `quality` recorre eventos con `$lookup` por visita en el rango (máx 92 días); con volumen alto acotar el rango. Los umbrales viven en `QUALITY_THRESHOLDS` y no son benchmarks.

@@ -5,6 +5,8 @@ import { Types } from 'mongoose';
 import AcquisitionEvent from '../../models/AcquisitionEvent/index.js';
 import AcquisitionVisit from '../../models/AcquisitionVisit/index.js';
 import Inscription from '../../models/Inscription.js';
+import { inscription, lead, visit } from '../../utils/testing/acquisitionFixtures.js';
+import type { InscriptionFixture } from '../../utils/testing/acquisitionFixtures.js';
 import { startTestDb } from '../../utils/testing/mongoMemoryServer.js';
 import { reportQuerySchema } from './filters.js';
 import { getChannelsReport, getOverviewReport } from './index.js';
@@ -25,84 +27,6 @@ beforeEach(async () => {
 
 const query = (overrides: Record<string, unknown> = {}) =>
   reportQuerySchema.parse({ from: '2026-11-10', to: '2026-11-16', timezone: TIMEZONE, ...overrides });
-
-// ---------- fixtures ----------
-
-interface VisitFixture {
-  visitorId: string;
-  visitId?: string;
-  at: string;
-  channel: string;
-  platform?: string;
-  campaign?: string;
-  landing?: string;
-  device?: string;
-}
-
-const visit = async (fixture: VisitFixture): Promise<string> => {
-  const visitId = fixture.visitId ?? randomUUID();
-  await AcquisitionVisit.create({
-    visitId,
-    visitorId: fixture.visitorId,
-    startedAt: new Date(fixture.at),
-    lastActivityAt: new Date(fixture.at),
-    entryPath: '/lp',
-    landingSlug: fixture.landing,
-    device: fixture.device ?? 'desktop',
-    rawAttribution: { campaign: fixture.campaign },
-    classification: {
-      sourcePlatform: fixture.platform ?? 'unknown',
-      acquisitionType: 'x',
-      channelGroup: fixture.channel,
-      reason: 'paid_medium',
-      classifierVersion: 1,
-    },
-    consentVersion: 'v1',
-  });
-  return visitId;
-};
-
-interface InscriptionFixture {
-  createdAt: string;
-  price: number;
-  status: 'pending' | 'paid' | 'partial';
-  payments?: Array<[amount: number, at: string]>;
-  paymentDate?: string;
-  depositAmount?: number;
-  depositDate?: string;
-}
-
-let sequence = 0;
-const inscription = async (fixture: InscriptionFixture): Promise<string> => {
-  sequence += 1;
-  const doc = await Inscription.create({
-    nombre: 'Nombre',
-    apellido: 'Apellido',
-    email: `person${sequence}@example.com`,
-    celular: '3815550000',
-    courseId: 'course-1',
-    courseTitle: 'Curso',
-    coursePrice: fixture.price,
-    paymentStatus: fixture.status,
-    fechaInscripcion: new Date(fixture.createdAt),
-    paymentDate: fixture.paymentDate ? new Date(fixture.paymentDate) : undefined,
-    depositAmount: fixture.depositAmount,
-    depositDate: fixture.depositDate ? new Date(fixture.depositDate) : undefined,
-    paymentHistory: (fixture.payments ?? []).map(([amount, at]) => ({ amount, date: new Date(at) })),
-  });
-  return doc._id.toHexString();
-};
-
-const lead = (visitId: string, visitorId: string, inscriptionId: string, at: string) =>
-  AcquisitionEvent.create({
-    eventId: `lead_${inscriptionId}`,
-    visitId,
-    visitorId,
-    name: 'lead',
-    occurredAt: new Date(at),
-    source: 'server',
-    inscriptionId,
-  });
 
 /** Range: [2026-11-10T03:00Z, 2026-11-17T03:00Z). See the expectations below for what each visitor is. */
 const seedScenario = async () => {

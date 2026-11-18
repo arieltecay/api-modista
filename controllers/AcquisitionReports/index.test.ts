@@ -36,15 +36,18 @@ beforeEach(async () => {
 });
 
 const RANGE = 'from=2026-11-10&to=2026-11-16';
-const ENDPOINTS = ['overview', 'channels'];
+/** Endpoints that share the full report query (mode, window, perspective, filters). */
+const ENDPOINTS = ['overview', 'channels', 'funnel'];
+const AUTH_ENDPOINTS = ['overview', 'channels', 'funnel', 'quality', 'journeys', 'live', `journeys/${randomUUID()}`];
 
 test('every report endpoint requires an authenticated admin', async () => {
-  for (const endpoint of ENDPOINTS) {
+  for (const endpoint of AUTH_ENDPOINTS) {
     const path = `/api/admin/acquisition/${endpoint}?${RANGE}`;
+    const expected = endpoint.startsWith('journeys/') ? 404 : 200; // an unknown visit is a 404 for an admin
     assert.equal((await server.get(path)).status, 401, `${endpoint} anonymous`);
     assert.equal((await server.get(path, { authorization: 'Bearer garbage' })).status, 403, `${endpoint} bad token`);
     assert.equal((await server.get(path, userHeaders)).status, 403, `${endpoint} non-admin`);
-    assert.equal((await server.get(path, adminHeaders)).status, 200, `${endpoint} admin`);
+    assert.equal((await server.get(path, adminHeaders)).status, expected, `${endpoint} admin`);
   }
 });
 
@@ -152,4 +155,55 @@ test('channels returns rows and totals and leaks no personal data', async () => 
 test('only GET is exposed', async () => {
   const response = await server.post(`/api/admin/acquisition/overview?${RANGE}`, {}, adminHeaders);
   assert.equal(response.status, 404);
+});
+
+test('quality and journeys validate the calendar range and their own parameters', async () => {
+  for (const endpoint of ['quality', 'journeys']) {
+    for (const params of ['to=2026-11-16', 'from=2026-11-16&to=2026-11-10', `${RANGE}&timezone=Mars/Olympus`, 'from=2026-01-01&to=2026-12-31']) {
+      assert.equal((await server.get(`/api/admin/acquisition/${endpoint}?${params}`, adminHeaders)).status, 400, `${endpoint}?${params}`);
+    }
+  }
+  for (const params of ['page=0', 'limit=0', 'limit=101', 'page=x', 'campaign=a&campaign=b']) {
+    assert.equal((await server.get(`/api/admin/acquisition/journeys?${RANGE}&${params}`, adminHeaders)).status, 400, params);
+  }
+});
+
+test('live validates its window and does not need a range', async () => {
+  assert.equal((await server.get('/api/admin/acquisition/live', adminHeaders)).status, 200);
+  assert.equal((await server.get('/api/admin/acquisition/live?windowMinutes=60', adminHeaders)).status, 200);
+  for (const value of ['10', '0', 'abc']) {
+    assert.equal((await server.get(`/api/admin/acquisition/live?windowMinutes=${value}`, adminHeaders)).status, 400, value);
+  }
+});
+
+test('funnel accepts a course filter and rejects a malformed one', async () => {
+  assert.equal((await server.get(`/api/admin/acquisition/funnel?${RANGE}&course=curso-1`, adminHeaders)).status, 200);
+  assert.equal((await server.get(`/api/admin/acquisition/funnel?${RANGE}&course=<script>`, adminHeaders)).status, 400);
+});
+
+test('journey detail: malformed id is 400, unknown id is 404, a real visit returns its timeline without personal data', async () => {
+  assert.equal((await server.get('/api/admin/acquisition/journeys/not-a-uuid', adminHeaders)).status, 400);
+  assert.equal((await server.get(`/api/admin/acquisition/journeys/${randomUUID()}`, adminHeaders)).status, 404);
+
+  const visitId = randomUUID();
+  const visitorId = randomUUID();
+  await AcquisitionVisit.create({
+    visitId, visitorId, startedAt: new Date('2026-11-11T12:00:00.000Z'), lastActivityAt: new Date('2026-11-11T12:00:00.000Z'), entryPath: '/lp',
+    classification: { sourcePlatform: 'unknown', acquisitionType: 'direct', channelGroup: 'direct', reason: 'direct_no_signals', classifierVersion: 1 },
+    consentVersion: 'v1',
+  });
+  const response = await server.get(`/api/admin/acquisition/journeys/${visitId}`, adminHeaders);
+  assert.equal(response.status, 200);
+  const serialized = JSON.stringify(response.body);
+  assert.ok(serialized.includes(visitId));
+  assert.ok(!serialized.includes(visitorId));
+});
+
+test('the live and quality endpoints answer their documented shapes', async () => {
+  const live = (await server.get('/api/admin/acquisition/live?windowMinutes=5', adminHeaders)).body as { windowMinutes: number; data: Record<string, unknown> };
+  assert.equal(live.windowMinutes, 5);
+  assert.deepEqual(Object.keys(live.data).sort(), ['activeByChannel', 'activeVisits', 'eventsInWindow', 'eventsPerMinute', 'recentEvents']);
+
+  const quality = (await server.get(`/api/admin/acquisition/quality?${RANGE}`, adminHeaders)).body as { data: { rules: unknown[]; evaluated: string[] } };
+  assert.ok(Array.isArray(quality.data.rules) && quality.data.evaluated.includes('TRACKING_STALE'));
 });

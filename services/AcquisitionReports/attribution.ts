@@ -10,7 +10,9 @@ export const stage = (value: Record<string, unknown>): PipelineStage => value as
 /** Channels that say nothing about where the person came from. */
 const NOT_A_REAL_ORIGIN = ['direct', 'unknown'];
 
-const VISIT_FILTER_FIELDS: ReadonlyArray<readonly [keyof ReportQuery, string]> = [
+type VisitFilters = Pick<ReportQuery, 'campaign' | 'source' | 'medium' | 'landing' | 'device'>;
+
+const VISIT_FILTER_FIELDS: ReadonlyArray<readonly [keyof VisitFilters, string]> = [
   ['campaign', 'rawAttribution.campaign'],
   ['source', 'rawAttribution.source'],
   ['medium', 'rawAttribution.medium'],
@@ -22,7 +24,7 @@ export const hasVisitFilters = (filters: ReportQuery): boolean =>
   filters.channel !== undefined || filters.platform !== undefined || VISIT_FILTER_FIELDS.some(([key]) => filters[key] !== undefined);
 
 /** `$match` on the properties of a visit; `prefix` is where the visit lives in the document ('' or 'visit.'). */
-export const visitFilterMatch = (filters: ReportQuery, prefix = ''): Record<string, string> =>
+export const visitFilterMatch = (filters: VisitFilters, prefix = ''): Record<string, string> =>
   Object.fromEntries(VISIT_FILTER_FIELDS.flatMap(([key, path]) => (filters[key] === undefined ? [] : [[`${prefix}${path}`, filters[key] as string]])));
 
 export const visitsInRange = (range: ReportRange, filters: ReportQuery): PipelineStage =>

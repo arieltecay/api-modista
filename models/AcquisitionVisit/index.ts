@@ -42,6 +42,8 @@ AcquisitionVisitSchema.index({ visitorId: 1, startedAt: -1 });
 AcquisitionVisitSchema.index({ startedAt: -1, 'classification.channelGroup': 1 });
 AcquisitionVisitSchema.index({ 'rawAttribution.campaign': 1, startedAt: -1 });
 AcquisitionVisitSchema.index({ landingSlug: 1, startedAt: -1 });
+// The live panel counts visits touched recently (server time).
+AcquisitionVisitSchema.index({ updatedAt: -1 });
 
 const AcquisitionVisit = model<AcquisitionVisitPersistence>('AcquisitionVisit', AcquisitionVisitSchema);
 
