@@ -387,7 +387,7 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
             } else {
               try {
                 const geo = getGeoLocationFromIp(inscription.clientIpAddress || '');
-                const capiSuccess = await fireMetaEvent({
+                const delivery = await fireMetaEvent({
                   eventName: 'Purchase',
                   marketingConsent: inscription.metaMarketingConsent === true,
                   email: inscription.email,
@@ -400,15 +400,17 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
                   contentType: 'product',
                   externalId: inscription.sessionId,
                   eventId: buildEventId('purchase', id),
+                  orderId: id,
+                  eventTime: Math.floor(Date.now() / 1000),
                   fbc: inscription.metaFbc,
                   fbp: inscription.metaFbp,
                   clientIpAddress: inscription.clientIpAddress,
                   clientUserAgent: inscription.clientUserAgent,
                   city: geo.city,
                   country: geo.country,
-                  eventSourceUrl: inscription.eventSourceUrl || 'https://modista-app.com/payment/success'
+                  eventSourceUrl: 'https://modista-app.com/payment/success'
                 });
-                if (capiSuccess) {
+                if (delivery.accepted) {
                   inscription.metaPurchaseFiredAt = new Date();
                   // save happens at the end of function
                 }
@@ -628,7 +630,7 @@ export const addPayment = async (req: Request<{ id: string }, {}, { amount: numb
       if (!wasAlreadyPaid && !inscription.metaPurchaseFiredAt) {
         try {
             const geo = getGeoLocationFromIp(inscription.clientIpAddress || '');
-            const capiSuccess = await fireMetaEvent({
+            const delivery = await fireMetaEvent({
               eventName: 'Purchase',
               marketingConsent: inscription.metaMarketingConsent === true,
               email: inscription.email,
@@ -641,15 +643,17 @@ export const addPayment = async (req: Request<{ id: string }, {}, { amount: numb
               contentType: 'product',
               externalId: inscription.sessionId,
               eventId: buildEventId('purchase', id),
+              orderId: id,
+              eventTime: Math.floor((inscription.paymentDate || new Date()).getTime() / 1000),
               fbc: inscription.metaFbc,
               fbp: inscription.metaFbp,
               clientIpAddress: inscription.clientIpAddress,
               clientUserAgent: inscription.clientUserAgent,
               city: geo.city,
               country: geo.country,
-              eventSourceUrl: inscription.eventSourceUrl || 'https://modista-app.com/payment/success'
+              eventSourceUrl: 'https://modista-app.com/payment/success'
             });
-          if (capiSuccess) {
+          if (delivery.accepted) {
             inscription.metaPurchaseFiredAt = new Date();
           }
         } catch (capiError) {

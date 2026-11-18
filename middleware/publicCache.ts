@@ -3,7 +3,7 @@ import type { Request, Response, NextFunction } from 'express';
 /**
  * Caché de borde (CDN de Vercel) SOLO para GET públicos puros: sin efectos
  * secundarios ni datos por usuario. NO usar en endpoints que disparan eventos
- * de Meta CAPI (GET /api/courses/:id, GET /api/landings/slug/:slug/full).
+ * de Meta CAPI (por ejemplo, GET /api/courses/:id).
  * `max-age=0`: el navegador siempre revalida; el CDN sirve desde caché.
  */
 export const publicCache =

@@ -121,10 +121,12 @@ export const getVerifiedPaymentData = async (req: Request, res: Response): Promi
           } else {
             try {
               const geo = getGeoLocationFromIp(inscription.clientIpAddress || '');
-              const ok = await fireMetaEvent({
+              const delivery = await fireMetaEvent({
                 eventName: 'Purchase',
                 marketingConsent: inscription.metaMarketingConsent === true,
                 eventId: buildEventId('purchase', inscriptionId),
+                eventTime: Math.floor(new Date(mpDateApproved).getTime() / 1000),
+                orderId: inscriptionId,
                 email: inscription.email,
                 phone: inscription.celular,
                 firstName: inscription.nombre,
@@ -140,9 +142,9 @@ export const getVerifiedPaymentData = async (req: Request, res: Response): Promi
                 clientUserAgent: inscription.clientUserAgent,
                 city: geo.city,
                 country: geo.country,
-                eventSourceUrl: inscription.eventSourceUrl || 'https://modista-app.com/payment/success'
+                eventSourceUrl: 'https://modista-app.com/payment/success'
               });
-              if (ok) {
+              if (delivery.accepted) {
                 inscription.metaPurchaseFiredAt = new Date();
                 await inscription.save();
               }

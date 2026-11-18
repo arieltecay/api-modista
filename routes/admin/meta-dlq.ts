@@ -51,10 +51,13 @@ router.delete('/cleanup', authenticateToken, requireAdmin, async (req, res) => {
 router.get('/stats', authenticateToken, requireAdmin, async (_req, res) => {
   try {
     const total = await MetaEventDlq.countDocuments();
+    const accepted = await MetaEventDlq.countDocuments({ outboxVersion: 2 });
     const pending = await MetaEventDlq.countDocuments({ status: 'pending' });
     const sent = await MetaEventDlq.countDocuments({ status: 'sent' });
     const failed = await MetaEventDlq.countDocuments({ status: 'failed' });
     const exhausted = await MetaEventDlq.countDocuments({ status: 'exhausted' });
+    const sentDirect = await MetaEventDlq.countDocuments({ status: 'sent', deliveryMode: 'direct' });
+    const sentByRetry = await MetaEventDlq.countDocuments({ status: 'sent', deliveryMode: 'retry' });
 
     const byEventName = await MetaEventDlq.aggregate([
       { $group: { _id: '$eventName', count: { $sum: 1 } } },
@@ -70,8 +73,11 @@ router.get('/stats', authenticateToken, requireAdmin, async (_req, res) => {
       success: true,
       stats: {
         total,
+        accepted,
         pending,
         sent,
+        sentDirect,
+        sentByRetry,
         failed,
         exhausted,
         byEventName,

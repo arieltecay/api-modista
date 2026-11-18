@@ -2,10 +2,16 @@ import { Request, Response } from 'express';
 import FunnelEvent from '../../models/FunnelEvent.js';
 import { logError } from '../../services/logger.js';
 import { getGeoLocationFromRequest } from '../../services/geolocation/index.js';
-import { fireMetaEvent, buildEventId } from '../../services/meta-capi-helpers/index.js';
 import { getClientIpAddress } from '../../utils/clientIpAddress.js';
 import { hasCurrentMetaMarketingConsent } from '../../services/privacy/marketingConsent.js';
 import { isMetaMarketingConsentGranted } from '../../utils/metaMarketingConsent.js';
+import { FUNNEL_STEPS, recordFunnelEvent, type FunnelStep } from '../../services/funnel/index.js';
+
+const asOptionalString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+
+const isFunnelStep = (value: unknown): value is FunnelStep =>
+  typeof value === 'string' && (FUNNEL_STEPS as readonly string[]).includes(value);
 
 /**
  * POST /api/funnel/event
@@ -21,6 +27,8 @@ export const trackFunnelEvent = async (req: Request, res: Response) => {
     inscriptionId,
     value,
     eventTime,
+    eventId,
+    eventSourceUrl: requestedEventSourceUrl,
     utmSource,
     utmCampaign,
     utmMedium,
@@ -30,8 +38,8 @@ export const trackFunnelEvent = async (req: Request, res: Response) => {
     device,
   } = req.body ?? {};
 
-  if (!sessionId || !step) {
-    res.status(400).json({ success: false, message: 'sessionId y step son requeridos' });
+  if (typeof sessionId !== 'string' || !isFunnelStep(step)) {
+    res.status(400).json({ success: false, message: 'sessionId y step válido son requeridos' });
     return;
   }
 
@@ -47,25 +55,36 @@ export const trackFunnelEvent = async (req: Request, res: Response) => {
 
   const clientIpAddress = getClientIpAddress(req);
   const clientUserAgent = req.headers['user-agent'] || '';
-  const eventSourceUrl = req.body.eventSourceUrl || req.body.referrer || req.headers.referer || req.headers.referrer || 'https://modista-app.com';
+  const referer = asOptionalString(req.headers.referer) || asOptionalString(req.headers.referrer);
+  const eventSourceUrl = asOptionalString(requestedEventSourceUrl)
+    || asOptionalString(req.body.referrer)
+    || referer
+    || 'https://modista-app.com';
+  const geo = getGeoLocationFromRequest(req);
 
   try {
-    await FunnelEvent.create({
+    await recordFunnelEvent({
       sessionId,
       step,
-      courseId,
-      courseTitle,
-      inscriptionId,
-      value,
-      utmSource,
-      utmCampaign,
-      utmMedium,
-      referrer,
-      device,
-      metaFbc: fbc,
-      metaFbp: fbp,
+      courseId: asOptionalString(courseId),
+      courseTitle: asOptionalString(courseTitle),
+      inscriptionId: asOptionalString(inscriptionId),
+      value: typeof value === 'number' && Number.isFinite(value) ? value : undefined,
+      eventId: asOptionalString(eventId),
+      eventTime: typeof eventTime === 'number' && Number.isFinite(eventTime) ? eventTime : undefined,
+      eventSourceUrl,
+      utmSource: asOptionalString(utmSource),
+      utmCampaign: asOptionalString(utmCampaign),
+      utmMedium: asOptionalString(utmMedium),
+      referrer: asOptionalString(referrer),
+      device: device === 'mobile' || device === 'desktop' ? device : undefined,
+      fbc: asOptionalString(fbc),
+      fbp: asOptionalString(fbp),
       clientIpAddress,
       clientUserAgent,
+      city: geo.city,
+      country: geo.country,
+      marketingConsent: hasMarketingConsent,
     });
 
     res.status(200).json({ success: true });
@@ -87,9 +106,9 @@ const FUNNEL_STEP_ORDER = [
   'form_view',
   'form_start',
   'form_submit',
-  'redirect_to_payment',
   'lead',
   'initiate_checkout',
+  'redirect_to_payment',
   'purchase',
 ] as const;
 

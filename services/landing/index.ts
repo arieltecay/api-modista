@@ -5,8 +5,6 @@ import type { ITestimonial } from '../../models/Testimonial.js';
 import { resolveCourseIdentifier } from '../../controllers/courses/helper.js';
 import { testimonialService } from '../testimonials/testimonial-service.js';
 import { cache } from '../../utils/cache.js';
-import { trackCourseViewServerSide } from '../courses/courseTrackingService.js';
-import type { TrackingHttpContext } from '../courses/courseTrackingService.js';
 
 const COURSE_CACHE_TTL_SECONDS = 300;
 
@@ -25,12 +23,11 @@ export type LandingFullResult =
 
 /**
  * Landing + curso + testimonios en una sola llamada.
- * Dispara el ViewContent de Meta CAPI igual que GET /api/courses/:id
- * (mismos campos, mismo eventId vía sessionId del contexto).
+ * Es una lectura pura: el tracking se procesa de forma separada por el
+ * endpoint de embudo para no penalizar el camino crítico de la landing.
  */
 export const getLandingFull = async (
   slug: string,
-  ctx: TrackingHttpContext
 ): Promise<LandingFullResult> => {
   const landing = await LandingPage.findOne({ slug, status: 'active' });
   if (!landing) return { status: 'landing_not_found' };
@@ -42,23 +39,12 @@ export const getLandingFull = async (
   let course: CourseDetail;
   if (cachedCourse) {
     course = cachedCourse;
-    trackCourseViewServerSide(ctx, {
-      courseId: course.id ?? identifier,
-      courseTitle: course.title ?? 'unknown',
-      price: course.price,
-    });
   } else {
     const found = await resolveCourseIdentifier(identifier);
     if (!found) return { status: 'course_not_found' };
 
     course = { ...found, id: found.uuid, courseId: found._id?.toString() };
     cache.set(cacheKey, course, COURSE_CACHE_TTL_SECONDS);
-
-    trackCourseViewServerSide(ctx, {
-      courseId: found.uuid ?? (found._id?.toString() ?? identifier),
-      courseTitle: found.title,
-      price: found.price,
-    });
   }
 
   // Mismo filtro que hacía el front: course.id (uuid) || _id

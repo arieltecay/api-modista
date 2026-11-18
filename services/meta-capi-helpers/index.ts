@@ -2,6 +2,7 @@ import { sendMetaConversionEvent as sendRaw } from '../meta-capi-service.js';
 import { logger } from '../logger.js';
 import { hasCurrentMetaMarketingConsent } from '../privacy/marketingConsent.js';
 import { META_MARKETING_CONSENT_VERSION } from '../../utils/metaMarketingConsent.js';
+import type { MetaDeliveryResult } from '../meta-capi-service.js';
 
 export type MetaEventName = 'PageView' | 'ViewContent' | 'InitiateCheckout' | 'Lead' | 'Purchase';
 
@@ -18,6 +19,7 @@ export interface MetaFireContext {
   contentName?: string;
   contentIds?: string[];
   contentType?: string;
+  orderId?: string;
   externalId?: string;
   fbc?: string;
   fbp?: string;
@@ -29,15 +31,15 @@ export interface MetaFireContext {
   eventTime?: number;
 }
 
-export const fireMetaEvent = async (ctx: MetaFireContext): Promise<boolean> => {
+export const fireMetaEvent = async (ctx: MetaFireContext): Promise<MetaDeliveryResult> => {
   if (
     !ctx.marketingConsent ||
     !await hasCurrentMetaMarketingConsent(ctx.externalId, META_MARKETING_CONSENT_VERSION)
-  ) return false;
+  ) return { accepted: false, delivered: false, eventId: ctx.eventId };
 
   const testEventCode = process.env.META_TEST_EVENT_CODE;
 
-  const ok = await sendRaw({
+  const result = await sendRaw({
     eventName: ctx.eventName,
     marketingConsent: ctx.marketingConsent,
     email: ctx.email,
@@ -49,6 +51,7 @@ export const fireMetaEvent = async (ctx: MetaFireContext): Promise<boolean> => {
     contentName: ctx.contentName,
     contentIds: ctx.contentIds,
     contentType: ctx.contentType,
+    orderId: ctx.orderId,
     externalId: ctx.externalId,
     fbc: ctx.fbc,
     fbp: ctx.fbp,
@@ -62,8 +65,10 @@ export const fireMetaEvent = async (ctx: MetaFireContext): Promise<boolean> => {
     testEventCode,
   });
 
-  if (!ok) logger.warn(`[MetaHelper] CAPI ${ctx.eventName} (${ctx.eventId}) no confirmado`);
-  return ok;
+  if (!result.delivered) {
+    logger.warn(`[MetaHelper] CAPI ${ctx.eventName} (${ctx.eventId}) aceptado para retry: ${result.accepted}`);
+  }
+  return result;
 };
 
 export const buildEventId = (

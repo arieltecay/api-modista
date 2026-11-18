@@ -3,10 +3,11 @@ import type { Request } from 'express';
 import test from 'node:test';
 import { getClientIpAddress, normalizeClientIpAddress } from './clientIpAddress.js';
 
-type RequestIp = Pick<Request, 'ip' | 'socket'>;
+type RequestIp = Pick<Request, 'ip' | 'ips' | 'socket'>;
 
-const makeRequest = (ip: string | undefined, remoteAddress: string | undefined): RequestIp => ({
+const makeRequest = (ip: string | undefined, remoteAddress: string | undefined, ips: string[] = []): RequestIp => ({
   ip,
+  ips,
   socket: { remoteAddress } as RequestIp['socket'],
 });
 
@@ -16,6 +17,13 @@ test('prefers the client IP resolved by Express over the proxy socket', () => {
 
 test('keeps valid IPv6 addresses', () => {
   assert.equal(getClientIpAddress(makeRequest('2001:db8::10', '10.0.0.1')), '2001:db8::10');
+});
+
+test('prefers the first client address from the trusted proxy chain', () => {
+  assert.equal(
+    getClientIpAddress(makeRequest('10.0.0.1', '10.0.0.2', ['2001:db8::20', '10.0.0.1'])),
+    '2001:db8::20',
+  );
 });
 
 test('normalizes IPv4-mapped IPv6 addresses', () => {

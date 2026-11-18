@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 - Aísla la integración de Instagram, valida la firma del webhook y aplica las ventanas de respuesta de Meta.
+- Hace durable la entrega CAPI antes de responder, deduplica eventos con IDs estables y expone entregas directas/reintentadas en el diagnóstico.
+- Separa `ViewContent` del GET de landing, registra el embudo con consentimiento y habilita caché CDN corta para la lectura pública.
 - Exige consentimiento vigente para Meta y elimina señales de navegación al revocarlo.
 - Normaliza y valida la IP del cliente en los eventos CAPI de Meta.
 - Envía el UUID persistente del navegador como `external_id` consistente entre Pixel y CAPI.
