@@ -34,3 +34,13 @@ export const telemetryLimiter = rateLimit({
     legacyHeaders: false,
     message: { success: false, message: 'Demasiadas solicitudes' },
 });
+
+// Telemetría de adquisición: visita + eventos + señales de Pixel por sesión (~40 requests);
+// 600/15min tolera NAT móvil compartido y frena floods.
+export const acquisitionLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 600,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: 'Demasiadas solicitudes' },
+});
