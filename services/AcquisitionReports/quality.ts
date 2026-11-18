@@ -6,7 +6,7 @@ import Inscription from '../../models/Inscription.js';
 import { stage } from './attribution.js';
 import { rangeInfo, ratio } from './envelope.js';
 import type { QualityQuery } from './filters.js';
-import { collectedIn, completedIn } from './payments.js';
+import { collectedIn, completedIn, inscriptionsLookup } from './payments.js';
 import { resolveRange } from './range.js';
 import type { ReportRange } from './range.js';
 import { QUERY_OPTIONS } from './runners.js';
@@ -18,12 +18,17 @@ export const QUALITY_THRESHOLDS = {
   incompleteTagging: { warning: 0.1 },
   orphanEvents: { warning: 0.05 },
   inscriptionsWithoutVisit: { warning: 0.3 },
+  /** Share-based rules cannot escalate beyond info below this many observations. */
+  minimumSample: 10,
+  /** A fresh payment is not flagged as missing its purchase signal until this much time has passed. */
+  paymentGraceMinutes: 15,
   staleAfterHours: 6,
   capiPendingHours: 24,
   futureToleranceMs: 5 * 60 * 1000,
 };
 
 const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
 const FOREVER = { from: new Date(0), to: new Date('2100-01-01T00:00:00.000Z') };
 const PAID_REASONS = ['paid_medium', 'paid_campaign_mapped', 'paid_source_alias'];
 const OPEN_CAPI_STATUSES = ['accepted', 'pending', 'retry'];
@@ -94,13 +99,19 @@ const visitsRow = (range: ReportRange) => {
 const eventsRow = (range: ReportRange) =>
   firstRow(AcquisitionEvent, [
     stage({ $match: { occurredAt: { $gte: range.from, $lt: range.toExclusive } } }),
-    stage({ $lookup: { from: AcquisitionVisit.collection.name, localField: 'visitId', foreignField: 'visitId', as: '__visit' } }),
+    stage({ $lookup: { from: AcquisitionVisit.collection.name, localField: 'visitId', foreignField: 'visitId', pipeline: [{ $project: { _id: 1 } }, { $limit: 1 }], as: '__visit' } }),
+    stage({ $group: { _id: null, universe: { $sum: 1 }, ...counter('orphans', { $eq: [{ $size: '$__visit' }, 0] }, '$occurredAt') } }),
+  ]);
+
+/** Found by reception time: an event claiming a future time may fall outside the range it claims. */
+const futureRow = (range: ReportRange) =>
+  firstRow(AcquisitionEvent, [
+    stage({ $match: { receivedAt: { $gte: range.from, $lt: range.toExclusive } } }),
     stage({
       $group: {
         _id: null,
         universe: { $sum: 1 },
-        ...counter('orphans', { $eq: [{ $size: '$__visit' }, 0] }, '$occurredAt'),
-        ...counter('future', { $gt: ['$occurredAt', { $add: ['$receivedAt', QUALITY_THRESHOLDS.futureToleranceMs] }] }, '$occurredAt'),
+        ...counter('future', { $gt: ['$occurredAt', { $add: ['$receivedAt', QUALITY_THRESHOLDS.futureToleranceMs] }] }, '$receivedAt'),
       },
     }),
   ]);
@@ -109,7 +120,7 @@ const purchasesRow = (range: ReportRange) =>
   firstRow(AcquisitionEvent, [
     stage({ $match: { name: 'purchase', occurredAt: { $gte: range.from, $lt: range.toExclusive } } }),
     stage({ $addFields: { __oid: { $convert: { input: '$inscriptionId', to: 'objectId', onError: null, onNull: null } } } }),
-    stage({ $lookup: { from: Inscription.collection.name, localField: '__oid', foreignField: '_id', as: '__inscription' } }),
+    inscriptionsLookup('__oid', '__inscription'),
     stage({
       $group: {
         _id: null,
@@ -136,13 +147,14 @@ const inscriptionsWithoutVisitRow = (range: ReportRange) =>
   ]);
 
 /** Paid, consenting inscriptions whose journey is linked (has a lead) but whose purchase signal is missing. */
-const paymentsWithoutSignalRow = (range: ReportRange) =>
-  firstRow(Inscription, [
+const paymentsWithoutSignalRow = (range: ReportRange, now: Date) => {
+  const settledBefore = new Date(Math.min(range.toExclusive.getTime(), now.getTime() - QUALITY_THRESHOLDS.paymentGraceMinutes * MINUTE_MS));
+  return firstRow(Inscription, [
     stage({
       $match: {
         metaMarketingConsent: true,
         paymentStatus: 'paid',
-        $expr: { $let: { vars: { i: '$$ROOT' }, in: completedIn('$$i', range.from, range.toExclusive) } },
+        $expr: { $let: { vars: { i: '$$ROOT' }, in: completedIn('$$i', range.from, settledBefore) } },
       },
     }),
     leadLookup('lead', '__lead'),
@@ -150,6 +162,7 @@ const paymentsWithoutSignalRow = (range: ReportRange) =>
     stage({ $match: { $expr: { $gt: [{ $size: '$__lead' }, 0] } } }),
     stage({ $group: { _id: null, universe: { $sum: 1 }, ...counter('missingSignal', { $eq: [{ $size: '$__purchase' }, 0] }, '$fechaInscripcion') } }),
   ]);
+};
 
 const attemptsRow = (range: ReportRange, now: Date) => {
   const cutoff = new Date(now.getTime() - QUALITY_THRESHOLDS.capiPendingHours * HOUR_MS);
@@ -183,6 +196,8 @@ const lastActivity = async (): Promise<Date | null> => {
 
 interface RuleSpec {
   code: string;
+  /** Severity comes from a percentage, so a tiny sample is capped at info. */
+  shareBased?: boolean;
   measure: Measure;
   severity: (affected: number, percentage: number | null) => QualitySeverity | undefined;
   explanation: string;
@@ -199,7 +214,9 @@ const always = (severity: QualitySeverity) => (affected: number): QualitySeverit
 
 const toRule = (spec: RuleSpec): QualityRule | undefined => {
   const percentage = ratio(spec.measure.affected, spec.measure.universe);
-  const severity = spec.measure.affected > 0 ? spec.severity(spec.measure.affected, percentage) : undefined;
+  const computed = spec.measure.affected > 0 ? spec.severity(spec.measure.affected, percentage) : undefined;
+  const smallSample = spec.shareBased && spec.measure.universe < QUALITY_THRESHOLDS.minimumSample;
+  const severity = computed && smallSample ? 'info' : computed;
   return severity === undefined
     ? undefined
     : {
@@ -217,30 +234,31 @@ const toRule = (spec: RuleSpec): QualityRule | undefined => {
 
 export const getQualityReport = async (filters: QualityQuery, now = new Date()): Promise<QualityResponse> => {
   const range = resolveRange(filters);
-  const [visits, events, purchases, withoutVisit, withoutSignal, attempts, last] = await Promise.all([
-    visitsRow(range), eventsRow(range), purchasesRow(range), inscriptionsWithoutVisitRow(range), paymentsWithoutSignalRow(range), attemptsRow(range, now), lastActivity(),
+  const [visits, events, future, purchases, withoutVisit, withoutSignal, attempts, last] = await Promise.all([
+    visitsRow(range), eventsRow(range), futureRow(range), purchasesRow(range), inscriptionsWithoutVisitRow(range),
+    paymentsWithoutSignalRow(range, now), attemptsRow(range, now), lastActivity(),
   ]);
 
   const t = QUALITY_THRESHOLDS;
   const paidUniverse = Number(visits?.paidVisits ?? 0);
   const specs: RuleSpec[] = [
-    { code: 'UNKNOWN_CHANNEL_RATE_HIGH', measure: measure(visits, 'unknown'), severity: tiers(t.unknownChannel.warning, t.unknownChannel.critical),
+    { code: 'UNKNOWN_CHANNEL_RATE_HIGH', shareBased: true, measure: measure(visits, 'unknown'), severity: tiers(t.unknownChannel.warning, t.unknownChannel.critical),
       explanation: 'Una parte alta de las visitas no se pudo clasificar en ningún canal.', action: 'Revisá las UTMs de las campañas activas y el convenio de nombres; filtrá recorridos por canal unknown.' },
-    { code: 'UTM_SOURCE_WITHOUT_MEDIUM', measure: measure(visits, 'utmWithoutMedium'), severity: infoUntil(t.incompleteTagging.warning),
+    { code: 'UTM_SOURCE_WITHOUT_MEDIUM', shareBased: true, measure: measure(visits, 'utmWithoutMedium'), severity: infoUntil(t.incompleteTagging.warning),
       explanation: 'Hay visitas con utm_source pero sin utm_medium, así que no se puede distinguir pago de orgánico.', action: 'Agregá utm_medium a los enlaces (cpc, paid_social, social, email).' },
-    { code: 'PAID_MEDIUM_WITHOUT_CAMPAIGN', measure: measure(visits, 'paidWithoutCampaign', paidUniverse), severity: infoUntil(t.incompleteTagging.warning),
+    { code: 'PAID_MEDIUM_WITHOUT_CAMPAIGN', shareBased: true, measure: measure(visits, 'paidWithoutCampaign', paidUniverse), severity: infoUntil(t.incompleteTagging.warning),
       explanation: 'Hay visitas pagas sin utm_campaign, lo que impide medir por campaña.', action: 'Agregá utm_campaign a los anuncios pagos.' },
     { code: 'SOCIAL_SOURCE_CLASSIFIED_AS_PAID_WITHOUT_EVIDENCE', measure: measure(visits, 'paidWithoutEvidence', paidUniverse), severity: always('critical'),
       explanation: 'Hay visitas clasificadas como pagas sin un medio pago, una campaña mapeada ni un alias de anuncio.', action: 'Revisá el clasificador: no debe inferir pago solo por la red de origen.' },
-    { code: 'ORPHAN_EVENT', measure: measure(events, 'orphans'), severity: infoUntil(t.orphanEvents.warning),
+    { code: 'ORPHAN_EVENT', shareBased: true, measure: measure(events, 'orphans'), severity: infoUntil(t.orphanEvents.warning),
       explanation: 'Hay eventos cuya visita no existe (llegaron antes que la visita o su registro falló).', action: 'Si crece, revisá el orden de envío del cliente y los errores de /visits.' },
-    { code: 'EVENT_TIME_IN_FUTURE', measure: measure(events, 'future'), severity: always('warning'),
+    { code: 'EVENT_TIME_IN_FUTURE', measure: measure(future, 'future'), severity: always('warning'),
       explanation: 'Hay eventos con la hora del navegador adelantada respecto de la recepción.', action: 'Sospechá de relojes desfasados o de clientes que no son el sitio.' },
     { code: 'PURCHASE_WITHOUT_PAYMENT', measure: measure(purchases, 'withoutPayment'), severity: always('critical'),
       explanation: 'Hay señales de compra sin dinero cobrado detrás.', action: 'Compará esas inscripciones con los pagos reales antes de confiar en las campañas.' },
     { code: 'PAYMENT_WITHOUT_PURCHASE_SIGNAL', measure: measure(withoutSignal, 'missingSignal'), severity: always('warning'),
       explanation: 'Hay inscripciones pagadas con recorrido que no generaron la señal de compra.', action: 'Revisá que el pago pase por fireMetaEvent y que el flag esté activo.' },
-    { code: 'INSCRIPTION_WITHOUT_VISIT', measure: measure(withoutVisit, 'withoutVisit'), severity: tiers(t.inscriptionsWithoutVisit.warning),
+    { code: 'INSCRIPTION_WITHOUT_VISIT', shareBased: true, measure: measure(withoutVisit, 'withoutVisit'), severity: tiers(t.inscriptionsWithoutVisit.warning),
       explanation: 'Hay inscripciones con consentimiento que no se pudieron vincular a una visita.', action: 'Verificá que la web envíe /visits antes del formulario y que el visitante coincida.' },
     { code: 'CAPI_PENDING_TOO_LONG', measure: measure(attempts, 'tooLong'), severity: always('warning'),
       explanation: `Hay eventos CAPI sin resolver hace más de ${t.capiPendingHours} horas.`, action: 'Revisá el cron de la DLQ de Meta y las credenciales.' },

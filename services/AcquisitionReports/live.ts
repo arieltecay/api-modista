@@ -32,7 +32,7 @@ export const getLiveReport = async ({ windowMinutes }: LiveQuery, now = new Date
       stage({ $match: received }),
       stage({ $sort: { receivedAt: -1 } }),
       stage({ $limit: RECENT_EVENTS }),
-      stage({ $lookup: { from: AcquisitionVisit.collection.name, localField: 'visitId', foreignField: 'visitId', as: 'visit' } }),
+      stage({ $lookup: { from: AcquisitionVisit.collection.name, localField: 'visitId', foreignField: 'visitId', pipeline: [{ $project: { _id: 0, classification: { channelGroup: 1 } } }], as: 'visit' } }),
       stage({ $project: { _id: 0, name: 1, receivedAt: 1, visitId: 1, path: 1, courseId: 1, channel: '$visit.classification.channelGroup' } }),
     ]).option(QUERY_OPTIONS),
   ]);

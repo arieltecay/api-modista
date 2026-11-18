@@ -39,7 +39,7 @@ export const qualityQuerySchema = z.object(rangeFields);
 
 export const journeysQuerySchema = z.object({
   ...rangeFields,
-  page: z.coerce.number().int().min(1).max(10_000).default(1),
+  page: z.coerce.number().int().min(1).max(1000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   channel,
   ...visitFields,

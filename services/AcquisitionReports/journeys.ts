@@ -1,10 +1,11 @@
+import { Types } from 'mongoose';
 import AcquisitionEvent from '../../models/AcquisitionEvent/index.js';
 import AcquisitionVisit from '../../models/AcquisitionVisit/index.js';
 import Inscription from '../../models/Inscription.js';
 import { stage, visitFilterMatch } from './attribution.js';
 import { rangeInfo } from './envelope.js';
 import type { JourneysQuery } from './filters.js';
-import { collectedIn } from './payments.js';
+import { collectedIn, inscriptionsLookup } from './payments.js';
 import { resolveRange } from './range.js';
 import type { ReportRange } from './range.js';
 import { QUERY_OPTIONS } from './runners.js';
@@ -48,6 +49,7 @@ const pagePipeline = (match: Record<string, unknown>, skip: number, limit: numbe
       let: { visit: '$visitId' },
       pipeline: [
         { $match: { $expr: { $eq: ['$visitId', '$$visit'] } } },
+        { $sort: { occurredAt: 1 } },
         { $limit: EVENTS_PER_VISIT },
         { $project: { _id: 0, name: 1, inscriptionId: 1 } },
       ],
@@ -65,7 +67,7 @@ const pagePipeline = (match: Record<string, unknown>, skip: number, limit: numbe
       },
     },
   }),
-  stage({ $lookup: { from: Inscription.collection.name, localField: '__inscriptionIds', foreignField: '_id', as: '__inscriptions' } }),
+  inscriptionsLookup('__inscriptionIds', '__inscriptions'),
   stage({
     $project: {
       _id: 0,
@@ -94,6 +96,7 @@ const toRow = (journey: JourneyAggregate): JourneyRow => ({
   hasPurchase: journey.eventNames.includes('purchase'),
   revenue: journey.revenue,
   eventCount: journey.eventNames.length,
+  truncated: journey.eventNames.length >= EVENTS_PER_VISIT,
   ...(journey.landingSlug === undefined ? {} : { landingSlug: journey.landingSlug }),
 });
 
@@ -126,12 +129,18 @@ export const getJourneyDetail = async (visitId: string, now = new Date()): Promi
     .maxTimeMS(QUERY_OPTIONS.maxTimeMS)
     .lean();
 
-  const inscriptionIds = events.filter((event) => event.name === 'lead' && event.inscriptionId).map((event) => event.inscriptionId as string);
-  const conversions = await Inscription.aggregate<{ _id: { toString(): string }; paymentStatus: string; collected: number }>([
-    stage({ $match: { $expr: { $in: [{ $toString: '$_id' }, inscriptionIds] } } }),
-    stage({ $project: { paymentStatus: 1, collected: collectedEver } }),
-    stage({ $sort: { _id: 1 } }),
-  ]).option(QUERY_OPTIONS);
+  const inscriptionIds = events
+    .filter((event) => event.name === 'lead' && event.inscriptionId && Types.ObjectId.isValid(event.inscriptionId))
+    .map((event) => new Types.ObjectId(event.inscriptionId));
+  // Most visits have no lead: skip the lookup entirely instead of scanning inscriptions for nothing.
+  const conversions =
+    inscriptionIds.length === 0
+      ? []
+      : await Inscription.aggregate<{ _id: { toString(): string }; paymentStatus: string; collected: number }>([
+          stage({ $match: { _id: { $in: inscriptionIds } } }),
+          stage({ $project: { paymentStatus: 1, collected: collectedEver } }),
+          stage({ $sort: { _id: 1 } }),
+        ]).option(QUERY_OPTIONS);
 
   return {
     generatedAt: now.toISOString(),
@@ -165,6 +174,7 @@ export const getJourneyDetail = async (visitId: string, now = new Date()): Promi
         ...(event.courseId === undefined ? {} : { courseId: event.courseId }),
       })),
       conversions: conversions.map((row) => ({ inscriptionId: row._id.toString(), paymentStatus: row.paymentStatus, collected: row.collected })),
+      truncated: events.length >= EVENTS_PER_VISIT,
     },
   };
 };

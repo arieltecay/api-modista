@@ -26,9 +26,11 @@ const query = (overrides: Record<string, unknown> = {}) =>
   journeysQuerySchema.parse({ from: '2026-11-10', to: '2026-11-16', timezone: 'America/Argentina/Tucuman', ...overrides });
 
 const ids: Record<string, string> = {};
+const visitors: string[] = [];
 
 const seedJourneys = async () => {
   const [v1, v2, v3, v4] = Array.from({ length: 4 }, () => randomUUID());
+  visitors.push(v1, v2, v3, v4);
   ids.buyer = await visit({ visitorId: v1, at: '2026-11-10T12:00:00.000Z', channel: 'meta_paid', platform: 'instagram', landing: 'curso-a', device: 'mobile', campaign: 'black', source: 'instagram', medium: 'cpc' });
   const inscriptionId = await inscription({
     createdAt: '2026-11-10T12:10:00.000Z', price: 100000, status: 'paid', paymentDate: '2026-11-10T13:00:00.000Z', payments: [[100000, '2026-11-10T13:00:00.000Z']],
@@ -61,6 +63,7 @@ test('lists the visits of the range newest first with their furthest step and ou
     [buyer.channelGroup, buyer.sourcePlatform, buyer.landingSlug, buyer.device, buyer.maxStep, buyer.hasLead, buyer.hasPurchase, buyer.revenue, buyer.eventCount],
     ['meta_paid', 'instagram', 'curso-a', 'mobile', 'purchase', true, true, 100000, 4],
   );
+  assert.equal(buyer.truncated, false);
   const bounce = data.journeys[1];
   assert.deepEqual([bounce.maxStep, bounce.hasLead, bounce.hasPurchase, bounce.revenue, bounce.eventCount], ['visit', false, false, 0, 1]);
   assert.equal(data.journeys[0].maxStep, 'form_view');
@@ -77,7 +80,7 @@ test('paginates on the server and reports totals', async () => {
 });
 
 test('bounds page and limit', () => {
-  for (const params of [{ page: '0' }, { limit: '0' }, { limit: '101' }, { page: 'x' }, { limit: '1.5' }]) {
+  for (const params of [{ page: '0' }, { page: '1001' }, { limit: '0' }, { limit: '101' }, { page: 'x' }, { limit: '1.5' }]) {
     assert.equal(journeysQuerySchema.safeParse({ from: '2026-11-10', to: '2026-11-16', ...params }).success, false, JSON.stringify(params));
   }
 });
@@ -93,7 +96,23 @@ test('filters apply to the visit', async () => {
 test('the list never exposes visitor ids or personal data', async () => {
   await seedJourneys();
   const serialized = JSON.stringify(await getJourneys(query(), NOW));
-  for (const secret of ['example.com', 'Nombre', 'Apellido', '3815550000', 'visitorId']) assert.ok(!serialized.includes(secret), secret);
+  for (const secret of ['example.com', 'Nombre', 'Apellido', '3815550000', 'visitorId', ...visitors]) assert.ok(!serialized.includes(secret), secret);
+});
+
+test('a visit with more events than the cap is flagged as truncated, never silently wrong', async () => {
+  const visitorId = randomUUID();
+  const visitId = await visit({ visitorId, at: '2026-11-11T12:00:00.000Z', channel: 'direct' });
+  const base = new Date('2026-11-11T12:00:01.000Z').getTime();
+  await AcquisitionEvent.insertMany(
+    Array.from({ length: 501 }, (_, i) => ({
+      eventId: randomUUID(), visitId, visitorId, name: 'page_view', occurredAt: new Date(base + i), receivedAt: new Date(base + i), source: 'browser',
+    })),
+  );
+  const [row] = (await getJourneys(query(), NOW)).data.journeys;
+  assert.deepEqual([row.eventCount, row.truncated], [500, true]);
+  const detail = await getJourneyDetail(visitId, NOW);
+  assert.equal(detail?.data.truncated, true);
+  assert.equal(detail?.data.events.length, 500);
 });
 
 test('detail: ordered timeline, attribution and linked conversions without personal data', async () => {

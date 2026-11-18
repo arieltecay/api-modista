@@ -1,3 +1,7 @@
+import type { PipelineStage } from 'mongoose';
+import Inscription from '../../models/Inscription.js';
+import { stage } from './attribution.js';
+
 /**
  * Mongo expressions over an inscription (`inv` is a variable such as '$$i') that decide what
  * counts as a purchase, a partial payment and collected revenue inside a time window. Revenue is
@@ -60,3 +64,10 @@ export const partialIn = (inv: string, start: Expression, end: Expression): Expr
 });
 
 export const createdIn = (start: Expression, end: Expression): Expression => inWindow('$fechaInscripcion', start, end);
+
+/** Only the fields the money expressions read: names, emails and phones never enter a pipeline. */
+const MONEY_FIELDS = { paymentStatus: 1, paymentHistory: 1, paymentDate: 1, depositAmount: 1, depositDate: 1, coursePrice: 1, fechaInscripcion: 1 };
+
+/** `$lookup` of inscriptions by `_id` that keeps only what is needed to price them. */
+export const inscriptionsLookup = (localField: string, as: string): PipelineStage =>
+  stage({ $lookup: { from: Inscription.collection.name, localField, foreignField: '_id', pipeline: [{ $project: MONEY_FIELDS }], as } });

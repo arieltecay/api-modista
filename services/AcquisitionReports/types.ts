@@ -98,6 +98,8 @@ export interface JourneyRow {
   hasPurchase: boolean;
   revenue: number;
   eventCount: number;
+  /** True when the visit has more events than the cap, so the step and flags may be incomplete. */
+  truncated: boolean;
   landingSlug?: string;
 }
 
@@ -128,6 +130,7 @@ export interface JourneyDetailData {
   };
   events: Array<{ name: string; occurredAt: string; source: string; path?: string; courseId?: string }>;
   conversions: Array<{ inscriptionId: string; paymentStatus: string; collected: number }>;
+  truncated: boolean;
 }
 
 export interface JourneyDetailResponse {

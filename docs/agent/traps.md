@@ -28,3 +28,7 @@
 - El embudo de cohorte cuenta por paso más lejano: un evento faltante no rompe el embudo, pero tampoco se ve; `event_period` cuenta eventos por separado y puede dar un paso mayor que el anterior. Evidencia: `services/AcquisitionReports/funnel.ts`.
 - `live` y `TRACKING_STALE` miden por hora de recepción del servidor (`receivedAt`/`updatedAt`/`startedAt`), no por la hora del navegador. Evidencia: `services/AcquisitionReports/live.ts`, `quality.ts`.
 - `quality` recorre eventos con `$lookup` por visita en el rango (máx 92 días); con volumen alto acotar el rango. Los umbrales viven en `QUALITY_THRESHOLDS` y no son benchmarks.
+- Los `$lookup` de reportes proyectan solo lo necesario (`inscriptionsLookup` trae solo campos de dinero): sin proyección entran emails y teléfonos a memoria. Evidencia: `services/AcquisitionReports/payments.ts`.
+- Con filtro `course` el embudo solo cuenta eventos de ese curso, y el tope es "visitas que tocaron ese curso". Las reglas de calidad basadas en porcentaje no pasan de `info` con menos de 10 observaciones, y un pago reciente tiene 15 min de gracia antes de `PAYMENT_WITHOUT_PURCHASE_SIGNAL`. Evidencia: `quality.ts`.
+- Una visita con más de 500 eventos se marca `truncated` (los flags y el paso máximo pueden estar incompletos). `rawAttribution` es texto libre del visitante: el panel nunca debe renderizarlo como HTML.
+- `quality` y `event_period` siguen escaneando `Inscription` (sin índice por consentimiento/fechas de pago); indexar si la colección crece.

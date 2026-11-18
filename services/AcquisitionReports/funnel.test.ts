@@ -123,3 +123,21 @@ test('funnel responses carry no personal identifiers', async () => {
   const serialized = JSON.stringify(await getFunnelReport(query(), NOW));
   assert.ok(!/[0-9a-f]{8}-[0-9a-f]{4}-/.test(serialized));
 });
+
+test('course filter: the furthest step counts only events of that course', async () => {
+  const visitorId = randomUUID();
+  const visitId = await visit({ visitorId, at: at('10', '12:00:00'), channel: 'meta_paid', platform: 'instagram' });
+  await acquisitionEvent({ visitId, visitorId, name: 'course_detail_view', at: at('10', '12:01:00'), courseId: 'c1' });
+  await acquisitionEvent({ visitId, visitorId, name: 'purchase', at: at('10', '12:30:00'), courseId: 'c2', source: 'server' });
+
+  const forC1 = await getFunnelReport(query({ course: 'c1' }), NOW);
+  assert.deepEqual(forC1.data.steps.map((step) => step.visits), [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const forC2 = await getFunnelReport(query({ course: 'c2' }), NOW);
+  assert.deepEqual(forC2.data.steps.map((step) => step.visits), [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+});
+
+test('event_period with a course filter: the top counts visits that touched that course', async () => {
+  await seedFunnel();
+  const report = await getFunnelReport(query({ reportingMode: 'event_period', course: 'c1' }), NOW);
+  assert.equal(report.data.steps[0].visits, 2); // visits A and B logged events for c1; C, D and E did not
+});

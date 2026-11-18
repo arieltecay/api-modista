@@ -1,10 +1,9 @@
 import type { PipelineStage } from 'mongoose';
 import AcquisitionEvent from '../../models/AcquisitionEvent/index.js';
 import AcquisitionVisit from '../../models/AcquisitionVisit/index.js';
-import Inscription from '../../models/Inscription.js';
 import { attributedFilter, attributionStages, hasVisitFilters, stage, visitFilterMatch, visitsInRange } from './attribution.js';
 import type { ReportQuery } from './filters.js';
-import { collectedIn, completedIn, createdIn, partialIn } from './payments.js';
+import { collectedIn, completedIn, createdIn, inscriptionsLookup, partialIn } from './payments.js';
 import type { ReportRange } from './range.js';
 
 const SUM_OUTCOMES = {
@@ -39,7 +38,7 @@ const cohortOutcomeStages = (windowMs: number): PipelineStage[] => {
         __inscriptionIds: { $map: { input: '$__leads', as: 'lead', in: { $convert: { input: '$$lead.inscriptionId', to: 'objectId', onError: null, onNull: null } } } },
       },
     }),
-    stage({ $lookup: { from: Inscription.collection.name, localField: '__inscriptionIds', foreignField: '_id', as: '__inscriptions' } }),
+    inscriptionsLookup('__inscriptionIds', '__inscriptions'),
     stage({
       $addFields: {
         leads: { $size: '$__inscriptions' },

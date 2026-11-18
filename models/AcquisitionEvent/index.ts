@@ -32,6 +32,8 @@ AcquisitionEventSchema.index({ courseId: 1, occurredAt: -1 });
 // Consent revocation deletes by visitor; the live panel and freshness check read the newest receipts.
 AcquisitionEventSchema.index({ visitorId: 1 });
 AcquisitionEventSchema.index({ receivedAt: -1 });
+// Range scans of the quality report.
+AcquisitionEventSchema.index({ occurredAt: -1 });
 
 const AcquisitionEvent = model<AcquisitionEventPersistence>('AcquisitionEvent', AcquisitionEventSchema);
 

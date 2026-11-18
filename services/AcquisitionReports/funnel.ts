@@ -10,6 +10,10 @@ import type { ReportRange } from './range.js';
 import { FUNNEL_STEPS } from './steps.js';
 import type { FunnelData, FunnelStepRow, ReportEnvelope } from './types.js';
 
+/** With a course filter only that course's events count, so a purchase of another course is not a purchase here. */
+const courseEvents = (course: string | undefined) =>
+  course === undefined ? '$__events' : { $filter: { input: '$__events', as: 'event', cond: { $eq: ['$$event.courseId', course] } } };
+
 /** Per visit, the index of the furthest funnel step among its events inside the outcome window. */
 const cohortFunnelPipeline = (range: ReportRange, filters: FunnelQuery, windowMs: number): PipelineStage[] => [
   visitsInRange(range, filters),
@@ -29,22 +33,25 @@ const cohortFunnelPipeline = (range: ReportRange, filters: FunnelQuery, windowMs
   ...(filters.course === undefined ? [] : [stage({ $match: { __events: { $elemMatch: { courseId: filters.course } } } })]),
   stage({
     $group: {
-      _id: { $max: { $map: { input: '$__events', as: 'event', in: { $indexOfArray: [[...FUNNEL_STEPS], '$$event.name'] } } } },
+      _id: { $max: { $map: { input: courseEvents(filters.course), as: 'event', in: { $indexOfArray: [[...FUNNEL_STEPS], '$$event.name'] } } } },
       visits: { $sum: 1 },
     },
   }),
 ];
 
-/** Distinct visits that had each step inside the range, whatever the date of the visit. */
-const periodFunnelPipeline = (range: ReportRange, filters: FunnelQuery): PipelineStage[] => [
+/**
+ * Distinct visits per funnel step inside the range, whatever the date of the visit. In `visits`
+ * mode it counts, as one group, the visits that logged any event of the filtered course.
+ */
+const periodFunnelPipeline = (range: ReportRange, filters: FunnelQuery, mode: 'steps' | 'visits'): PipelineStage[] => [
   stage({
     $match: {
       occurredAt: { $gte: range.from, $lt: range.toExclusive },
-      name: { $in: [...FUNNEL_STEPS] },
+      ...(mode === 'steps' ? { name: { $in: [...FUNNEL_STEPS] } } : {}),
       ...(filters.course === undefined ? {} : { courseId: filters.course }),
     },
   }),
-  stage({ $group: { _id: { visit: '$visitId', name: '$name' } } }),
+  stage({ $group: { _id: { visit: '$visitId', name: mode === 'steps' ? '$name' : null } } }),
   stage({ $lookup: { from: AcquisitionVisit.collection.name, localField: '_id.visit', foreignField: 'visitId', as: 'visit' } }),
   stage({ $unwind: '$visit' }),
   ...(hasVisitFilters(filters) ? [stage({ $match: visitFilterMatch(filters, 'visit.') })] : []),
@@ -77,12 +84,16 @@ export const getFunnelReport = async (filters: FunnelQuery, now = new Date()): P
     return buildEnvelope(filters, range, now, { steps: toRows(top, reached, true), independentCounts: false });
   }
 
-  const [counts, visits] = await Promise.all([
-    AcquisitionEvent.aggregate<{ _id: string; visits: number }>(periodFunnelPipeline(range, filters)).option(QUERY_OPTIONS),
-    runVisitPipeline(range, filters, undefined),
+  const run = (mode: 'steps' | 'visits') =>
+    AcquisitionEvent.aggregate<{ _id: string | null; visits: number }>(periodFunnelPipeline(range, filters, mode)).option(QUERY_OPTIONS);
+  // With a course filter the top is the visits that touched that course, not every visit of the range.
+  const [counts, top] = await Promise.all([
+    run('steps'),
+    filters.course === undefined
+      ? runVisitPipeline(range, filters, undefined).then((visits) => visits.rows.reduce((sum, row) => sum + row.visits, 0))
+      : run('visits').then(([row]) => row?.visits ?? 0),
   ]);
   const byStep = new Map(counts.map((row) => [row._id, row.visits]));
-  const top = visits.rows.reduce((sum, row) => sum + row.visits, 0);
   const reached = FUNNEL_STEPS.map((step) => byStep.get(step) ?? 0);
   return buildEnvelope(filters, range, now, { steps: toRows(top, reached, false), independentCounts: true });
 };

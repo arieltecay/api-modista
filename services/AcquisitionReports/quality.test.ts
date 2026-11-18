@@ -70,7 +70,7 @@ test('UTM_SOURCE_WITHOUT_MEDIUM and PAID_MEDIUM_WITHOUT_CAMPAIGN count the incom
   const utm = await ruleOf('UTM_SOURCE_WITHOUT_MEDIUM', FRESH);
   assert.deepEqual([utm?.severity, utm?.affected, utm?.universe], ['info', 1, 20]);
   const paid = await ruleOf('PAID_MEDIUM_WITHOUT_CAMPAIGN', FRESH);
-  assert.deepEqual([paid?.severity, paid?.affected, paid?.universe], ['warning', 1, 1]);
+  assert.deepEqual([paid?.severity, paid?.affected, paid?.universe], ['info', 1, 1]); // 1 paid visit is too small a sample to escalate
 });
 
 test('SOCIAL_SOURCE_CLASSIFIED_AS_PAID_WITHOUT_EVIDENCE is critical when a paid visit has no paid reason', async () => {
@@ -168,4 +168,31 @@ test('rules carry an explanation and action, and the report holds no personal da
   for (const rule of result.data.rules) assert.ok(rule.explanation.length > 10 && rule.action.length > 10, rule.code);
   const serialized = JSON.stringify(result);
   assert.ok(!/[0-9a-f]{8}-[0-9a-f]{4}-/.test(serialized));
+});
+
+test('share-based rules never escalate beyond info on a tiny sample', async () => {
+  await visits(2, { channel: 'unknown' }); // 100% unknown, but only 2 visits
+  assert.equal((await ruleOf('UNKNOWN_CHANNEL_RATE_HIGH', FRESH))?.severity, 'info');
+  await visits(8, { channel: 'unknown' }); // 10 visits: now a real sample
+  assert.equal((await ruleOf('UNKNOWN_CHANNEL_RATE_HIGH', FRESH))?.severity, 'critical');
+});
+
+test('PAYMENT_WITHOUT_PURCHASE_SIGNAL gives a fresh payment a grace period before flagging it', async () => {
+  const [v] = await visits(1);
+  const id = await inscription({
+    createdAt: '2026-11-11T12:10:00.000Z', price: 1000, status: 'paid', consent: true,
+    payments: [[1000, '2026-11-11T13:55:00.000Z']], paymentDate: '2026-11-11T13:55:00.000Z',
+  });
+  await lead(v.visitId, v.visitorId, id, '2026-11-11T12:10:00.000Z');
+  assert.equal(await ruleOf('PAYMENT_WITHOUT_PURCHASE_SIGNAL', new Date('2026-11-11T14:00:00.000Z')), undefined, '5 minutes after the payment');
+  assert.equal((await ruleOf('PAYMENT_WITHOUT_PURCHASE_SIGNAL', new Date('2026-11-11T14:30:00.000Z')))?.affected, 1, '35 minutes after');
+});
+
+test('EVENT_TIME_IN_FUTURE is found by reception time, even when the claimed time falls outside the range', async () => {
+  const [v] = await visits(1);
+  await acquisitionEvent({
+    visitId: v.visitId, visitorId: v.visitorId, name: 'page_view', at: '2026-11-25T12:00:00.000Z', receivedAt: '2026-11-11T12:30:00.000Z',
+  });
+  const future = await ruleOf('EVENT_TIME_IN_FUTURE', FRESH);
+  assert.deepEqual([future?.affected, future?.universe], [1, 1]);
 });
