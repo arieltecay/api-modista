@@ -17,3 +17,11 @@
 - Los eventos `purchase` de Acquisition no guardan `value`: los cuatro sitios de `fireMetaEvent` mandan precio de lista o total cobrado según el caso. El revenue sale siempre de los pagos.
 - La reconciliación solo avanza intentos existentes: crearlos resucitaría, sin `visitorId`, datos ya purgados por una revocación. Un evento cuyo espejo falló no tiene intento; la entrega CAPI se mide desde el outbox. Evidencia: `services/Acquisition/signals.ts`.
 - `MetaEventDlq` no indexa `updatedAt`: la reconciliación escanea la colección; hoy es chica (payloads depurados), indexar si crece.
+- Rangos: solo `resolveRange` convierte días locales en instantes UTC `[from, to)` (DST: días de 23/25 h); ningún controller arma límites por su cuenta. Evidencia: `services/AcquisitionReports/range.ts`.
+- `event_period` hace `COLLSCAN` sobre `Inscription` (el `$or` de fechas de pago no tiene índices); aceptable con pocos miles de inscripciones, indexar `paymentDate`/`paymentHistory.date`/`fechaInscripcion` si crece. El pipeline de visitas usa el índice `startedAt`. Evidencia: `explain` de `periodOutcomePipeline`.
+- El filtro por curso aún no existe en `overview/channels` (las visitas no llevan curso; entra con el embudo).
+- Los totales de visitantes salen de un `$facet` aparte: sumar `visitors` por fila duplica al visitante que pasa por varios canales.
+- Pago parcial = cobró algo dentro de la ventana y no completó dentro de ella (por pagos, no por el estado actual), así que no cambia cuando la inscripción se salda después. En cohorte las ventanas se miden desde `startedAt` de la visita, no desde el lead. Evidencia: `services/AcquisitionReports/payments.ts`.
+- Revenue legado sin historial: `depositAmount` es lo cobrado (como el dashboard actual); una seña pendiente cuenta como cobrada pero no como compra. Evidencia: tests de `channels.test.ts`.
+- `first_touch`/`last_non_direct` hacen un `$lookup` por visita (no por visitante) y usan `allowDiskUse`; sin medir con volumen real. Los empates de `startedAt` se desempatan por `visitId`.
+- Los errores de los reportes se mapean en `handleReportError` (400/504/500 con mensajes fijos); el handler global devolvería el texto crudo de Mongo. Evidencia: `controllers/AcquisitionReports/index.ts`.

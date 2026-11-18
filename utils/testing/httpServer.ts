@@ -9,6 +9,7 @@ export interface TestResponse {
 }
 
 export interface TestServer {
+  get: (path: string, headers?: Record<string, string>) => Promise<TestResponse>;
   post: (path: string, body: unknown, headers?: Record<string, string>) => Promise<TestResponse>;
   close: () => Promise<void>;
 }
@@ -24,17 +25,20 @@ export const startTestServer = async (mount: (app: Express) => void): Promise<Te
   });
   const { port } = server.address() as AddressInfo;
 
+  const send = async (method: string, path: string, headers: Record<string, string>, body?: unknown) => {
+    const response = await fetch(`http://127.0.0.1:${port}${path}`, {
+      method,
+      headers: { 'content-type': 'application/json', ...headers },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const text = await response.text();
+    const isJson = response.headers.get('content-type')?.includes('application/json');
+    return { status: response.status, body: isJson ? JSON.parse(text) : text || undefined };
+  };
+
   return {
-    post: async (path, body, headers = {}) => {
-      const response = await fetch(`http://127.0.0.1:${port}${path}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', ...headers },
-        body: JSON.stringify(body),
-      });
-      const text = await response.text();
-      const isJson = response.headers.get('content-type')?.includes('application/json');
-      return { status: response.status, body: isJson ? JSON.parse(text) : text || undefined };
-    },
+    get: (path, headers = {}) => send('GET', path, headers),
+    post: (path, body, headers = {}) => send('POST', path, headers, body),
     close: () =>
       new Promise((resolve) => {
         server.closeAllConnections();

@@ -24,6 +24,7 @@ import cronRoutes from './cron.js';
 import metaDlqRoutes from './admin/meta-dlq.js';
 import privacyRoutes from './privacy/privacyRoutes.js';
 import acquisitionRoutes from './Acquisition/index.js';
+import acquisitionReportsRoutes from './admin/acquisition.js';
 
 // Rate limiter para endpoints públicos (lectura)
 const publicLimiter = rateLimit({
@@ -67,6 +68,7 @@ router.use('/chat', chatRoutes);
 
 // Admin: Meta CAPI DLQ management
 router.use('/admin/meta-dlq', metaDlqRoutes);
+router.use('/admin/acquisition', acquisitionReportsRoutes);
 
 // Cron jobs (Vercel Cron invoca estos endpoints; protegidos con CRON_SECRET)
 router.use('/cron', cronRoutes);

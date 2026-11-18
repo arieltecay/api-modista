@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Agrega los endpoints admin `overview` y `channels` de adquisición (cohorte o período, tres perspectivas de atribución y revenue desde pagos).
 - Registra `lead`, `initiate_checkout` y `purchase` server-side en adquisición y el estado de entrega CAPI, con reconciliación desde el outbox.
 - Agrega la ingesta de visitas, eventos y señales de Pixel de adquisición (detrás de `ACQUISITION_TRACKING_ENABLED`) y su borrado al revocar el consentimiento.
 - Agrega los modelos de visitas, eventos e intentos de señal de adquisición (aún sin endpoints).
