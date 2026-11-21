@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- El admin puede encender la consulta de inscripciones por WhatsApp y editar los textos del bot; Instagram limita a 6 consultas por hora por cuenta.
 - Agrega `npm run test:local:instagram` y corrige que el celular se tomara de los dígitos del email al consultar inscripciones.
 - Instagram solo responde los temas que el admin activa por bloque y frase; los demás DMs quedan para respuesta humana.
 - Los webhooks de WhatsApp e Instagram ignoran reintentos duplicados y reintentan si falla el envío.

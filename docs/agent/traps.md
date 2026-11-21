@@ -39,3 +39,5 @@
 - Un mensaje que falla 3 veces se descarta (deja de responder 500) para que Meta no deshabilite el webhook; el envío con error 4xx permanente no se distingue del transitorio. Evidencia: `services/BotWebhookEvent/index.ts`.
 - `PUT` de instrucciones usa `instructionUpdateSchema` sin defaults: con `.default()` un update parcial reiniciaría los campos de Instagram. Evidencia: `controllers/chat/botInstructionSchema.ts`.
 - WhatsApp solo consulta inscripción con frases explícitas y, si no hay coincidencia, sigue el flujo anterior (pago/compra/Gemini). Evidencia: `services/BotEnrollment/index.ts`.
+- Tope de 6 consultas/hora por cuenta de Instagram (TTL 1 h en `BotLookupAttempt`); los reintentos de Meta por un envío fallido también cuentan. Evidencia: `services/BotEnrollment/rateLimit.ts`.
+- Una plantilla nunca debe admitir otros placeholders: la API los rechaza (400) y el render solo reemplaza `{curso}` sin interpretar `$`. Evidencia: `services/BotEnrollment/templates.ts`.

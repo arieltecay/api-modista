@@ -26,6 +26,7 @@ const { default: BotInstruction } = await import('../dist/models/BotInstruction.
 const { default: BotWebhookEvent } = await import('../dist/models/BotWebhookEvent/index.js');
 const { default: ConversationMessage } = await import('../dist/models/ConversationMessage.js');
 const { default: Inscription } = await import('../dist/models/Inscription.js');
+const { default: BotLookupAttempt } = await import('../dist/models/BotLookupAttempt/index.js');
 
 await connectDB();
 if (!/test|dev|local|staging/i.test(mongoose.connection.name)) {
@@ -56,6 +57,7 @@ const cleanup = async () => {
     BotWebhookEvent.deleteMany({ messageId: new RegExp(`^${PREFIX}`) }),
     ConversationMessage.deleteMany({ platform: 'instagram', platform_id: new RegExp(`^${PREFIX}`) }),
     Inscription.deleteMany({ email: new RegExp(`^${PREFIX}`) }),
+    BotLookupAttempt.deleteMany({ platformId: new RegExp(`^${PREFIX}`) }),
   ]);
 };
 

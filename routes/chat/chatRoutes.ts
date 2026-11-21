@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as chatController from '../../controllers/chat/chatController.js';
 import * as botInstructionController from '../../controllers/chat/botInstructionController.js';
+import * as botEnrollmentConfigController from '../../controllers/chat/botEnrollmentConfigController.js';
 import { authenticateToken, requireAdmin } from '../../middleware/authMiddleware.js';
 
 const router = Router();
@@ -19,6 +20,10 @@ router.get('/instructions', authenticateToken, requireAdmin, botInstructionContr
 router.post('/instructions', authenticateToken, requireAdmin, botInstructionController.createInstruction);
 router.put('/instructions/:id', authenticateToken, requireAdmin, botInstructionController.updateInstruction);
 router.delete('/instructions/:id', authenticateToken, requireAdmin, botInstructionController.deleteInstruction);
+
+// Consulta de inscripciones del bot (interruptor de WhatsApp y textos)
+router.get('/enrollment-config', authenticateToken, requireAdmin, botEnrollmentConfigController.getEnrollmentConfig);
+router.put('/enrollment-config', authenticateToken, requireAdmin, botEnrollmentConfigController.saveEnrollmentConfig);
 
 export default router;
 

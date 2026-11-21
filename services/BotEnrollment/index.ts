@@ -1,5 +1,8 @@
 import Inscription from '../../models/Inscription.js';
 import ConversationMessage from '../../models/ConversationMessage.js';
+import { getEnrollmentConfig } from './config.js';
+import { consumeLookupAttempt } from './rateLimit.js';
+import { renderEnrollmentAnswer } from './templates.js';
 
 type Platform = 'whatsapp' | 'instagram';
 const emailPattern = /[\w.+-]+@[\w.-]+\.[a-z]{2,}/i;
@@ -12,11 +15,9 @@ export const classifyEnrollmentMessage = (text: string): 'enrollment' | 'other' 
   return 'other';
 };
 
-const statusLabel = (status: string): string => ({
-  paid: 'figura como pagada', partial: 'registra un pago parcial', pending: 'tiene el pago pendiente de confirmación',
-})[status] ?? 'tiene un estado pendiente de revisión';
-
 export const answerEnrollmentMessage = async (platform: Platform, platformId: string, text: string): Promise<string | null> => {
+  const { whatsappLookupEnabled, templates } = await getEnrollmentConfig();
+  if (platform === 'whatsapp' && !whatsappLookupEnabled) return null;
   const recent = await ConversationMessage.find({ platform, platform_id: platformId, direction: 'inbound', timestamp: { $gte: new Date(Date.now() - 10 * 60_000) } })
     .sort({ timestamp: -1 }).limit(5).select('body').lean();
   const context = [text, ...recent.map(message => message.body)].join(' ');
@@ -25,9 +26,11 @@ export const answerEnrollmentMessage = async (platform: Platform, platformId: st
   const email = context.match(emailPattern)?.[0]?.toLowerCase();
   const suppliedPhone = platform === 'whatsapp' ? digits(platformId) : digits(context.replace(emailPattern, ' ').match(phonePattern)?.[0] ?? '');
   if (platform === 'instagram' && (!email || suppliedPhone.length < 10)) {
-    return 'Para consultar tu inscripción por acá, indicame el email y el celular que usaste al inscribirte. Solo te diré el curso y el estado registrado.';
+    return templates.askContact;
   }
   if (platform === 'whatsapp' && suppliedPhone.length < 10) return 'No pude identificar este número para consultar inscripciones.';
+
+  if (platform === 'instagram' && !(await consumeLookupAttempt(platform, platformId))) return templates.rateLimited;
 
   const query = email ? { email: { $regex: `^${escapeRegex(email)}$`, $options: 'i' } } : { celular: { $regex: suppliedPhone.slice(-8).split('').join('\\D*') + '$' } };
   const candidates = await Inscription.find(query).select('celular courseTitle paymentStatus').limit(30).lean();
@@ -35,6 +38,6 @@ export const answerEnrollmentMessage = async (platform: Platform, platformId: st
     const stored = digits(row.celular);
     return stored.length >= 10 && stored.slice(-10) === suppliedPhone.slice(-10);
   });
-  if (!matches.length) return platform === 'whatsapp' ? null : 'No encontré una inscripción con esos datos. Revisá el email y el celular que ingresaste al inscribirte.';
-  return `Encontré estas inscripciones:\n${matches.map(row => `• ${row.courseTitle}: ${statusLabel(row.paymentStatus)}.`).join('\n')}\nEste es el estado registrado actualmente; un pago reciente puede tardar en reflejarse.`;
+  if (!matches.length) return platform === 'whatsapp' ? null : templates.notFound;
+  return renderEnrollmentAnswer(templates, matches);
 };
