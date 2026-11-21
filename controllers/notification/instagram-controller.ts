@@ -5,15 +5,14 @@ import {
   InstagramWebhookChangeValue 
 } from '../../types/instagram-official.js';
 import { generateAIResponse } from '../../services/gemini-service.js';
+import { answerEnrollmentMessage } from '../../services/BotEnrollment/index.js';
+import { getInstagramReplyPolicy } from '../../services/BotReplyPolicy/index.js';
+import { processBotWebhookMessage } from '../../services/BotWebhookEvent/index.js';
 import { sendInstagramMessage } from '../../services/instagram/instagram-official-service.js';
 import ConversationMessage from '../../models/ConversationMessage.js';
 import { logger } from '../../services/logger.js';
-import { 
-  handlePurchaseIntent, 
-  handlePaymentConfirmation,
-  isPurchaseIntent,
-  isPaymentConfirmation 
-} from '../../services/instagram/instagram-bot-service.js';
+
+let lastSignatureMismatchLogAt = 0;
 
 /**
  * @route   GET /api/notification/instagram/webhook
@@ -75,7 +74,15 @@ export const handleWebhook = async (req: Request, res: Response) => {
       .digest();
 
     if (receivedHash.length !== expectedHash.length || !crypto.timingSafeEqual(receivedHash, expectedHash)) {
-      logger.warn('⚠️ Validación de firma HMAC fallida en Webhook de Instagram');
+      const now = Date.now();
+      if (now - lastSignatureMismatchLogAt > 5 * 60_000) {
+        lastSignatureMismatchLogAt = now;
+        logger.warn('[Instagram Webhook] Firma HMAC inválida', {
+          contentType: req.get('content-type')?.slice(0, 80),
+          userAgent: req.get('user-agent')?.slice(0, 120),
+          bodyBytes: req.rawBody.length,
+        });
+      }
       return res.sendStatus(401);
     }
 
@@ -106,7 +113,9 @@ export const handleWebhook = async (req: Request, res: Response) => {
             continue;
           }
 
-          await processInstagramMessage(from, textBody);
+          if (messaging.message.mid) {
+            await processBotWebhookMessage('instagram', messaging.message.mid, () => processInstagramMessage(from, textBody, messaging.message.mid));
+          }
         }
       }
 
@@ -137,19 +146,19 @@ export const handleWebhook = async (req: Request, res: Response) => {
 
               // Si no hay texto (es imagen, video, etc.), solo persistimos
               if (!textBody && message.type !== 'text') {
-                await ConversationMessage.create({ 
-                  platform: 'instagram', 
-                  platform_id: from, 
-                  body: `[${message.type.toUpperCase()}]`, 
-                  direction: 'inbound', 
-                  status: 'delivered' 
+                await processBotWebhookMessage('instagram', message.id, async () => {
+                  await ConversationMessage.updateOne(
+                    { platform: 'instagram', externalMessageId: message.id },
+                    { $setOnInsert: { platform_id: from, body: `[${message.type.toUpperCase()}]`, direction: 'inbound', status: 'delivered' } },
+                    { upsert: true },
+                  );
                 });
                 continue;
               }
 
               if (!textBody) continue;
 
-              await processInstagramMessage(from, textBody);
+              await processBotWebhookMessage('instagram', message.id, () => processInstagramMessage(from, textBody, message.id));
             }
           }
         }
@@ -166,44 +175,37 @@ export const handleWebhook = async (req: Request, res: Response) => {
 /**
  * Procesa un mensaje de texto de Instagram
  */
-async function processInstagramMessage(from: string, text: string) {
+async function processInstagramMessage(from: string, text: string, messageId: string) {
   // 1. Persistir mensaje entrante
-  await ConversationMessage.create({ 
-    platform: 'instagram', 
-    platform_id: from, 
-    body: text, 
-    direction: 'inbound', 
-    status: 'delivered' 
-  });
+  await ConversationMessage.updateOne(
+    { platform: 'instagram', externalMessageId: messageId },
+    { $setOnInsert: { platform_id: from, body: text, direction: 'inbound', status: 'delivered' } },
+    { upsert: true },
+  );
 
-  // 2. Detectar intención de compra
-  if (isPurchaseIntent(text)) {
-    await handlePurchaseIntent(from);
-    return;
+  const matchedInstructions = await getInstagramReplyPolicy(text);
+  if (matchedInstructions.length === 0) return;
+
+  const canCheckEnrollment = matchedInstructions.some(instruction => instruction.instagramEnrollmentLookup);
+  if (canCheckEnrollment) {
+    const enrollmentAnswer = await answerEnrollmentMessage('instagram', from, text);
+    if (enrollmentAnswer) {
+      const sent = await sendInstagramMessage(from, enrollmentAnswer);
+      if (!sent) throw new Error('No se pudo entregar la respuesta de inscripción por Instagram');
+      await ConversationMessage.create({ platform: 'instagram', platform_id: from, body: enrollmentAnswer, direction: 'outbound', status: 'sent' });
+      return;
+    }
   }
 
-  // 3. Detectar confirmación de pago
-  if (isPaymentConfirmation(text)) {
-    await handlePaymentConfirmation(from);
-    return;
-  }
-
-  // 4. Fallback a IA
+  // Solo usa la información de las reglas de Instagram que coincidieron.
   try {
-    // @ts-ignore - agregaremos platform pronto en gemini-service
-    const aiResponse = await generateAIResponse(text, from, 'instagram');
+    const aiResponse = await generateAIResponse(text, from, 'instagram', matchedInstructions);
     const sent = await sendInstagramMessage(from, aiResponse);
 
-    if (sent) {
-      await ConversationMessage.create({ 
-        platform: 'instagram', 
-        platform_id: from, 
-        body: aiResponse, 
-        direction: 'outbound', 
-        status: 'sent' 
-      });
-    }
+    if (!sent) throw new Error('No se pudo entregar la respuesta de Gemini por Instagram');
+    await ConversationMessage.create({ platform: 'instagram', platform_id: from, body: aiResponse, direction: 'outbound', status: 'sent' });
   } catch (aiError: any) {
     logger.error('[Instagram] Error al generar respuesta IA:', aiError.message);
+    throw aiError;
   }
 }

@@ -9,16 +9,16 @@ import {
 /**
  * Instagram Messaging Service (Meta Graph API)
  *
- * IMPORTANTE: Usa un System User Token (META_INSTAGRAM_ACCESS_TOKEN) con permisos:
- * - instagram_basic
- * - instagram_manage_messages
+ * IMPORTANTE: Usa un Instagram User access token de Instagram Login con permisos:
+ * - instagram_business_basic
+ * - instagram_business_manage_messages
  *
  * El endpoint de envío usa META_INSTAGRAM_USER_ID (ID del IG Business Account),
- * NO '/me', porque los System User Tokens no soportan ese endpoint.
+ * para la cuenta suscrita a los webhooks de Instagram Login.
  */
 
 const API_VERSION = process.env.META_INSTAGRAM_API_VERSION ?? 'v27.0';
-const BASE_URL = `https://graph.facebook.com/${API_VERSION}`;
+const BASE_URL = `https://graph.instagram.com/${API_VERSION}`;
 const RESPONSE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const HUMAN_AGENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 

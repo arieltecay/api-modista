@@ -15,7 +15,7 @@ router.delete('/:platform/:platform_id/clear', authenticateToken, requireAdmin, 
 router.delete('/messages/:id', authenticateToken, requireAdmin, chatController.deleteMessage);
 
 // Rutas de entrenamiento (Instrucciones)
-router.get('/instructions', authenticateToken, botInstructionController.getInstructions);
+router.get('/instructions', authenticateToken, requireAdmin, botInstructionController.getInstructions);
 router.post('/instructions', authenticateToken, requireAdmin, botInstructionController.createInstruction);
 router.put('/instructions/:id', authenticateToken, requireAdmin, botInstructionController.updateInstruction);
 router.delete('/instructions/:id', authenticateToken, requireAdmin, botInstructionController.deleteInstruction);

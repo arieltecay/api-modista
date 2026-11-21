@@ -1,5 +1,8 @@
 # Contratos de tracking de Meta
 
+- `GEMINI_MODEL` selecciona el modelo del bot (def. `gemini-3.5-flash-lite`). WhatsApp usa todas las instrucciones activas; Instagram solo las que tienen `instagramAutoReply` y cuya frase de `instagramKeywords` coincide con el DM (sin coincidencia: se guarda y no responde). `instagramEnrollmentLookup` habilita consultar inscripción (solo curso y estado). Evidencia: `services/BotReplyPolicy/index.ts`, `services/gemini-service.ts`.
+- Webhooks de Meta: idempotencia por `{platform, messageId}` en `BotWebhookEvent` (processing/complete/failed, TTL 7 días). Si el envío falla responde 500 y Meta reintenta; el entrante no se duplica (`ConversationMessage.externalMessageId` único). Evidencia: `services/BotWebhookEvent/index.ts`.
+
 - `sendMetaConversionEvent` acepta el evento cuando queda persistido en el outbox; `delivered` indica si Meta confirmó la entrega directa.
 - `POST /api/funnel/track` recibe `eventId` y `eventSourceUrl`; para `course_detail_view` valida el ID determinista y toma nombre/precio desde la base de datos.
 - El GET completo de landing es una lectura pura y puede cachearse; no debe volver a disparar CAPI.

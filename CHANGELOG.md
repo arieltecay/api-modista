@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- Instagram solo responde los temas que el admin activa por bloque y frase; los demás DMs quedan para respuesta humana.
+- Los webhooks de WhatsApp e Instagram ignoran reintentos duplicados y reintentan si falla el envío.
+- Reduce los logs repetidos de firmas inválidas de Instagram y registra metadatos para diagnosticar el origen.
+- Alinea el envío de mensajes de Instagram con la API de Instagram Login configurada en Meta.
+- Actualiza el modelo predeterminado del bot a Gemini 3.5 Flash-Lite y permite configurarlo con `GEMINI_MODEL`.
+- El bot consulta inscripciones por WhatsApp e Instagram y responde con el curso y estado registrado usando datos de contacto coincidentes.
+- El bot conserva el contexto reciente de cada conversación de WhatsApp e Instagram al responder.
 - Agrega los endpoints admin `funnel`, `live`, `journeys` y `quality` de adquisición.
 - Agrega los endpoints admin `overview` y `channels` de adquisición (cohorte o período, tres perspectivas de atribución y revenue desde pagos).
 - Registra `lead`, `initiate_checkout` y `purchase` server-side en adquisición y el estado de entrega CAPI, con reconciliación desde el outbox.
