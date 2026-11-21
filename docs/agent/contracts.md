@@ -1,5 +1,8 @@
 # Contratos de tracking de Meta
 
+- `GEMINI_MODEL` selecciona el modelo del bot (def. `gemini-3.5-flash-lite`). WhatsApp usa todas las instrucciones activas; Instagram solo las que tienen `instagramAutoReply` y cuya frase de `instagramKeywords` coincide con el DM (sin coincidencia: se guarda y no responde). `instagramEnrollmentLookup` habilita consultar inscripción (solo curso y estado). Evidencia: `services/BotReplyPolicy/index.ts`, `services/gemini-service.ts`.
+- Webhooks de Meta: idempotencia por `{platform, messageId}` en `BotWebhookEvent` (processing/complete/failed, TTL 7 días). Si el envío falla responde 500 y Meta reintenta; el entrante no se duplica (`ConversationMessage.externalMessageId` único). Evidencia: `services/BotWebhookEvent/index.ts`.
+
 - `sendMetaConversionEvent` acepta el evento cuando queda persistido en el outbox; `delivered` indica si Meta confirmó la entrega directa.
 - `POST /api/funnel/track` recibe `eventId` y `eventSourceUrl`; para `course_detail_view` valida el ID determinista y toma nombre/precio desde la base de datos.
 - El GET completo de landing es una lectura pura y puede cachearse; no debe volver a disparar CAPI.
@@ -17,3 +20,4 @@
 - La perspectiva cambia a qué origen se acredita cada visita (propio / primer origen conocido / último no directo previo); las conversiones heredan el de su visita. `unknown` y `direct` no cuentan como origen para `last_non_direct`. Evidencia: `services/AcquisitionReports/attribution.ts`.
 - `coverage.totalSiteVisits` y `measurementCoverage` son `null` hasta conectar una fuente independiente.
 - Más endpoints admin (mismos 401/403/400): `GET /funnel` (query de overview + `course`; cohorte = cada visita cuenta en su paso más lejano y en los previos, `event_period` = visitas distintas con cada evento, `independentCounts: true`), `GET /live?windowMinutes=5|15|30|60` (por hora del servidor; solo ids de visita acortados a 8), `GET /journeys` (+ `page`, `limit` ≤ 100; sin `visitorId`) y `GET /journeys/:visitId` (línea de tiempo; 404 si no existe; `term/content` no se exponen), `GET /quality` (reglas con código estable, severidad, afectados, universo, % y primera/última aparición; `evaluated` lista lo chequeado, así que `rules: []` es "todo bien"). Evidencia: `controllers/AcquisitionReports/index.ts`.
+- `GET|PUT /api/chat/enrollment-config` (admin): `{ whatsappLookupEnabled, templates, defaults }`. WhatsApp solo consulta inscripciones con el interruptor encendido (def. apagado). Los textos solo aceptan el placeholder `{curso}`; las líneas por estado (`paid|partial|pending|review`) lo exigen; `header`/`footer` pueden ir vacíos. Evidencia: `controllers/chat/botEnrollmentConfigSchema.ts`.

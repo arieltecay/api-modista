@@ -5,6 +5,9 @@ export interface IBotInstruction extends Document {
   content: string;
   order: number;
   isActive: boolean;
+  instagramAutoReply: boolean;
+  instagramKeywords: string[];
+  instagramEnrollmentLookup: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -26,7 +29,10 @@ const BotInstructionSchema: Schema = new Schema({
   isActive: { 
     type: Boolean, 
     default: true 
-  }
+  },
+  instagramAutoReply: { type: Boolean, default: false },
+  instagramKeywords: { type: [String], default: [] },
+  instagramEnrollmentLookup: { type: Boolean, default: false }
 }, {
   timestamps: true
 });

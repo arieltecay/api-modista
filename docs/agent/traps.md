@@ -1,4 +1,6 @@
-- Instagram requiere `META_INSTAGRAM_ACCESS_TOKEN`, `META_INSTAGRAM_APP_SECRET` y `META_INSTAGRAM_VERIFY_TOKEN`; no reutiliza credenciales de WhatsApp. Evidencia: `services/instagram/instagram-official-service.ts`, `controllers/notification/instagram-controller.ts`.
+- El webhook configurado en Instagram Login de `Modista APP Bot-IG` se firma con el secreto de esa app de Instagram (ID 4433727103579184); no usar el de la app principal de Meta/WhatsApp. Evidencia: configuración de Meta Developers y `controllers/notification/instagram-controller.ts`.
+- Firmas HMAC inválidas de Instagram responden 401; el log de diagnóstico se limita por instancia a uno cada cinco minutos para evitar inundar Axiom. Evidencia: `controllers/notification/instagram-controller.ts`.
+- Instagram Login usa un token de usuario de Instagram y `graph.instagram.com`; un token de Facebook Login corresponde al flujo antiguo y no sirve para este endpoint. Evidencia: `services/instagram/instagram-official-service.ts`.
 - El bot solo responde dentro de la ventana estándar; `HUMAN_AGENT` es exclusivamente para respuesta manual dentro de siete días. Evidencia: `services/instagram/instagram-official-service.ts`.
 - `utm_source` social/buscador (o `fbclid`) sin medio pago nunca es `paid`; solo `paid`/`cpc`/`paid_*` o una campaña mapeada lo son. Evidencia: `services/Acquisition/classifier.test.ts`.
 - El clasificador no filtra self-referrals ni retornos de pasarela (p. ej. MercadoPago): quien lo llame debe descartarlos de `referrerHost`; si no, cuentan como `referral`. Evidencia: `services/Acquisition/classifier.ts`.
@@ -32,3 +34,10 @@
 - Con filtro `course` el embudo solo cuenta eventos de ese curso, y el tope es "visitas que tocaron ese curso". Las reglas de calidad basadas en porcentaje no pasan de `info` con menos de 10 observaciones, y un pago reciente tiene 15 min de gracia antes de `PAYMENT_WITHOUT_PURCHASE_SIGNAL`. Evidencia: `quality.ts`.
 - Una visita con más de 500 eventos se marca `truncated` (los flags y el paso máximo pueden estar incompletos). `rawAttribution` es texto libre del visitante: el panel nunca debe renderizarlo como HTML.
 - `quality` y `event_period` siguen escaneando `Inscription` (sin índice por consentimiento/fechas de pago); indexar si la colección crece.
+- Entrega no exactamente-una-vez: si Graph acepta el envío pero falla el guardado posterior, el reintento de Meta reenvía la respuesta. Evidencia: `controllers/notification/instagram-controller.ts` (`processInstagramMessage`).
+- Email+celular en Instagram limitan los datos (curso y estado) pero no prueban titularidad; no hay OTP por decisión del dueño. Evidencia: `services/BotEnrollment/index.ts`.
+- Un mensaje que falla 3 veces se descarta (deja de responder 500) para que Meta no deshabilite el webhook; el envío con error 4xx permanente no se distingue del transitorio. Evidencia: `services/BotWebhookEvent/index.ts`.
+- `PUT` de instrucciones usa `instructionUpdateSchema` sin defaults: con `.default()` un update parcial reiniciaría los campos de Instagram. Evidencia: `controllers/chat/botInstructionSchema.ts`.
+- WhatsApp solo consulta inscripción con frases explícitas y, si no hay coincidencia, sigue el flujo anterior (pago/compra/Gemini). Evidencia: `services/BotEnrollment/index.ts`.
+- Tope de 6 consultas/hora por cuenta de Instagram (TTL 1 h en `BotLookupAttempt`); los reintentos de Meta por un envío fallido también cuentan. Evidencia: `services/BotEnrollment/rateLimit.ts`.
+- Una plantilla nunca debe admitir otros placeholders: la API los rechaza (400) y el render solo reemplaza `{curso}` sin interpretar `$`. Evidencia: `services/BotEnrollment/templates.ts`.

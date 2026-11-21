@@ -2,6 +2,8 @@ import crypto from 'crypto';
 import { Request, Response } from 'express';
 import { MetaWhatsAppWebhookPayload } from '../../types/whatsapp-official.js';
 import { generateAIResponse } from '../../services/gemini-service.js';
+import { answerEnrollmentMessage } from '../../services/BotEnrollment/index.js';
+import { processBotWebhookMessage } from '../../services/BotWebhookEvent/index.js';
 import { sendWhatsAppMessage } from '../../services/whatsapp-official-service.js';
 import ConversationMessage from '../../models/ConversationMessage.js';
 import { logger } from '../../services/logger.js';
@@ -32,21 +34,18 @@ export const verifyWebhook = (req: Request, res: Response) => {
 
 export const handleWebhook = async (req: Request, res: Response) => {
   try {
-    const signature = req.headers['x-hub-signature-256'] as string;
-    
-    if (process.env.META_APP_SECRET && signature) {
-      const elements = signature.split('=');
-      const signatureHash = elements[1];
-      // @ts-ignore
-      const rawPayload: Buffer | string = req.rawBody ?? JSON.stringify(req.body);
-      const expectedHash = crypto
-        .createHmac('sha256', process.env.META_APP_SECRET)
-        .update(rawPayload)
-        .digest('hex');
+    const signature = req.headers['x-hub-signature-256'];
+    if (!process.env.META_APP_SECRET) return res.sendStatus(503);
+    if (typeof signature !== 'string' || !req.rawBody || !/^sha256=[a-f0-9]{64}$/i.test(signature)) return res.sendStatus(401);
+    const signatureHash = signature.slice('sha256='.length);
+    const expectedHash = crypto
+      .createHmac('sha256', process.env.META_APP_SECRET)
+      .update(req.rawBody)
+      .digest();
 
-      if (signatureHash !== expectedHash) {
-        logger.warn('⚠️ Validación de firma HMAC fallida en Webhook de WhatsApp');
-      }
+    if (!crypto.timingSafeEqual(Buffer.from(signatureHash, 'hex'), expectedHash)) {
+      logger.warn('⚠️ Validación de firma HMAC fallida en Webhook de WhatsApp');
+      return res.sendStatus(401);
     }
 
     const body: MetaWhatsAppWebhookPayload = req.body;
@@ -58,56 +57,57 @@ export const handleWebhook = async (req: Request, res: Response) => {
           
           if (value.messages) {
             for (const message of value.messages) {
-              const from = message.from;
+              await processBotWebhookMessage('whatsapp', message.id, async () => {
+                const from = message.from;
               
-              if (message.type === 'button' && message.button) {
-                const buttonText = message.button.text;
+                if (message.type === 'button' && message.button) {
+                  const buttonText = message.button.text;
                 
-                if (buttonText === 'Copiar CVU') {
-                  await handleCvuCopy(from);
-                  continue;
-                }
+                  if (buttonText === 'Copiar CVU') {
+                    await handleCvuCopy(from);
+                    return;
+                  }
                 
-                if (buttonText === 'Copiar Alias') {
-                  await handleAliasCopy(from);
-                  continue;
+                  if (buttonText === 'Copiar Alias') {
+                    await handleAliasCopy(from);
+                    return;
+                  }
                 }
-              }
 
-              const textBody = message.text?.body;
+                const textBody = message.text?.body;
               
-              if (textBody) {
-                await ConversationMessage.create({ 
-                  platform: 'whatsapp', 
-                  platform_id: from, 
-                  body: textBody, 
-                  direction: 'inbound', 
-                  status: 'delivered' 
-                });
+                if (textBody) {
+                  await ConversationMessage.updateOne(
+                    { platform: 'whatsapp', externalMessageId: message.id },
+                    { $setOnInsert: { platform_id: from, body: textBody, direction: 'inbound', status: 'delivered' } },
+                    { upsert: true },
+                  );
 
-                if (isPurchaseIntent(textBody)) {
-                  await handlePurchaseIntent(from);
-                  continue;
-                }
-                
-                if (isPaymentConfirmation(textBody)) {
-                  await handlePaymentConfirmation(from);
-                  continue;
-                }
-                
-                const aiResponse = await generateAIResponse(textBody, from, 'whatsapp');
-                const sent = await sendWhatsAppMessage(from, aiResponse);
+                  const enrollmentAnswer = await answerEnrollmentMessage('whatsapp', from, textBody);
+                  if (enrollmentAnswer) {
+                    const sent = await sendWhatsAppMessage(from, enrollmentAnswer);
+                    if (!sent) throw new Error('No se pudo entregar la respuesta de inscripción por WhatsApp');
+                    await ConversationMessage.create({ platform: 'whatsapp', platform_id: from, body: enrollmentAnswer, direction: 'outbound', status: 'sent' });
+                    return;
+                  }
 
-                if (sent) {
-                  await ConversationMessage.create({ 
-                    platform: 'whatsapp', 
-                    platform_id: from, 
-                    body: aiResponse, 
-                    direction: 'outbound', 
-                    status: 'sent' 
-                  });
+                  if (isPaymentConfirmation(textBody)) {
+                    await handlePaymentConfirmation(from);
+                    return;
+                  }
+
+                  if (isPurchaseIntent(textBody)) {
+                    await handlePurchaseIntent(from);
+                    return;
+                  }
+                
+                  const aiResponse = await generateAIResponse(textBody, from, 'whatsapp');
+                  const sent = await sendWhatsAppMessage(from, aiResponse);
+
+                  if (!sent) throw new Error('No se pudo entregar la respuesta de Gemini por WhatsApp');
+                  await ConversationMessage.create({ platform: 'whatsapp', platform_id: from, body: aiResponse, direction: 'outbound', status: 'sent' });
                 }
-              }
+              });
             }
           }
 

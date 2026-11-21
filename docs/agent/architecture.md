@@ -1,4 +1,8 @@
 - `services/Acquisition/`: dominio de adquisición (plan: `docs/plan-acquisition-conversion-dashboard.md` en la raíz del workspace). `classifier.ts` + `taxonomy.ts` (tablas) + `types.ts`: puros, sin Express ni Mongoose.
+- `services/BotEnrollment/`: consulta acotada de inscripciones por número de WhatsApp o email y celular en Instagram; muestra solo curso y estado general registrado.
+- `services/BotEnrollment/{config,templates,rateLimit}.ts` + `models/BotEnrollmentConfig|BotLookupAttempt/`: interruptor de WhatsApp, textos editables y tope de consultas de Instagram.
+- `services/BotReplyPolicy/`: elige las instrucciones que Instagram puede usar según el DM. `services/BotWebhookEvent/` + `models/BotWebhookEvent/`: reclamo idempotente por mensaje de Meta.
+- `services/gemini-service.ts`: WhatsApp usa instrucciones globales, cursos y FAQ; Instagram solo las instrucciones coincidentes. Ambos con historial reciente por plataforma e ID de remitente.
 - `models/AcquisitionVisit|AcquisitionEvent|AcquisitionSignalAttempt/`: persistencia del dominio (`index.ts` + `types.ts`, tipos propios). Tests con `mongodb-memory-server` vía `utils/testing/mongoMemoryServer.ts`.
 - Ingesta: `routes/Acquisition` → `controllers/Acquisition` (flag, consentimiento, Zod, 201/200/409) → `services/Acquisition/{index,signals}.ts` (upserts idempotentes). `consent.ts`, `config.ts`, `sanitize.ts`, `schemas.ts` son helpers puros.
 - Conversiones: `services/meta-capi-helpers` → `services/Acquisition/serverEvents.ts` (eventos `lead/initiate_checkout/purchase` y estado CAPI inmediato) y `signals.ts` (`reconcileCapiSignals` desde el outbox, invocado por el cron).

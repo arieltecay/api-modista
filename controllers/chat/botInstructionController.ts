@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import BotInstruction from '../../models/BotInstruction.js';
+import { instructionInputSchema, instructionUpdateSchema } from './botInstructionSchema.js';
 
 /**
  * Obtener todas las instrucciones del bot ordenadas
@@ -18,8 +19,9 @@ export const getInstructions = async (req: Request, res: Response) => {
  */
 export const createInstruction = async (req: Request, res: Response) => {
   try {
-    const { title, content, order, isActive } = req.body;
-    const newInstruction = new BotInstruction({ title, content, order, isActive });
+    const parsed = instructionInputSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: 'Instrucción inválida' });
+    const newInstruction = new BotInstruction(parsed.data);
     await newInstruction.save();
     res.status(201).json(newInstruction);
   } catch (error: any) {
@@ -33,11 +35,12 @@ export const createInstruction = async (req: Request, res: Response) => {
 export const updateInstruction = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, content, order, isActive } = req.body;
+    const parsed = instructionUpdateSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: 'Instrucción inválida' });
     
     const updatedInstruction = await BotInstruction.findByIdAndUpdate(
       id,
-      { title, content, order, isActive },
+      parsed.data,
       { new: true, runValidators: true }
     );
 
