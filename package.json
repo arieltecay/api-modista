@@ -10,6 +10,7 @@
     "dev": "nodemon --exec node --loader ts-node/esm server.js",
     "clean": "rm -rf ./node_modules && rm package-lock.json && npm cache clean --force && npm install",
     "seed": "nodemon --exec node --loader ts-node/esm scripts/seedTariffData.ts",
+    "test:local:instagram": "npm run build && node scripts/test-local-instagram-bot.mjs",
     "test:e2e:payment": "node scripts/test-e2e-payment.mjs"
   },
   "keywords": [],

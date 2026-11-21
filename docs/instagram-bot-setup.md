@@ -31,3 +31,8 @@ y cuya frase coincide con el DM; el resto queda guardado para respuesta humana. 
 respuestas de inscripción vienen de la base de datos, no del modelo, y solo si el
 bloque habilita la consulta. La verificación por email y celular limita los datos
 mostrados, pero no equivale a un segundo factor.
+
+## Validación local
+
+`npm run test:local:instagram` ejecuta el webhook real contra la BD de `.env` (debe llamarse con `test`, `dev`, `local` o `staging`), con Graph simulado y Gemini real (o `-- --mock-gemini`). Crea datos con prefijo `local-test` y los borra al terminar. No reemplaza la prueba con un DM real.
+

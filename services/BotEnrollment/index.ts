@@ -23,7 +23,7 @@ export const answerEnrollmentMessage = async (platform: Platform, platformId: st
   const hasContactData = platform === 'instagram' && (emailPattern.test(text) || phonePattern.test(text));
   if (classifyEnrollmentMessage(context) !== 'enrollment' && !hasContactData) return null;
   const email = context.match(emailPattern)?.[0]?.toLowerCase();
-  const suppliedPhone = platform === 'whatsapp' ? digits(platformId) : digits(context.match(phonePattern)?.[0] ?? '');
+  const suppliedPhone = platform === 'whatsapp' ? digits(platformId) : digits(context.replace(emailPattern, ' ').match(phonePattern)?.[0] ?? '');
   if (platform === 'instagram' && (!email || suppliedPhone.length < 10)) {
     return 'Para consultar tu inscripción por acá, indicame el email y el celular que usaste al inscribirte. Solo te diré el curso y el estado registrado.';
   }
