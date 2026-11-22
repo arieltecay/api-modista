@@ -44,3 +44,12 @@ export const acquisitionLimiter = rateLimit({
     legacyHeaders: false,
     message: { success: false, message: 'Demasiadas solicitudes' },
 });
+
+// Página pública de la factura: se abre desde el mail (pocas veces por persona); frena el barrido de tokens.
+export const invoiceViewLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: 'Demasiadas solicitudes' },
+});

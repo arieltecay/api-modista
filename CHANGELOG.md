@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- Emite la Factura C de ARCA a consumidor final al confirmarse el pago de MercadoPago y la envía por mail con un link; apagada por defecto en producción (`ARCA_PRODUCTION_ENABLED`).
+- Registra en los logs cada factura autorizada, pendiente o rechazada por ARCA (sin datos del cliente).
+- Agrega los endpoints de facturas (público y admin) y un cron diario que completa las pendientes.
+- El webhook de MercadoPago rechaza (503) en producción si falta `MP_WEBHOOK_SECRET`, y el mail y el WhatsApp de acceso ya no se omiten si el evento de Meta ya estaba enviado.
 - Los errores temporales y de límite de Meta al responder comentarios permiten reintentar el webhook.
 - Instagram puede responder por mensaje privado a comentarios públicos, solo en los bloques donde el admin lo activa (apagado por defecto).
 - Cada webhook de Instagram deja un log de resumen (guardados, ecos, sin texto, otros eventos) y el tope de consultas pasa a un contador atómico.

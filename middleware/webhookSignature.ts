@@ -10,12 +10,24 @@ import { logger } from '../services/logger.js';
  *
  * Docs: https://www.mercadopago.com.ar/developers/es/docs/your-integrations/notifications/webhooks
  *
- * Si MP_WEBHOOK_SECRET no está configurado, la verificación se omite (solo dev).
+ * Si MP_WEBHOOK_SECRET no está configurado, la verificación se omite solo fuera de producción;
+ * en producción falla cerrado con 503 (MP reintenta) para no facturar notificaciones sin firmar.
  */
+const signaturesMatch = (expected: string, received: string): boolean => {
+  const expectedBuffer = Buffer.from(expected);
+  const receivedBuffer = Buffer.from(received);
+  return expectedBuffer.length === receivedBuffer.length && crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
+};
+
 export const verifyWebhookSignature = (req: Request, res: Response, next: NextFunction): void => {
   const secret = process.env.MP_WEBHOOK_SECRET;
 
   if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      logger.error('[Webhook] MP_WEBHOOK_SECRET no configurado en producción, se rechaza la notificación');
+      res.status(503).json({ error: 'Webhook secret not configured' });
+      return;
+    }
     logger.warn('[Webhook] MP_WEBHOOK_SECRET no configurado, omitiendo verificación de firma');
     next();
     return;
@@ -63,10 +75,8 @@ export const verifyWebhookSignature = (req: Request, res: Response, next: NextFu
     .update(manifest)
     .digest('hex');
 
-  if (expected !== v1) {
+  if (!signaturesMatch(expected, v1)) {
     logger.warn('[Webhook] Firma inválida', {
-      expected,
-      received: v1,
       url: req.originalUrl,
       method: req.method,
       dataId,

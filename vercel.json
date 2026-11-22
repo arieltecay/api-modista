@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/meta-dlq",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/invoices",
+      "schedule": "30 6 * * *"
     }
   ]
 }

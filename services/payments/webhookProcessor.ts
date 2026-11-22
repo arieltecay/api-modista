@@ -6,6 +6,10 @@ import { fireMetaEvent, buildEventId } from '../meta-capi-helpers/index.js';
 import { getGeoLocationFromIp } from '../geolocation/index.js';
 import { sendWhatsAppTemplate } from '../whatsapp-official-service.js';
 import { sendEmail } from '../emailServices.js';
+import { escapeHtml } from '../fsTemplate.js';
+import { issueInvoiceForPayment } from '../invoicing/index.js';
+import { invoiceEmailBlock } from '../invoicing/emailBlock.js';
+import { markInvoiceEmailed } from '../invoicing/notify.js';
 import { logger } from '../logger.js';
 
 interface MPPaymentPayload {
@@ -65,7 +69,10 @@ const findCourseForInscription = async (inscription: any) => {
  * - Si status === 'approved' y la inscripción pasa a 'paid' por primera vez,
  *   dispara side-effects (cupo, CAPI Purchase, WhatsApp, email).
  */
-export const processWebhookPayment = async (mpPayment: MPPaymentPayload): Promise<void> => {
+export const processWebhookPayment = async (
+  mpPayment: MPPaymentPayload,
+  hooks: PaymentHooks = defaultHooks
+): Promise<void> => {
   const mpPaymentId = mpPayment.id ? String(mpPayment.id) : null;
   const status = mpPayment.status;
 
@@ -157,7 +164,7 @@ export const processWebhookPayment = async (mpPayment: MPPaymentPayload): Promis
 
   // 7. Side-effects solo en transición a 'paid' (no en webhook duplicado ni en pagos extra)
   if (inscription.paymentStatus === 'paid' && !wasAlreadyPaid) {
-    await firePaymentApprovedSideEffects(inscription, totalPaid, paymentDate);
+    await firePaymentApprovedSideEffects(inscription, totalPaid, paymentDate, mpPaymentId, hooks);
   }
 };
 
@@ -165,22 +172,50 @@ const firePaymentApprovedSideEffects = async (
   inscription: any,
   totalPaid: number,
   paymentDate: Date,
+  mpPaymentId: string,
+  hooks: PaymentHooks,
 ): Promise<void> => {
   const inscriptionId = inscription._id.toString();
 
-  // Evitar re-envío si el Purchase ya fue disparado (por redirect de MP o admin manual)
+  // Evitar re-envío del Purchase si ya fue disparado (por redirect de MP o admin manual).
+  // Esto NO debe saltear el resto: la factura, el WhatsApp y el email de acceso salen igual.
   if (inscription.metaPurchaseFiredAt) {
     logger.info(`[WebhookProcessor] Purchase CAPI ya fue enviado para ${inscriptionId}, omitiendo.`);
-    return;
+  } else {
+    await hooks.sendPurchaseEvent(inscription, totalPaid, inscriptionId, paymentDate);
   }
-
-  await sendPurchaseCapiEvent(inscription, totalPaid, inscriptionId, paymentDate);
 
   // Curso asociado una sola vez (por uuid; fallback título legacy)
   const coursePaidLink = await resolveCoursePaidLink(inscription);
 
-  await sendWhatsAppAccessMessage(inscription, coursePaidLink, inscriptionId);
-  await sendCourseAccessEmail(inscription, coursePaidLink, inscriptionId);
+  // La factura se emite con el pago ya verificado y guardado; si ARCA no responde a tiempo el mail sale sin ella.
+  const invoiceUrl = await resolveInvoiceUrl(inscription, totalPaid, mpPaymentId, hooks);
+
+  await hooks.sendWhatsApp(inscription, coursePaidLink, inscriptionId);
+  await hooks.sendAccessEmail(inscription, coursePaidLink, inscriptionId, invoiceUrl);
+};
+
+/** Link a la factura autorizada, o undefined. Un fallo de facturación nunca debe frenar el mail de acceso. */
+const resolveInvoiceUrl = async (
+  inscription: any,
+  totalPaid: number,
+  mpPaymentId: string,
+  hooks: PaymentHooks,
+): Promise<string | undefined> => {
+  try {
+    const link = await hooks.issueInvoice({
+      inscriptionId: inscription._id.toString(),
+      total: totalPaid,
+      courseTitle: inscription.courseTitle,
+      name: `${inscription.nombre} ${inscription.apellido}`,
+      email: inscription.email,
+      mpPaymentId,
+    });
+    return link?.url;
+  } catch (err) {
+    logger.error('[WebhookProcessor] Error emitiendo la factura', err);
+    return undefined;
+  }
 };
 
 /** Meta CAPI: evento Purchase (con flags para idempotencia post-save). */
@@ -262,24 +297,51 @@ const sendWhatsAppAccessMessage = async (
 };
 
 /** Email unificado: confirmación de pago + link de acceso (con retry). */
+/** Datos de la plantilla de acceso: lo que escribió la persona en el formulario va escapado. */
+export const buildAccessEmailData = (
+  inscription: { nombre: string; apellido: string; courseTitle: string },
+  coursePaidLink: string,
+  invoiceUrl?: string
+): Record<'name' | 'courseTitle' | 'coursePaid' | 'invoiceBlock' | 'year', string> => ({
+  name: escapeHtml(`${inscription.nombre} ${inscription.apellido}`),
+  courseTitle: escapeHtml(inscription.courseTitle),
+  coursePaid: escapeHtml(coursePaidLink),
+  invoiceBlock: invoiceUrl ? invoiceEmailBlock(invoiceUrl) : '',
+  year: new Date().getFullYear().toString(),
+});
+
 const sendCourseAccessEmail = async (
   inscription: any,
   coursePaidLink: string,
-  inscriptionId: string
+  inscriptionId: string,
+  invoiceUrl?: string
 ): Promise<void> => {
   const emailSent = await sendEmailWithRetry({
     to: inscription.email,
     subject: `¡Pago confirmado! Accedé a "${inscription.courseTitle}"`,
     templateName: 'paymentCourseAccess',
-    data: {
-      name: `${inscription.nombre} ${inscription.apellido}`,
-      courseTitle: inscription.courseTitle,
-      coursePaid: coursePaidLink,
-      year: new Date().getFullYear().toString(),
-    },
+    data: buildAccessEmailData(inscription, coursePaidLink, invoiceUrl),
   });
 
   if (!emailSent) {
     logger.error(`[WebhookProcessor] Email de acceso NO enviado tras reintentos para ${inscriptionId}`);
+  } else if (invoiceUrl) {
+    // El mail ya llevó el link: el reintento no debe mandarlo de nuevo.
+    await markInvoiceEmailed(inscriptionId);
   }
+};
+
+/** Efectos del pago aprobado; inyectables para probar el orden y las fallas sin servicios externos. */
+export interface PaymentHooks {
+  sendPurchaseEvent: typeof sendPurchaseCapiEvent;
+  issueInvoice: typeof issueInvoiceForPayment;
+  sendWhatsApp: typeof sendWhatsAppAccessMessage;
+  sendAccessEmail: typeof sendCourseAccessEmail;
+}
+
+const defaultHooks: PaymentHooks = {
+  sendPurchaseEvent: sendPurchaseCapiEvent,
+  issueInvoice: issueInvoiceForPayment,
+  sendWhatsApp: sendWhatsAppAccessMessage,
+  sendAccessEmail: sendCourseAccessEmail,
 };

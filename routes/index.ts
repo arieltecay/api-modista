@@ -25,6 +25,8 @@ import metaDlqRoutes from './admin/meta-dlq.js';
 import privacyRoutes from './privacy/privacyRoutes.js';
 import acquisitionRoutes from './Acquisition/index.js';
 import acquisitionReportsRoutes from './admin/acquisition.js';
+import invoicesRoutes from './invoices/index.js';
+import invoicesCronRoutes from './invoices/cron.js';
 
 // Rate limiter para endpoints públicos (lectura)
 const publicLimiter = rateLimit({
@@ -60,6 +62,7 @@ router.use('/turnos', turnosRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/notification', notificationRoutes);
 router.use('/payment', paymentRoutes);
+router.use('/invoices', invoicesRoutes);
 router.use('/email', emailRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/analytics', analyticsRoutes);
@@ -71,6 +74,7 @@ router.use('/admin/meta-dlq', metaDlqRoutes);
 router.use('/admin/acquisition', acquisitionReportsRoutes);
 
 // Cron jobs (Vercel Cron invoca estos endpoints; protegidos con CRON_SECRET)
+router.use('/cron/invoices', invoicesCronRoutes);
 router.use('/cron', cronRoutes);
 
 export default router;
