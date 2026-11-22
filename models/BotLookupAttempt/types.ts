@@ -1,5 +1,7 @@
 export interface BotLookupAttemptDocument {
   platform: 'instagram' | 'whatsapp';
   platformId: string;
-  createdAt: Date;
+  /** Inicio de la hora a la que pertenece el contador. */
+  windowStart: Date;
+  count: number;
 }

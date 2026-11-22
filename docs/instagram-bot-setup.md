@@ -40,3 +40,7 @@ Desde el admin (Mila AI → Inscripciones) se enciende la consulta por WhatsApp 
 
 `npm run test:local:instagram` ejecuta el webhook real contra la BD de `.env` (debe llamarse con `test`, `dev`, `local` o `staging`), con Graph simulado y Gemini real (o `-- --mock-gemini`). Crea datos con prefijo `local-test` y los borra al terminar. No reemplaza la prueba con un DM real.
 
+## Monitoreo
+
+Cada webhook de Instagram registra `[Instagram Webhook] Resumen` con `{ texts, echoes, nonText, ignored }`: mensajes de texto guardados, ecos propios, mensajes sin texto y tipos de evento ignorados (`read`, `reaction`...). No incluye contenido ni IDs. Un 200 con `texts: 0` significa que no entró ningún DM de texto.
+

@@ -8,6 +8,7 @@ import BotInstruction from '../../models/BotInstruction.js';
 import BotWebhookEvent from '../../models/BotWebhookEvent/index.js';
 import ConversationMessage from '../../models/ConversationMessage.js';
 import Inscription from '../../models/Inscription.js';
+import { logger } from '../../services/logger.js';
 import { startTestDb } from '../../utils/testing/mongoMemoryServer.js';
 
 const SECRET = 'instagram-flow-secret';
@@ -51,8 +52,8 @@ beforeEach(async () => {
 });
 afterEach(() => mock.restoreAll());
 
-const receiveDm = async (mid: string, text: string, sender = 'ig-customer') => {
-  const raw = Buffer.from(JSON.stringify({ object: 'instagram', entry: [{ id: 'ig-business', time: 1, messaging: [{ sender: { id: sender }, recipient: { id: 'ig-business' }, timestamp: 1, message: { mid, text } }] }] }));
+const deliver = async (messaging: Record<string, unknown>[]) => {
+  const raw = Buffer.from(JSON.stringify({ object: 'instagram', entry: [{ id: 'ig-business', time: 1, messaging }] }));
   const signature = `sha256=${crypto.createHmac('sha256', SECRET).update(raw).digest('hex')}`;
   const request = { body: JSON.parse(raw.toString()), rawBody: raw, headers: { 'x-hub-signature-256': signature }, get: () => undefined } as unknown as Request;
   let status = 200;
@@ -60,6 +61,9 @@ const receiveDm = async (mid: string, text: string, sender = 'ig-customer') => {
   await handleWebhook(request, response);
   return status;
 };
+
+const receiveDm = (mid: string, text: string, sender = 'ig-customer') =>
+  deliver([{ sender: { id: sender }, recipient: { id: 'ig-business' }, timestamp: 1, message: { mid, text } }]);
 
 const addBlock = (overrides: Record<string, unknown>) => BotInstruction.create({ title: 'Bloque', content: 'Contenido', order: 1, isActive: true, instagramAutoReply: true, instagramKeywords: ['camisa'], ...overrides });
 const count = (filter: Record<string, unknown>) => ConversationMessage.countDocuments({ platform: 'instagram', ...filter });
@@ -144,4 +148,28 @@ test('without the lookup flag an enrollment question never exposes stored data',
   assert.equal(network.graph.length, 1);
   assert.equal(network.graph[0].message.text, 'Respuesta de IA');
   assert.doesNotMatch(JSON.stringify(network.gemini), /Una camisa|figura como pagada/);
+});
+
+const lastSummary = (info: ReturnType<typeof mock.method>) => {
+  const call = info.mock.calls.map(c => c.arguments as unknown[]).reverse().find(args => String(args[0]).includes('Resumen'));
+  assert.ok(call, 'expected a webhook summary log');
+  return call[1] as Record<string, unknown>;
+};
+
+test('each webhook logs a summary of what it stored and ignored, without message content', async () => {
+  const info = mock.method(logger, 'info');
+  const base = { sender: { id: 'ig-customer' }, recipient: { id: 'ig-business' }, timestamp: 1 };
+
+  await receiveDm('m-sum-text', 'Mensaje privado del cliente');
+  assert.deepEqual(lastSummary(info), { texts: 1, echoes: 0, nonText: 0, ignored: [] });
+  assert.doesNotMatch(JSON.stringify(lastSummary(info)), /privado|ig-customer|m-sum/);
+
+  await deliver([{ ...base, message: { mid: 'm-sum-echo', text: 'Yo', is_echo: true } }]);
+  assert.deepEqual(lastSummary(info), { texts: 0, echoes: 1, nonText: 0, ignored: [] });
+
+  await deliver([{ ...base, message: { mid: 'm-sum-img', attachments: [{ type: 'image' }] } }]);
+  assert.deepEqual(lastSummary(info), { texts: 0, echoes: 0, nonText: 1, ignored: [] });
+
+  await deliver([{ ...base, read: { mid: 'm-sum-read' } }]);
+  assert.deepEqual(lastSummary(info), { texts: 0, echoes: 0, nonText: 0, ignored: ['read'] });
 });
