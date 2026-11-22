@@ -33,3 +33,17 @@ test('a phrase matches whole words, not fragments inside other words', async () 
   assert.equal((await getInstagramReplyPolicy('adel curso')).length, 0);
   assert.equal((await getInstagramReplyPolicy('Info del curso por favor')).length, 1);
 });
+
+test('comment replies need their own switch: DM-only blocks never answer comments and vice versa', async () => {
+  await BotInstruction.deleteMany({});
+  await BotInstruction.create({ title: 'Solo DM', content: 'x', order: 1, isActive: true, instagramAutoReply: true, instagramKeywords: ['camisa'] });
+  assert.equal((await getInstagramReplyPolicy('info camisa', 'comment')).length, 0);
+  assert.equal((await getInstagramReplyPolicy('info camisa')).length, 1);
+
+  await BotInstruction.create({ title: 'Solo comentarios', content: 'y', order: 2, isActive: true, instagramCommentReply: true, instagramKeywords: ['camisa'] });
+  assert.deepEqual((await getInstagramReplyPolicy('info camisa', 'comment')).map(item => item.title), ['Solo comentarios']);
+  assert.deepEqual((await getInstagramReplyPolicy('info camisa')).map(item => item.title), ['Solo DM']);
+
+  await BotInstruction.updateOne({ title: 'Solo comentarios' }, { isActive: false });
+  assert.equal((await getInstagramReplyPolicy('info camisa', 'comment')).length, 0);
+});

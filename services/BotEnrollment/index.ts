@@ -18,7 +18,7 @@ export const classifyEnrollmentMessage = (text: string): 'enrollment' | 'other' 
 export const answerEnrollmentMessage = async (platform: Platform, platformId: string, text: string): Promise<string | null> => {
   const { whatsappLookupEnabled, templates } = await getEnrollmentConfig();
   if (platform === 'whatsapp' && !whatsappLookupEnabled) return null;
-  const recent = await ConversationMessage.find({ platform, platform_id: platformId, direction: 'inbound', timestamp: { $gte: new Date(Date.now() - 10 * 60_000) } })
+  const recent = await ConversationMessage.find({ platform, platform_id: platformId, direction: 'inbound', kind: { $exists: false }, timestamp: { $gte: new Date(Date.now() - 10 * 60_000) } })
     .sort({ timestamp: -1 }).limit(5).select('body').lean();
   const context = [text, ...recent.map(message => message.body)].join(' ');
   const hasContactData = platform === 'instagram' && (emailPattern.test(text) || phonePattern.test(text));

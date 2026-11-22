@@ -36,6 +36,12 @@ mostrados, pero no equivale a un segundo factor.
 
 Desde el admin (Mila AI → Inscripciones) se enciende la consulta por WhatsApp (apagada por defecto) y se editan los textos. En Instagram se habilita por bloque en Entrenamiento y atiende hasta 6 consultas por hora por cuenta.
 
+## Respuestas privadas a comentarios
+
+Apagado por defecto: cada bloque necesita "Responder también comentarios" en Entrenamiento (independiente del switch de DMs) y una frase coincidente.
+Requisitos en Meta antes de activar un bloque: webhook de Instagram suscrito al campo `comments`; el token `META_INSTAGRAM_ACCESS_TOKEN` generado con `instagram_business_manage_comments` (si se generó solo con mensajes, regenerarlo y actualizar la variable; sin ese permiso Meta responde 4xx y el panel muestra la respuesta "no enviada"); Advanced Access para usuarios sin rol en la app.
+Prueba: bloque de prueba solo para comentarios con una frase inocua, comentar desde otra cuenta, ver una respuesta única en Inbox/Requests y en Conversaciones; revisar `[Instagram Webhook] Resumen` (`comments`). Límites: una respuesta por comentario, 7 días, la persona debe contestar para seguir, 3/h por persona y 30/h por cuenta.
+
 ## Validación local
 
 `npm run test:local:instagram` ejecuta el webhook real contra la BD de `.env` (debe llamarse con `test`, `dev`, `local` o `staging`), con Graph simulado y Gemini real (o `-- --mock-gemini`). Crea datos con prefijo `local-test` y los borra al terminar. No reemplaza la prueba con un DM real.

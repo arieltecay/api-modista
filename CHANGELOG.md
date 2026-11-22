@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Instagram puede responder por mensaje privado a comentarios públicos, solo en los bloques donde el admin lo activa (apagado por defecto).
 - Cada webhook de Instagram deja un log de resumen (guardados, ecos, sin texto, otros eventos) y el tope de consultas pasa a un contador atómico.
 - El admin puede encender la consulta de inscripciones por WhatsApp y editar los textos del bot; Instagram limita a 6 consultas por hora por cuenta.
 - Agrega `npm run test:local:instagram` y corrige que el celular se tomara de los dígitos del email al consultar inscripciones.

@@ -2,12 +2,14 @@ import crypto from 'crypto';
 import { Request, Response } from 'express';
 import { 
   InstagramWebhookPayload, 
-  InstagramWebhookChangeValue 
+  InstagramWebhookChangeValue,
+  InstagramCommentValue,
 } from '../../types/instagram-official.js';
 import { generateAIResponse } from '../../services/gemini-service.js';
 import { answerEnrollmentMessage } from '../../services/BotEnrollment/index.js';
 import { getInstagramReplyPolicy } from '../../services/BotReplyPolicy/index.js';
 import { processBotWebhookMessage } from '../../services/BotWebhookEvent/index.js';
+import { commentEventKey, parseCommentChange, processInstagramComment } from '../../services/instagram/instagram-comment-service.js';
 import { sendInstagramMessage } from '../../services/instagram/instagram-official-service.js';
 import ConversationMessage from '../../models/ConversationMessage.js';
 import { logger } from '../../services/logger.js';
@@ -91,14 +93,27 @@ export const handleWebhook = async (req: Request, res: Response) => {
     }
 
     const body: InstagramWebhookPayload = req.body;
-    const summary = { texts: 0, echoes: 0, nonText: 0, ignored: [] as string[] };
+    const summary = { texts: 0, comments: 0, echoes: 0, nonText: 0, ignored: [] as string[] };
 
     if (body.object !== 'instagram') {
       logger.warn('[Instagram Webhook] Objeto no reconocido:', { object: body.object });
       return res.sendStatus(404);
     }
 
+    const handleCommentChange = async (field: string, value: InstagramCommentValue | undefined, entryId: string) => {
+      const parsed = parseCommentChange(field, value, [process.env.META_INSTAGRAM_USER_ID, entryId]);
+      if ('ignored' in parsed) {
+        summary.ignored.push(parsed.ignored);
+        return;
+      }
+      await processBotWebhookMessage('instagram', commentEventKey(parsed.event.commentId), () => processInstagramComment(parsed.event));
+      summary.comments += 1;
+    };
+
     for (const entry of body.entry) {
+      // Instagram Login entrega los comentarios directamente en la entrada (sin changes[]).
+      if (entry.field) await handleCommentChange(entry.field, entry.value, entry.id);
+
       // Formato legacy: entry.messaging[]
       if (entry.messaging) {
         for (const messaging of entry.messaging) {
@@ -136,7 +151,7 @@ export const handleWebhook = async (req: Request, res: Response) => {
       if (entry.changes) {
         for (const change of entry.changes) {
           if (change.field !== 'messages') {
-            summary.ignored.push(`change:${change.field}`);
+            await handleCommentChange(change.field, change.value as InstagramCommentValue, entry.id);
             continue;
           }
 

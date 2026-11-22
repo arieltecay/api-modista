@@ -15,8 +15,13 @@ const matchesPhrase = (message: string, phrase: string): boolean => {
   return normalized.length > 0 && new RegExp(`(?<![a-z0-9])${escapeRegex(normalized)}`).test(message);
 };
 
-export const getInstagramReplyPolicy = async (text: string): Promise<InstagramInstruction[]> => {
-  const instructions = await BotInstruction.find({ isActive: true, instagramAutoReply: true })
+export type InstagramChannel = 'dm' | 'comment';
+
+/** Cada canal tiene su propio interruptor: activar los DMs de un bloque nunca habilita comentarios. */
+const CHANNEL_SWITCH = { dm: 'instagramAutoReply', comment: 'instagramCommentReply' } as const;
+
+export const getInstagramReplyPolicy = async (text: string, channel: InstagramChannel = 'dm'): Promise<InstagramInstruction[]> => {
+  const instructions = await BotInstruction.find({ isActive: true, [CHANNEL_SWITCH[channel]]: true })
     .sort({ order: 1 }).select('title content instagramKeywords instagramEnrollmentLookup').lean();
   const message = normalize(text);
   return instructions
