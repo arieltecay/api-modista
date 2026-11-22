@@ -14,6 +14,10 @@ import { logger } from '../../services/logger.js';
 
 let lastSignatureMismatchLogAt = 0;
 
+const SENDER_FIELDS = new Set(['sender', 'recipient', 'timestamp']);
+/** Tipo de un evento sin mensaje (read, reaction, postback...), sin ningún dato del usuario. */
+const eventKind = (messaging: object): string => Object.keys(messaging).filter(key => !SENDER_FIELDS.has(key)).join('+') || 'unknown';
+
 /**
  * @route   GET /api/notification/instagram/webhook
  * @desc    Verificación del webhook de Instagram
@@ -87,6 +91,7 @@ export const handleWebhook = async (req: Request, res: Response) => {
     }
 
     const body: InstagramWebhookPayload = req.body;
+    const summary = { texts: 0, echoes: 0, nonText: 0, ignored: [] as string[] };
 
     if (body.object !== 'instagram') {
       logger.warn('[Instagram Webhook] Objeto no reconocido:', { object: body.object });
@@ -97,11 +102,15 @@ export const handleWebhook = async (req: Request, res: Response) => {
       // Formato legacy: entry.messaging[]
       if (entry.messaging) {
         for (const messaging of entry.messaging) {
-          if (!messaging.message) continue;
+          if (!messaging.message) {
+            summary.ignored.push(eventKind(messaging));
+            continue;
+          }
 
           // BUG #3: Ignorar echos para prevenir loops de mensajeria
           if (messaging.message.is_echo) {
             logger.info('[Instagram Webhook] Se detectó evento de tipo ECO (legacy), ignorando');
+            summary.echoes += 1;
             continue;
           }
 
@@ -110,11 +119,15 @@ export const handleWebhook = async (req: Request, res: Response) => {
 
           if (!textBody) {
             logger.info('[Instagram Webhook] Mensaje sin texto (imagen/sticker), ignorado');
+            summary.nonText += 1;
             continue;
           }
 
           if (messaging.message.mid) {
             await processBotWebhookMessage('instagram', messaging.message.mid, () => processInstagramMessage(from, textBody, messaging.message.mid));
+            summary.texts += 1;
+          } else {
+            summary.ignored.push('message_without_id');
           }
         }
       }
@@ -122,7 +135,10 @@ export const handleWebhook = async (req: Request, res: Response) => {
       // Formato Cloud API v2: entry.changes[].value.messages[]
       if (entry.changes) {
         for (const change of entry.changes) {
-          if (change.field !== 'messages') continue;
+          if (change.field !== 'messages') {
+            summary.ignored.push(`change:${change.field}`);
+            continue;
+          }
 
           const value = change.value as InstagramWebhookChangeValue;
           
@@ -133,12 +149,14 @@ export const handleWebhook = async (req: Request, res: Response) => {
               // BUG #3: Ignorar echos del propio bot en Cloud API para evitar loops
               if (from === process.env.META_INSTAGRAM_USER_ID) {
                 logger.info('[Instagram Webhook] Se detectó evento de origen bot (Cloud API), ignorando echo');
+                summary.echoes += 1;
                 continue;
               }
 
               // @ts-ignore
               if (message.is_echo) {
                 logger.info('[Instagram Webhook] Se detectó bandera is_echo en Cloud API, ignorando echo');
+                summary.echoes += 1;
                 continue;
               }
               
@@ -153,18 +171,21 @@ export const handleWebhook = async (req: Request, res: Response) => {
                     { upsert: true },
                   );
                 });
+                summary.nonText += 1;
                 continue;
               }
 
               if (!textBody) continue;
 
               await processBotWebhookMessage('instagram', message.id, () => processInstagramMessage(from, textBody, message.id));
+              summary.texts += 1;
             }
           }
         }
       }
     }
 
+    logger.info('[Instagram Webhook] Resumen', summary);
     res.status(200).send('EVENT_RECEIVED');
   } catch (error: any) {
     logger.error('[Instagram Webhook] Error procesando mensaje:', { message: error.message, stack: error.stack });
