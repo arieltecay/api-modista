@@ -27,6 +27,7 @@ async function getElapsedSinceLatestInboundMessage(recipientId: string): Promise
     platform: 'instagram',
     platform_id: recipientId,
     direction: 'inbound',
+    kind: { $exists: false }, // un comentario público no abre la ventana de mensajería
   }).sort({ timestamp: -1 }).select('timestamp').lean();
 
   const lastInboundAt = latestInboundMessage?.timestamp?.getTime();

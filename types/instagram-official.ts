@@ -70,14 +70,26 @@ export interface InstagramWebhookChangeValue {
   }>;
 }
 
+export interface InstagramCommentValue {
+  id?: string;          // ID del comentario (Instagram Login)
+  comment_id?: string;  // ID del comentario (Facebook/Unified Login)
+  parent_id?: string;   // Presente solo en respuestas a otro comentario
+  text?: string;
+  from?: { id?: string; username?: string };
+  media?: { id?: string; media_product_type?: string; ad_id?: string };
+}
+
 export interface InstagramWebhookEntry {
   id: string;
   time: number;
   messaging?: InstagramMessagingEntry[];   // Formato legacy (v1)
   changes?: Array<{
-    field: 'messages';
-    value: InstagramWebhookChangeValue;    // Formato Cloud API (v2)
+    field: string;
+    value: InstagramWebhookChangeValue | InstagramCommentValue;    // Formato Cloud API (v2)
   }>;
+  /** Instagram Login entrega el cambio directamente en la entrada, sin `changes[]`. */
+  field?: string;
+  value?: InstagramCommentValue;
 }
 
 export interface InstagramWebhookPayload {

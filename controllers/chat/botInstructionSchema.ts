@@ -13,6 +13,7 @@ export const instructionInputSchema = z.object({
   instagramAutoReply: z.boolean().default(false),
   instagramKeywords: keywords.default([]),
   instagramEnrollmentLookup: z.boolean().default(false),
+  instagramCommentReply: z.boolean().default(false),
 });
 
 // Sin defaults: una actualización parcial no debe reiniciar lo que omite.
@@ -21,4 +22,5 @@ export const instructionUpdateSchema = z.object({
   instagramAutoReply: z.boolean(),
   instagramKeywords: keywords,
   instagramEnrollmentLookup: z.boolean(),
+  instagramCommentReply: z.boolean(),
 }).partial();
