@@ -35,20 +35,7 @@
       color: #555;
     }
 
-    .course-link {
-      display: inline-block;
-      background-color: #8a2be2;
-      color: white;
-      padding: 12px 24px;
-      text-decoration: none;
-      border-radius: 6px;
-      margin: 20px 0;
-      font-weight: bold;
-    }
 
-    .course-link:hover {
-      background-color: #7a1fb2;
-    }
 
     .footer {
       margin-top: 30px;
@@ -74,7 +61,13 @@
     <p>
       Muchas gracias por confiar en nosotros para tu formación. Aquí tienes el acceso directo para comenzar tu curso:
     </p>
-    <a href="{{coursePaid}}" class="course-link" target="_blank">Acceder al Curso ahora</a>
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 24px 0;">
+      <tr>
+        <td align="center" bgcolor="#5b21b6" style="background-color: #5b21b6; border-radius: 8px;">
+          <a href="{{coursePaid}}" target="_blank" style="display: inline-block; padding: 16px 32px; font-family: Arial, Helvetica, sans-serif; font-size: 18px; font-weight: bold; line-height: 1; color: #ffffff !important; text-decoration: none; border-radius: 8px;"><span style="color: #ffffff;">Acceder al curso &rarr;</span></a>
+        </td>
+      </tr>
+    </table>
     <p>
       Si tienes alguna duda antes de empezar, escríbenos respondiendo este mail o por WhatsApp.
     </p>
