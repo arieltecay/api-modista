@@ -48,6 +48,18 @@ test('5xx, 429 and network failures are transient', async () => {
   }
 });
 
+test('Meta temporary and throttling 4xx error codes are transient', async () => {
+  for (const code of [1, 2, 4, 17, 32, 341, 368, 613, 80002]) {
+    mock.method(axios, 'post', async () => {
+      throw Object.assign(new Error('Meta throttling'), {
+        response: { status: 400, data: { error: { code } } },
+      });
+    });
+    assert.equal((await sendInstagramPrivateReply('comment-1', 'Hola')).status, 'transient', `code ${code}`);
+    mock.restoreAll();
+  }
+});
+
 test('missing credentials are a permanent configuration failure and call nothing', async () => {
   delete process.env.META_INSTAGRAM_ACCESS_TOKEN;
   const post = mock.method(axios, 'post', async () => ({ data: {} }));

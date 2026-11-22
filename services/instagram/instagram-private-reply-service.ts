@@ -13,6 +13,7 @@ export type PrivateReplyResult =
   | { status: 'transient'; httpStatus?: number };
 
 const API_VERSION = process.env.META_INSTAGRAM_API_VERSION ?? 'v27.0';
+const TRANSIENT_META_ERROR_CODES = new Set([1, 2, 4, 17, 32, 341, 368, 613, 80002]);
 
 export const sendInstagramPrivateReply = async (commentId: string, text: string): Promise<PrivateReplyResult> => {
   const token = process.env.META_INSTAGRAM_ACCESS_TOKEN;
@@ -35,7 +36,9 @@ export const sendInstagramPrivateReply = async (commentId: string, text: string)
     const provider = response?.data?.error;
     // Solo se registran identificadores del error, nunca el mensaje de la excepción (podría incluir la credencial).
     logger.error('[Instagram Private Reply] Meta rechazó o no recibió la respuesta', { httpStatus, code: provider?.code, subcode: provider?.error_subcode, traceId: provider?.fbtrace_id });
-    const permanent = httpStatus !== undefined && httpStatus >= 400 && httpStatus < 500 && httpStatus !== 429;
+    const isClientError = httpStatus !== undefined && httpStatus >= 400 && httpStatus < 500;
+    const isTransientMetaError = provider?.code !== undefined && TRANSIENT_META_ERROR_CODES.has(provider.code);
+    const permanent = isClientError && httpStatus !== 429 && !isTransientMetaError;
     return permanent
       ? { status: 'permanent', httpStatus, code: provider?.code, subcode: provider?.error_subcode, traceId: provider?.fbtrace_id }
       : { status: 'transient', httpStatus };
