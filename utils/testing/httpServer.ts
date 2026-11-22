@@ -6,6 +6,7 @@ import type { Server } from 'node:http';
 export interface TestResponse {
   status: number;
   body: unknown;
+  headers: Headers;
 }
 
 export interface TestServer {
@@ -33,7 +34,7 @@ export const startTestServer = async (mount: (app: Express) => void): Promise<Te
     });
     const text = await response.text();
     const isJson = response.headers.get('content-type')?.includes('application/json');
-    return { status: response.status, body: isJson ? JSON.parse(text) : text || undefined };
+    return { status: response.status, body: isJson ? JSON.parse(text) : text || undefined, headers: response.headers };
   };
 
   return {

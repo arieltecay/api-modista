@@ -4,6 +4,18 @@ import path from 'path';
 const templatesDir = path.join(process.cwd(), 'templates');
 
 /**
+ * Escapa texto que escribió una persona antes de pasarlo a una plantilla. Neutraliza también `$`:
+ * `renderTemplate` usa `String.replace` y un `$&` en el valor se interpretaría como patrón.
+ */
+export const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/\$/g, '&#36;');
+
+/**
  * Lee un archivo de plantilla HTML y reemplaza los marcadores de posición.
  * Los marcadores de posición deben tener el formato {{key}}.
  * @param {string} templateName - El nombre del archivo de la plantilla (sin .html).
