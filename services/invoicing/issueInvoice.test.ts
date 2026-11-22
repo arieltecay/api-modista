@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import test, { after, before, beforeEach } from 'node:test';
+import test, { after, before, beforeEach, mock } from 'node:test';
 import mongoose from 'mongoose';
 import Invoice from '../../models/Invoice/index.js';
+import { logger } from '../logger.js';
 import { createFakeArca } from '../../utils/testing/fakeArca.js';
 import { startTestDb } from '../../utils/testing/mongoMemoryServer.js';
 import { ArcaRejectedError, ArcaUnavailableError } from './errors.js';
@@ -308,4 +309,47 @@ test('an invoice of another environment is left alone', async () => {
   assert.equal(result.status, 'pending');
   assert.equal(result.issued, false);
   assert.equal(state.requests.length, 0);
+});
+
+/** Runs `action` and returns what the logger received at `level`. */
+const logged = async (level: 'info' | 'warn' | 'error', action: () => Promise<unknown>): Promise<string> => {
+  const spy = mock.method(logger, level, () => logger);
+  try {
+    await action();
+    return JSON.stringify(spy.mock.calls.map((call) => call.arguments));
+  } finally {
+    spy.mock.restore();
+  }
+};
+
+test('logs each authorized invoice with its number and CAE, and nothing personal', async () => {
+  const { client } = createFakeArca();
+  const data = input();
+
+  const output = await logged('info', () => issueInvoiceForInscription(data, deps(client)));
+
+  assert.match(output, /Factura autorizada/);
+  assert.match(output, /"number":1/);
+  assert.match(output, /"cae":"CAE1"/);
+  assert.doesNotMatch(output, /beatriz@example\.com|BEATRIZ/);
+});
+
+test('warns when ARCA does not answer and the invoice stays pending', async () => {
+  const { client, state } = createFakeArca();
+  state.failNext.push(new ArcaUnavailableError('socket hang up'));
+
+  const output = await logged('warn', () => issueInvoiceForInscription(input(), deps(client)));
+
+  assert.match(output, /queda pendiente/);
+  assert.match(output, /socket hang up/);
+});
+
+test('logs an error with the ARCA code when ARCA refuses the invoice', async () => {
+  const { client, state } = createFakeArca();
+  state.failNext.push(new ArcaRejectedError('10015: Factura C no puede discriminar IVA', ['10015']));
+
+  const output = await logged('error', () => issueInvoiceForInscription(input(), deps(client)));
+
+  assert.match(output, /rechazada/);
+  assert.match(output, /10015/);
 });

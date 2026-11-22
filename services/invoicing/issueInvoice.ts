@@ -164,6 +164,9 @@ const obtainCae = async (start: InvoiceDoc, deps: IssueInvoiceDeps): Promise<Inv
 /** Leaves the invoice in `status`, releases the lease and keeps any reserved number for the next attempt. */
 const close = async (invoice: InvoiceDoc, status: 'pending' | 'failed', message: string): Promise<IssueInvoiceResult> => {
   const closed = await Invoice.findByIdAndUpdate(invoice._id, { $set: { status, lastError: message, lockedUntil: null } }, { new: true });
+  const context = { invoiceId: String(invoice._id), environment: invoice.environment, number: invoice.number, reason: message };
+  if (status === 'failed') logger.error('[Invoicing] Factura rechazada por ARCA', context);
+  else logger.warn('[Invoicing] Factura queda pendiente: ARCA no respondió', context);
   return toResult(closed ?? invoice, false);
 };
 
@@ -188,7 +191,16 @@ export const issueInvoiceForInscription = async (input: IssueInvoiceInput, deps:
   if (!claimed) return toResult((await Invoice.findById(invoice._id)) ?? invoice, false);
 
   try {
-    return toResult(await obtainCae(claimed, deps), true);
+    const issued = await obtainCae(claimed, deps);
+    // Only fiscal identifiers: no name, email or amount of the receiver.
+    logger.info('[Invoicing] Factura autorizada', {
+      invoiceId: String(issued._id),
+      environment: issued.environment,
+      pointOfSale: issued.pointOfSale,
+      number: issued.number,
+      cae: issued.cae,
+    });
+    return toResult(issued, true);
   } catch (error) {
     if (error instanceof ArcaRejectedError) return close(claimed, 'failed', error.message);
     if (error instanceof ArcaUnavailableError) return close(claimed, 'pending', error.message);
