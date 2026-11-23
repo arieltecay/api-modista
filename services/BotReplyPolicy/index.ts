@@ -19,6 +19,11 @@ const matchesPhrase = (message: string, phrase: string): boolean => {
   return normalized.length > 0 && new RegExp(`(?<![a-z0-9])${escapeRegex(normalized)}`).test(message);
 };
 
+const matchesWhatsAppPhrase = (message: string, phrase: string): boolean => {
+  const normalized = normalize(phrase);
+  return normalized.length > 0 && new RegExp(`(?<![a-z0-9])${escapeRegex(normalized)}(?![a-z0-9])`).test(message);
+};
+
 export type InstagramChannel = 'dm' | 'comment';
 
 /** Cada canal tiene su propio interruptor: activar los DMs de un bloque nunca habilita comentarios. */
@@ -53,5 +58,5 @@ export const getWhatsAppFixedReply = async (text: string): Promise<string | null
   const rules = await BotInstruction.find({ isActive: true, whatsappFixedReplyEnabled: true })
     .sort({ order: 1, _id: 1 }).select('whatsappKeywords whatsappFixedResponse').lean();
   const message = normalize(text);
-  return rules.find(rule => rule.whatsappFixedResponse?.trim() && (rule.whatsappKeywords ?? []).some(keyword => matchesPhrase(message, keyword)))?.whatsappFixedResponse ?? null;
+  return rules.find(rule => rule.whatsappFixedResponse?.trim() && (rule.whatsappKeywords ?? []).some(keyword => matchesWhatsAppPhrase(message, keyword)))?.whatsappFixedResponse ?? null;
 };

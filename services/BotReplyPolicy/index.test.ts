@@ -100,5 +100,6 @@ test('WhatsApp fixed reply matches an active phrase before Mila, independently o
   await BotInstruction.create({ title: 'Acceso', content: 'x', order: 2, whatsappFixedReplyEnabled: true, whatsappKeywords: ['me inscribí', 'confirmar mi acceso'], whatsappFixedResponse: 'Revisá tu correo y este WhatsApp.' });
   await BotInstruction.create({ title: 'Otra', content: 'x', order: 1, whatsappFixedReplyEnabled: false, whatsappKeywords: ['me inscribí'], whatsappFixedResponse: 'No debe salir' });
   assert.equal(await getWhatsAppFixedReply('Me inscribi al curso Camisas'), 'Revisá tu correo y este WhatsApp.');
+  assert.equal(await getWhatsAppFixedReply('Me inscribiría, ¿cómo pago?'), null);
   assert.equal(await getWhatsAppFixedReply('No recibí nada'), null);
 });
