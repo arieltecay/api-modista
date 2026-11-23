@@ -10,6 +10,7 @@ import BotWebhookEvent from '../../models/BotWebhookEvent/index.js';
 import ConversationMessage from '../../models/ConversationMessage.js';
 import Inscription from '../../models/Inscription.js';
 import { logger } from '../../services/logger.js';
+import { DEFAULT_ENROLLMENT_TEMPLATES } from '../../services/BotEnrollment/templates.js';
 import BotLookupAttempt from '../../models/BotLookupAttempt/index.js';
 import { startTestDb } from '../../utils/testing/mongoMemoryServer.js';
 
@@ -369,10 +370,199 @@ test('an over-long generated reply is trimmed below the Instagram message limit'
   await commentBlock();
   mock.restoreAll();
   mock.method(axios, 'post', async (url: string, payload: never) => {
-    if (url.includes('generativelanguage.googleapis.com')) return { data: { candidates: [{ content: { parts: [{ text: 'a'.repeat(3000) }] } }] } };
+    if (url.includes('generativelanguage.googleapis.com')) return { data: { candidates: [{ content: { parts: [{ text: '👋'.repeat(3000) }] } }] } };
     network.graph.push(payload);
     return { data: {} };
   });
   await comment();
-  assert.ok(network.graph[0].message.text.length <= 900);
+  // Trimmed by characters: 900 whole emojis, no half emoji at the end.
+  assert.equal(network.graph[0].message.text, '👋'.repeat(900));
+});
+
+// ─── Respuesta fija: se envía tal cual, sin Gemini ──────────────────────────
+
+const FIXED = 'Hola 👋\nEl curso de camisa empieza el sábado.';
+const fixedBlock = (overrides: Record<string, unknown> = {}) => addBlock({ title: 'Fija', instagramResponseMode: 'fixed', instagramFixedResponse: FIXED, ...overrides });
+
+test('a fixed DM rule sends its exact text through the usual path and never calls Gemini', async () => {
+  await fixedBlock();
+
+  assert.equal(await receiveDm('m-fixed', 'Info de la camisa'), 200);
+
+  assert.equal(network.gemini.length, 0);
+  assert.deepEqual(network.graph.map(call => call.message.text), [FIXED]);
+  const outbound = await ConversationMessage.findOne({ platform: 'instagram', direction: 'outbound' }).lean();
+  assert.equal(outbound?.body, FIXED);
+  assert.equal(outbound?.status, 'sent');
+});
+
+test('a fixed rule wins over a matching Gemini rule, and several fixed rules send one reply by order', async () => {
+  await addBlock({ title: 'Gemini', order: 0 });
+  await fixedBlock({ order: 7, instagramFixedResponse: 'Respuesta de orden 7' });
+  await fixedBlock({ order: 3, instagramFixedResponse: 'Respuesta de orden 3' });
+
+  await receiveDm('m-fixed-many', 'camisa');
+
+  assert.equal(network.gemini.length, 0);
+  assert.deepEqual(network.graph.map(call => call.message.text), ['Respuesta de orden 3']);
+});
+
+test('a fixed DM reply keeps the retry and idempotency rules: one inbound, one outbound', async () => {
+  await fixedBlock();
+  network.graphFails = true;
+  assert.equal(await receiveDm('m-fixed-retry', 'camisa'), 500);
+  network.graphFails = false;
+  assert.equal(await receiveDm('m-fixed-retry', 'camisa'), 200);
+  assert.equal(await receiveDm('m-fixed-retry', 'camisa'), 200);
+
+  assert.equal(await count({ direction: 'inbound' }), 1);
+  assert.equal(await count({ direction: 'outbound' }), 1);
+  assert.equal(network.gemini.length, 0);
+});
+
+test('enrollment lookup keeps answering before a fixed rule; other questions on the same topic get the fixed text', async () => {
+  await addBlock({ title: 'Inscripción', order: 5, instagramKeywords: ['curso'], instagramEnrollmentLookup: true });
+  await fixedBlock({ order: 1, instagramKeywords: ['curso'] });
+  await Inscription.create({ nombre: 'Ana', apellido: 'Paz', email: 'ana@example.com', celular: '+54 9 381 555 1234', courseId: 'c-1', courseTitle: 'Una camisa', coursePrice: 100, paymentStatus: 'paid' });
+
+  await receiveDm('m-fixed-enroll', 'Mi inscripción al curso: ana@example.com, celular 381 555 1234');
+  assert.match(network.graph[0].message.text, /Una camisa: figura como pagada/);
+
+  await receiveDm('m-fixed-enroll-2', '¿Cuándo empieza el curso?', 'ig-other');
+  assert.equal(network.graph[1].message.text, FIXED);
+  assert.equal(network.gemini.length, 0);
+});
+
+test('one rule with a fixed reply and enrollment lookup: the lookup answers enrollment questions, the fixed text the rest', async () => {
+  await fixedBlock({ instagramKeywords: ['curso'], instagramEnrollmentLookup: true });
+  await Inscription.create({ nombre: 'Ana', apellido: 'Paz', email: 'ana@example.com', celular: '+54 9 381 555 1234', courseId: 'c-1', courseTitle: 'Una camisa', coursePrice: 100, paymentStatus: 'paid' });
+
+  await receiveDm('m-both-status', 'Mi inscripción al curso: ana@example.com, celular 381 555 1234');
+  await receiveDm('m-both-nodata', '¿Está confirmada mi inscripción al curso?', 'ig-nodata');
+  await receiveDm('m-both-other', '¿Cuánto cuesta el curso?', 'ig-other');
+
+  const texts = network.graph.map(call => call.message.text);
+  assert.match(texts[0], /Una camisa: figura como pagada/);
+  assert.equal(texts[1], DEFAULT_ENROLLMENT_TEMPLATES.askContact);
+  assert.equal(texts[2], FIXED);
+  assert.equal(texts.length, 3);
+  assert.equal(network.gemini.length, 0);
+});
+
+test('fixed + enrollment: a price range is not mistaken for a phone number and gets the fixed text', async () => {
+  await fixedBlock({ instagramKeywords: ['camisa'], instagramEnrollmentLookup: true });
+  await receiveDm('m-price', '¿La camisa cuesta 150.000 - 200.000?');
+  assert.deepEqual(network.graph.map(call => call.message.text), [FIXED]);
+});
+
+test('fixed + enrollment: right after an enrollment question, the same person is still asked for contact data (10-minute context)', async () => {
+  await fixedBlock({ instagramKeywords: ['curso'], instagramEnrollmentLookup: true });
+  await receiveDm('m-same-1', '¿Está confirmada mi inscripción al curso?', 'ig-same');
+  await receiveDm('m-same-2', '¿Cuánto cuesta el curso?', 'ig-same');
+  assert.deepEqual(network.graph.map(call => call.message.text), [DEFAULT_ENROLLMENT_TEMPLATES.askContact, DEFAULT_ENROLLMENT_TEMPLATES.askContact]);
+  assert.equal(network.gemini.length, 0);
+});
+
+test('a fixed comment reply with emojis at the limit is sent whole, never cut inside an emoji', async () => {
+  const atLimit = 'a'.repeat(867) + '👋'.repeat(33); // 900 characters, 999 bytes, 933 UTF-16 units
+  await commentBlock({ instagramResponseMode: 'fixed', instagramFixedResponse: atLimit });
+  await comment();
+  assert.equal(network.graph[0].message.text, atLimit);
+});
+
+test('a comment with enrollment data on a fixed + lookup rule gets one private fixed reply and never reveals the enrollment', async () => {
+  await commentBlock({ instagramKeywords: ['curso'], instagramResponseMode: 'fixed', instagramFixedResponse: FIXED, instagramEnrollmentLookup: true });
+  await Inscription.create({ nombre: 'Ana', apellido: 'Paz', email: 'ana@example.com', celular: '+54 9 381 555 1234', courseId: 'c-1', courseTitle: 'Una camisa', coursePrice: 100, paymentStatus: 'paid' });
+  const value = commentValue({ text: 'Mi inscripción al curso: ana@example.com, celular 381 555 1234' });
+
+  assert.equal(await comment(value), 200);
+  assert.equal(await comment(value), 200);
+
+  assert.equal(network.graph.length, 1);
+  assert.deepEqual(network.graph[0].recipient, { comment_id: 'c-1' });
+  assert.equal(network.graph[0].message.text, FIXED);
+  assert.doesNotMatch(JSON.stringify(network.graph), /Una camisa|pagada/);
+  assert.equal(network.gemini.length, 0);
+});
+
+test('fixed + enrollment: an identified person who is not enrolled gets the safe "not found" answer, nothing else', async () => {
+  await fixedBlock({ instagramKeywords: ['curso'], instagramEnrollmentLookup: true });
+  await receiveDm('m-not-found', 'Mi inscripción al curso: nadie@example.com, celular 381 700 9999');
+  assert.deepEqual(network.graph.map(call => call.message.text), [DEFAULT_ENROLLMENT_TEMPLATES.notFound]);
+  assert.equal(network.gemini.length, 0);
+});
+
+test('several matching rules (fixed + lookup, and Gemini): one reply per message, lookup first, then fixed, never Gemini', async () => {
+  await addBlock({ title: 'Gemini', order: 0, instagramKeywords: ['curso'] });
+  await fixedBlock({ order: 4, instagramKeywords: ['curso'], instagramEnrollmentLookup: true });
+
+  await receiveDm('m-many-1', '¿Qué días es el curso?', 'ig-a');
+  await receiveDm('m-many-2', '¿Quedé anotada en el curso?', 'ig-b');
+
+  assert.deepEqual(network.graph.map(call => call.message.text), [FIXED, DEFAULT_ENROLLMENT_TEMPLATES.askContact]);
+  assert.equal(network.gemini.length, 0);
+});
+
+test('Gemini writes only from Gemini rules: a matching fixed rule without text never reaches the prompt', async () => {
+  await addBlock({ title: 'Gemini', content: 'CONTEXTO-GEMINI', order: 2 });
+  await BotInstruction.collection.insertOne({ title: 'Fija rota', content: 'CONTEXTO-FIJA', order: 1, isActive: true, instagramAutoReply: true, instagramKeywords: ['camisa'], instagramResponseMode: 'fixed', instagramFixedResponse: '' });
+
+  await receiveDm('m-only-gemini-rules', 'camisa');
+
+  assert.equal(network.gemini.length, 1);
+  assert.match(JSON.stringify(network.gemini), /CONTEXTO-GEMINI/);
+  assert.doesNotMatch(JSON.stringify(network.gemini), /CONTEXTO-FIJA/);
+});
+
+test('a message that only matches a fixed rule without text gets no reply and no Gemini call', async () => {
+  await BotInstruction.collection.insertOne({ title: 'Fija rota', content: 'x', order: 1, isActive: true, instagramAutoReply: true, instagramCommentReply: true, instagramKeywords: ['camisa'], instagramResponseMode: 'fixed', instagramFixedResponse: '' });
+
+  assert.equal(await receiveDm('m-broken-fixed', 'camisa'), 200);
+  assert.equal(await comment(), 200);
+
+  assert.equal(network.graph.length, 0);
+  assert.equal(network.gemini.length, 0);
+  assert.equal(await BotLookupAttempt.countDocuments(), 0, 'no hourly comment allowance is spent');
+});
+
+test('a legacy rule without the new fields keeps answering through Gemini', async () => {
+  await BotInstruction.collection.insertOne({ title: 'Viejo', content: 'Contenido viejo', order: 1, isActive: true, instagramAutoReply: true, instagramKeywords: ['camisa'], instagramEnrollmentLookup: false, instagramCommentReply: false });
+  await receiveDm('m-legacy', 'camisa');
+  assert.equal(network.gemini.length, 1);
+  assert.equal(network.graph[0].message.text, 'Respuesta de IA');
+});
+
+test('a Gemini rule that stored a fixed text from before still lets Mila write the reply', async () => {
+  await addBlock({ instagramResponseMode: 'gemini', instagramFixedResponse: 'TEXTO-GUARDADO' });
+  await receiveDm('m-gemini-kept', 'camisa');
+  assert.equal(network.graph[0].message.text, 'Respuesta de IA');
+  assert.doesNotMatch(JSON.stringify(network.gemini), /TEXTO-GUARDADO/);
+});
+
+test('a fixed comment rule sends its exact text as the single private reply, without Gemini', async () => {
+  await commentBlock({ instagramResponseMode: 'fixed', instagramFixedResponse: FIXED });
+
+  assert.equal(await comment(), 200);
+  assert.equal(await comment(), 200);
+
+  assert.equal(network.gemini.length, 0);
+  assert.equal(network.graph.length, 1);
+  assert.deepEqual(network.graph[0].recipient, { comment_id: 'c-1' });
+  assert.equal(network.graph[0].message.text, FIXED);
+  const reply = await ConversationMessage.findOne({ kind: 'private_reply' }).lean();
+  assert.equal(reply?.body, FIXED);
+});
+
+test('fixed comment replies keep the per-person hourly cap', async () => {
+  await commentBlock({ instagramResponseMode: 'fixed', instagramFixedResponse: FIXED });
+  for (let index = 0; index < 5; index += 1) await comment(commentValue({ id: `c-fixed-rate-${index}` }));
+  assert.equal(network.graph.length, 3);
+  assert.equal(network.gemini.length, 0);
+});
+
+test('an unmatched message never sends a fixed reply', async () => {
+  await fixedBlock({ instagramCommentReply: true });
+  await receiveDm('m-fixed-none', 'Hola');
+  await comment(commentValue({ text: 'Qué lindo' }));
+  assert.equal(network.graph.length + network.gemini.length, 0);
 });

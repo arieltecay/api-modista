@@ -36,6 +36,12 @@ test('WhatsApp leaves unrelated texts and unknown senders to the existing flows'
   assert.equal(await answerEnrollmentMessage('whatsapp', '5493819990000', 'Mi inscripción'), null);
 });
 
+test('Instagram: a number without any email is not contact data, so price questions are left to the rule', async () => {
+  assert.equal(await answerEnrollmentMessage('instagram', 'ig-price', '¿La camisa cuesta 150.000 - 200.000?'), null);
+  assert.equal(await answerEnrollmentMessage('instagram', 'ig-price', 'Llamame al 381 555 1234'), null);
+  assert.match(await answerEnrollmentMessage('instagram', 'ig-mail', 'ana@example.com') ?? '', /email y el celular/);
+});
+
 test('digits inside the email are not mistaken for the phone number', async () => {
   await Inscription.create({ nombre: 'Eva', apellido: 'Sol', email: 'eva17000000001234@example.com', celular: '+54 9 381 700 0002', courseId: 'course-2', courseTitle: 'Una falda', coursePrice: 100, paymentStatus: 'partial' });
   const answer = await answerEnrollmentMessage('instagram', 'ig-digits', 'Mi inscripción: eva17000000001234@example.com, celular 381 700 0002');

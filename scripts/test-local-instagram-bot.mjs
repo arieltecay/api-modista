@@ -150,6 +150,15 @@ const cases = [
     await send({ text: '¿Cuándo empieza el curso de zzcamisa?' });
     check('Gemini respondió y se envió por Graph', network.gemini.length === 1 && network.graph.length === 1);
   }],
+  ['respuesta fija: se envía tal cual y no usa Gemini', async () => {
+    const fixed = 'Hola 👋\nRespuesta fija de prueba';
+    await addBlock({ instagramResponseMode: 'fixed', instagramFixedResponse: fixed });
+    await addBlock({ title: `${TAG} gemini` });
+    await send({ text: 'info zzcamisa' });
+    check('envía exactamente el texto fijo', network.graph.length === 1 && network.graph[0]?.message?.text === fixed, network.graph[0]?.message?.text);
+    check('no llama a Gemini', network.gemini.length === 0);
+    check('guarda la respuesta enviada', (await countMessages({ direction: 'outbound', body: fixed })) === 1);
+  }],
 ];
 
 try {

@@ -1,7 +1,7 @@
 import type { InstagramCommentValue } from '../../types/instagram-official.js';
 import ConversationMessage from '../../models/ConversationMessage.js';
 import { consumeHourlyAttempt, releaseHourlyAttempt } from '../BotEnrollment/rateLimit.js';
-import { getInstagramReplyPolicy } from '../BotReplyPolicy/index.js';
+import { fixedReplyOf, geminiRulesOf, getInstagramReplyPolicy } from '../BotReplyPolicy/index.js';
 import { generateAIResponse } from '../gemini-service.js';
 import { logger } from '../logger.js';
 import { sendInstagramPrivateReply } from './instagram-private-reply-service.js';
@@ -49,7 +49,10 @@ export const processInstagramComment = async ({ commentId, from, text }: Instagr
   );
 
   const matchedInstructions = await getInstagramReplyPolicy(text, 'comment');
-  if (matchedInstructions.length === 0) return;
+  // Una regla fija coincidente se envía tal cual; si no hay, Gemini redacta solo con reglas de Gemini.
+  const fixedReply = fixedReplyOf(matchedInstructions);
+  const geminiRules = geminiRulesOf(matchedInstructions);
+  if (!fixedReply && geminiRules.length === 0) return;
 
   const userKey = `comment-user:${from}`;
   const withinUserCap = await consumeHourlyAttempt('instagram', userKey, COMMENT_REPLIES_PER_USER_PER_HOUR);
@@ -66,7 +69,8 @@ export const processInstagramComment = async ({ commentId, from, text }: Instagr
   let result: Awaited<ReturnType<typeof sendInstagramPrivateReply>>;
   try {
     // Las instrucciones de inscripción no se usan: un comentario es público y no autentica a la persona.
-    reply = (await generateAIResponse(text, from, 'instagram', matchedInstructions, 'comment')).slice(0, MAX_REPLY_CHARS);
+    // El texto fijo ya está validado y sale entero; lo generado se recorta por caracteres para no partir un emoji.
+    reply = fixedReply ?? [...await generateAIResponse(text, from, 'instagram', geminiRules, 'comment')].slice(0, MAX_REPLY_CHARS).join('');
     result = await sendInstagramPrivateReply(commentId, reply);
   } catch (error) {
     await releaseAllowance();

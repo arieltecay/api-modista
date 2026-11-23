@@ -9,8 +9,12 @@ export interface IBotInstruction extends Document {
   instagramKeywords: string[];
   instagramEnrollmentLookup: boolean;
   instagramCommentReply: boolean;
+  /** Ausente en reglas anteriores: se interpreta como 'gemini'. */
+  instagramResponseMode: 'gemini' | 'fixed';
   createdAt: Date;
   updatedAt: Date;
+  /** Texto que se envía tal cual en modo 'fixed'; se conserva al volver a 'gemini'. */
+  instagramFixedResponse?: string;
 }
 
 const BotInstructionSchema: Schema = new Schema({
@@ -34,7 +38,9 @@ const BotInstructionSchema: Schema = new Schema({
   instagramAutoReply: { type: Boolean, default: false },
   instagramKeywords: { type: [String], default: [] },
   instagramEnrollmentLookup: { type: Boolean, default: false },
-  instagramCommentReply: { type: Boolean, default: false }
+  instagramCommentReply: { type: Boolean, default: false },
+  instagramResponseMode: { type: String, enum: ['gemini', 'fixed'], default: 'gemini' },
+  instagramFixedResponse: { type: String }
 }, {
   timestamps: true
 });
