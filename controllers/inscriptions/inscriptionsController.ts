@@ -11,6 +11,7 @@ import { CreateInscriptionBody, CreateLandingInscriptionBody, ExportInscriptions
 import { resolveCourseIdentifier } from '../courses/helper.js';
 import { getEffectiveStartDate } from '../../utils/dateUtils.js';
 import { createInscription as createInscriptionService } from '../../services/inscriptions/inscriptionService.js';
+import { tryConfirmCouponUse } from '../../services/Coupons/index.js';
 import { fireMetaEvent, buildEventId } from '../../services/meta-capi-helpers/index.js';
 import { getGeoLocationFromIp } from '../../services/geolocation/index.js';
 import { isHoneypotTriggered, respondFakeSuccess } from './honeypot.js';
@@ -484,6 +485,8 @@ export const updatePaymentStatus = async (req: Request<{ id: string }, {}, Updat
       inscription.paymentSource = 'manual';
     }
     await inscription.save();
+    // Un pago marcado a mano también consume el cupón (idempotente).
+    if (inscription.paymentStatus === 'paid') await tryConfirmCouponUse(id);
 
     res.status(200).json({
       success: true,
@@ -665,6 +668,7 @@ export const addPayment = async (req: Request<{ id: string }, {}, { amount: numb
     }
 
     await inscription.save();
+    if (inscription.paymentStatus === 'paid') await tryConfirmCouponUse(id);
 
     // Enviar email
     try {
@@ -785,6 +789,7 @@ export const deletePayment = async (req: Request<{ id: string, paymentId: string
     }
 
     await inscription.save();
+    if (inscription.paymentStatus === 'paid') await tryConfirmCouponUse(id);
 
     res.status(200).json({
       success: true,

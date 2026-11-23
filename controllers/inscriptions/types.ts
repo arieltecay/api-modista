@@ -11,6 +11,7 @@ export interface CreateInscriptionBody {
   courseTitle: string;
   coursePrice: number;
   turnoId?: string;
+  couponCode?: string;
   sourceType?: 'app' | 'landing';
   landingPageId?: string;
   marketingSource?: string;
@@ -32,6 +33,7 @@ export interface CreateLandingInscriptionBody {
   courseTitle: string;
   coursePrice: number;
   landingPageId: string;
+  couponCode?: string;
   marketingSource?: string;
   utmParams?: any;
   sessionId?: string;

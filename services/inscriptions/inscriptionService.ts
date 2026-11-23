@@ -7,6 +7,9 @@ import { getGeoLocationFromIp } from '../geolocation/index.js';
 import { logger } from '../../services/logger.js';
 import { InscriptionBody, CreateInscriptionResult } from './types.js';
 import { META_MARKETING_CONSENT_VERSION } from '../../utils/metaMarketingConsent.js';
+import { claimSeat, mercadoPagoExpiration, newReservationEnd } from '../Coupons/reservation.js';
+import { couponNotValidError, priceInscription } from './couponPricing.js';
+import { publicInscriptionView, repriceExistingInscription } from './repricing.js';
 
 const getFrontendUrl = (): string => {
   if (process.env.FRONTEND_URL) return process.env.FRONTEND_URL.replace(/\/+$/, '');
@@ -67,7 +70,12 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
 
   // Fuente de verdad: precio/título del curso vienen de la DB (anti price-tampering),
   // email normalizado a lowercase para deduplicación correcta.
-  const { trustedCoursePrice: coursePrice, trustedCourseTitle: courseTitle, normalizedEmail } = validation;
+  const { trustedCourseTitle: courseTitle, normalizedEmail } = validation;
+  // El precio final (con cupón si aplica) lo decide el servidor; los campos de cupón del body se descartan.
+  const { coursePrice, hasCoupon, couponFields } = await priceInscription(body.couponCode, {
+    courseId: validation.finalCourseId,
+    price: validation.trustedCoursePrice,
+  });
   const metaMarketingConsent = body.metaMarketingConsent === true;
 
   const inscriptionData: InscriptionBody = {
@@ -76,6 +84,7 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
     courseTitle,
     coursePrice,
     courseId: validation.finalCourseId,
+    ...couponFields,
     metaMarketingConsent,
     metaMarketingConsentAt: metaMarketingConsent ? body.metaMarketingConsentAt ?? new Date() : undefined,
     metaMarketingConsentVersion: metaMarketingConsent ? META_MARKETING_CONSENT_VERSION : undefined,
@@ -88,15 +97,29 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
   };
   const eventSourceUrl = body.eventSourceUrl;
 
-  const inscription = await Inscription.create(inscriptionData).catch((createError: unknown) => {
-    // Race de dos requests simultáneos con el mismo email → índice único (E11000)
-    if ((createError as { code?: number })?.code === 11000) {
-      const err = new Error('Ya te encuentras inscripto en este curso con este email.') as Error & { statusCode: number };
-      err.statusCode = 409;
-      throw err;
-    }
-    throw createError;
-  });
+  const createNewInscription = () =>
+    Inscription.create(inscriptionData).catch((createError: unknown) => {
+      // Race de dos requests simultáneos con el mismo email → índice único (E11000)
+      if ((createError as { code?: number })?.code === 11000) {
+        const err = new Error('Ya te encuentras inscripto en este curso con este email.') as Error & { statusCode: number };
+        err.statusCode = 409;
+        throw err;
+      }
+      throw createError;
+    });
+
+  // Una inscripción sin pagar que vuelve con un cupón nuevo conserva su id y sus datos: solo cambia el precio.
+  const repriced = validation.existingInscriptionId
+    ? await repriceExistingInscription(validation.existingInscriptionId, { coursePrice, couponFields }, new Date())
+    : null;
+  const inscription = repriced ?? (await createNewInscription());
+
+  // El cupo se admite en una sola operación atómica sobre el cupón: quien no entra se deshace
+  // (la inscripción repreciada ya tomó su lugar antes de actualizarse).
+  if (!repriced && hasCoupon && !(await claimSeat(inscription.couponId, inscription._id, new Date()))) {
+    await Inscription.deleteOne({ _id: inscription._id });
+    throw couponNotValidError('exhausted');
+  }
 
   const inscriptionId = inscription._id.toString();
 
@@ -143,7 +166,8 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
   let mpInitPoint: string | null = null;
   let sandboxInitPoint: string | null = null;
   let mpPreferenceId: string | null = null;
-  let activePaymentLink: string | null = validation.resolvedCourse!.mpPaymentLink || null;
+  // Con cupón nunca se cae al link estático del curso: cobra el precio de lista.
+  let activePaymentLink: string | null = hasCoupon ? null : validation.resolvedCourse!.mpPaymentLink || null;
 
   // Cursos gratuitos (price <= 0) no generan checkout de MP.
   if (isMercadoPagoConfigured() && coursePrice > 0) {
@@ -175,6 +199,8 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
             inscription_id: inscriptionId,
             course_title: courseTitle,
           },
+          // El descuento solo se puede pagar mientras dura la reserva del cupo.
+          ...(hasCoupon ? mercadoPagoExpiration(new Date(), newReservationEnd(inscription.couponReservedAt ?? new Date())) : {}),
         },
       });
 
@@ -235,7 +261,8 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
 
   return {
     success: true,
-    data: inscription,
+    // Una inscripción repreciada es de otra persona (la que ya existía): no se devuelven sus datos personales.
+    data: repriced ? publicInscriptionView(inscription) : inscription,
     mpPaymentLink: activePaymentLink,
     mpInitPoint,
     sandboxInitPoint,

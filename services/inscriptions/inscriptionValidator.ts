@@ -2,6 +2,7 @@ import Turno from '../../models/Turno.js';
 import Inscription from '../../models/Inscription.js';
 import { resolveCourseIdentifier } from '../../controllers/courses/helper.js';
 import { ValidationResult, InscriptionBody } from './types.js';
+import { canRepriceWithCoupon } from './repricing.js';
 import type { ICourse } from '../../models/Course.js';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -52,7 +53,9 @@ export const validateInscriptionData = async (body: InscriptionBody): Promise<Va
 
   const finalCourseId = resolvedCourse.uuid as string;
   const existingInscription = await Inscription.findOne({ email: normalizedEmail, courseId: finalCourseId });
-  if (existingInscription) {
+  // Una inscripción sin pagar puede tomar un cupón nuevo en vez de responder «ya inscripto».
+  const repriceable = existingInscription && canRepriceWithCoupon(existingInscription, body.couponCode, new Date());
+  if (existingInscription && !repriceable) {
     return { valid: false, error: { status: 409, message: 'Ya te encuentras inscripto en este curso con este email.' } };
   }
 
@@ -64,5 +67,6 @@ export const validateInscriptionData = async (body: InscriptionBody): Promise<Va
     trustedCourseTitle,
     trustedCoursePrice,
     normalizedEmail,
+    existingInscriptionId: repriceable ? existingInscription?._id : undefined,
   };
 };

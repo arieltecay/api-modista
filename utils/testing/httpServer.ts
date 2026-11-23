@@ -12,6 +12,7 @@ export interface TestResponse {
 export interface TestServer {
   get: (path: string, headers?: Record<string, string>) => Promise<TestResponse>;
   post: (path: string, body: unknown, headers?: Record<string, string>) => Promise<TestResponse>;
+  patch: (path: string, body: unknown, headers?: Record<string, string>) => Promise<TestResponse>;
   close: () => Promise<void>;
 }
 
@@ -40,6 +41,7 @@ export const startTestServer = async (mount: (app: Express) => void): Promise<Te
   return {
     get: (path, headers = {}) => send('GET', path, headers),
     post: (path, body, headers = {}) => send('POST', path, headers, body),
+    patch: (path, body, headers = {}) => send('PATCH', path, headers, body),
     close: () =>
       new Promise((resolve) => {
         server.closeAllConnections();
