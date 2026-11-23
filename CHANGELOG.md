@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Pago confirmado: registra la aceptación del acceso por correo y WhatsApp; el envío por WhatsApp puede apagarse sin afectar el mail ni las respuestas del bot.
 - Una regla de Instagram puede enviar una respuesta fija, tal cual y sin Gemini, en DMs y comentarios, y combinarla con la consulta de inscripciones; Gemini solo redacta con reglas en modo Gemini y las existentes siguen así.
 - Instagram: un número sin email (p. ej. un rango de precios) ya no se toma como dato de contacto, y las respuestas privadas a comentarios no cortan emojis.
 - Emite la Factura C de ARCA a consumidor final al confirmarse el pago de MercadoPago y la envía por mail con un link; apagada por defecto en producción (`ARCA_PRODUCTION_ENABLED`).

@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { MetaWhatsAppWebhookPayload } from '../../types/whatsapp-official.js';
 import { generateAIResponse } from '../../services/gemini-service.js';
 import { answerEnrollmentMessage } from '../../services/BotEnrollment/index.js';
+import { getWhatsAppFixedReply } from '../../services/BotReplyPolicy/index.js';
 import { processBotWebhookMessage } from '../../services/BotWebhookEvent/index.js';
 import { sendWhatsAppMessage } from '../../services/whatsapp-official-service.js';
 import ConversationMessage from '../../models/ConversationMessage.js';
@@ -88,6 +89,13 @@ export const handleWebhook = async (req: Request, res: Response) => {
                     const sent = await sendWhatsAppMessage(from, enrollmentAnswer);
                     if (!sent) throw new Error('No se pudo entregar la respuesta de inscripción por WhatsApp');
                     await ConversationMessage.create({ platform: 'whatsapp', platform_id: from, body: enrollmentAnswer, direction: 'outbound', status: 'sent' });
+                    return;
+                  }
+
+                  const fixedReply = await getWhatsAppFixedReply(textBody);
+                  if (fixedReply) {
+                    const sent = await sendWhatsAppMessage(from, fixedReply, from);
+                    if (!sent) throw new Error('No se pudo entregar la respuesta fija por WhatsApp');
                     return;
                   }
 

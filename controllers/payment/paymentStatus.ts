@@ -21,7 +21,7 @@ export const getPaymentStatus = async (req: Request<{ inscriptionId: string }>, 
 
   try {
     const inscription = await Inscription.findById(inscriptionId).select(
-      'paymentStatus paymentDate paymentHistory courseTitle coursePrice paymentSource'
+      'paymentStatus paymentDate paymentHistory courseTitle coursePrice paymentSource accessEmailStatus accessWhatsAppStatus'
     );
 
     if (!inscription) {
@@ -41,6 +41,10 @@ export const getPaymentStatus = async (req: Request<{ inscriptionId: string }>, 
       coursePrice: inscription.coursePrice,
       totalPaid,
       paymentSource: inscription.paymentSource || null,
+      accessNotifications: {
+        email: inscription.accessEmailStatus ?? 'unknown',
+        whatsapp: inscription.accessWhatsAppStatus ?? 'unknown',
+      },
     });
   } catch (error) {
     logger.error('[getPaymentStatus] Error', error);

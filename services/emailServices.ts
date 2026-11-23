@@ -8,6 +8,10 @@ import { logger } from './logger.js';
 
 const sentEmailsDir = path.join(process.cwd(), 'sent_emails');
 
+/** Local file mode writes a preview; no mail provider accepts the message. */
+export const isEmailDeliverySimulated = (): boolean =>
+  process.env.EMAIL_MODE === 'file' || (!process.env.EMAIL_MODE && process.env.NODE_ENV !== 'production');
+
 /**
  * Para un envío real, Nodemailer se conecta a un servidor SMTP.
  * Las credenciales se toman del archivo .env.

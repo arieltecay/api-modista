@@ -15,6 +15,9 @@ export interface IBotInstruction extends Document {
   updatedAt: Date;
   /** Texto que se envía tal cual en modo 'fixed'; se conserva al volver a 'gemini'. */
   instagramFixedResponse?: string;
+  whatsappFixedReplyEnabled?: boolean;
+  whatsappKeywords?: string[];
+  whatsappFixedResponse?: string;
 }
 
 const BotInstructionSchema: Schema = new Schema({
@@ -40,7 +43,10 @@ const BotInstructionSchema: Schema = new Schema({
   instagramEnrollmentLookup: { type: Boolean, default: false },
   instagramCommentReply: { type: Boolean, default: false },
   instagramResponseMode: { type: String, enum: ['gemini', 'fixed'], default: 'gemini' },
-  instagramFixedResponse: { type: String }
+  instagramFixedResponse: { type: String },
+  whatsappFixedReplyEnabled: { type: Boolean, default: false },
+  whatsappKeywords: { type: [String], default: [] },
+  whatsappFixedResponse: { type: String },
 }, {
   timestamps: true
 });

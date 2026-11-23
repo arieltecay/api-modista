@@ -5,7 +5,7 @@ import Course from '../../models/Course.js';
 import { fireMetaEvent, buildEventId } from '../meta-capi-helpers/index.js';
 import { getGeoLocationFromIp } from '../geolocation/index.js';
 import { sendWhatsAppTemplate } from '../whatsapp-official-service.js';
-import { sendEmail } from '../emailServices.js';
+import { sendEmail, isEmailDeliverySimulated } from '../emailServices.js';
 import { escapeHtml } from '../fsTemplate.js';
 import { issueInvoiceForPayment } from '../invoicing/index.js';
 import { invoiceEmailBlock } from '../invoicing/emailBlock.js';
@@ -26,6 +26,7 @@ interface MPPaymentPayload {
 }
 
 const RELEVANT_STATUSES = ['approved', 'pending', 'in_process', 'rejected', 'cancelled'];
+const isPaymentAccessWhatsAppEnabled = (): boolean => process.env.PAYMENT_ACCESS_WHATSAPP_ENABLED !== 'false';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -144,8 +145,13 @@ export const processWebhookPayment = async (
 
   // 5. Actualizar paymentStatus
   const wasAlreadyPaid = inscription.paymentStatus === 'paid';
+  const whatsappEnabled = isPaymentAccessWhatsAppEnabled();
 
   inscription.paymentStatus = totalPaid >= inscription.coursePrice ? 'paid' : 'partial';
+  if (inscription.paymentStatus === 'paid' && !wasAlreadyPaid) {
+    inscription.accessWhatsAppStatus = whatsappEnabled ? 'pending' : 'disabled';
+    inscription.accessEmailStatus = 'pending';
+  }
   inscription.paymentDate = inscription.paymentStatus === 'paid' ? paymentDate : inscription.paymentDate;
   inscription.paymentSource = 'webhook';
 
@@ -164,7 +170,7 @@ export const processWebhookPayment = async (
 
   // 7. Side-effects solo en transición a 'paid' (no en webhook duplicado ni en pagos extra)
   if (inscription.paymentStatus === 'paid' && !wasAlreadyPaid) {
-    await firePaymentApprovedSideEffects(inscription, totalPaid, paymentDate, mpPaymentId, hooks);
+    await firePaymentApprovedSideEffects(inscription, totalPaid, paymentDate, mpPaymentId, whatsappEnabled, hooks);
   }
 };
 
@@ -173,6 +179,7 @@ const firePaymentApprovedSideEffects = async (
   totalPaid: number,
   paymentDate: Date,
   mpPaymentId: string,
+  whatsappEnabled: boolean,
   hooks: PaymentHooks,
 ): Promise<void> => {
   const inscriptionId = inscription._id.toString();
@@ -182,17 +189,51 @@ const firePaymentApprovedSideEffects = async (
   if (inscription.metaPurchaseFiredAt) {
     logger.info(`[WebhookProcessor] Purchase CAPI ya fue enviado para ${inscriptionId}, omitiendo.`);
   } else {
-    await hooks.sendPurchaseEvent(inscription, totalPaid, inscriptionId, paymentDate);
+    try {
+      await hooks.sendPurchaseEvent(inscription, totalPaid, inscriptionId, paymentDate);
+    } catch (error) {
+      logger.error('[WebhookProcessor] Error enviando Purchase CAPI', error);
+    }
   }
-
-  // Curso asociado una sola vez (por uuid; fallback título legacy)
-  const coursePaidLink = await resolveCoursePaidLink(inscription);
 
   // La factura se emite con el pago ya verificado y guardado; si ARCA no responde a tiempo el mail sale sin ella.
   const invoiceUrl = await resolveInvoiceUrl(inscription, totalPaid, mpPaymentId, hooks);
 
-  await hooks.sendWhatsApp(inscription, coursePaidLink, inscriptionId);
-  await hooks.sendAccessEmail(inscription, coursePaidLink, inscriptionId, invoiceUrl);
+  // Curso asociado una sola vez (por uuid; fallback título legacy)
+  let coursePaidLink: string;
+  try {
+    coursePaidLink = await resolveCoursePaidLink(inscription);
+  } catch (error) {
+    logger.error('[WebhookProcessor] Error buscando el enlace del curso', error);
+    if (whatsappEnabled) await recordAccessStatus(inscriptionId, 'accessWhatsAppStatus', false);
+    await recordAccessStatus(inscriptionId, 'accessEmailStatus', false);
+    return;
+  }
+
+  if (whatsappEnabled) {
+    try {
+      const accepted = await hooks.sendWhatsApp(inscription, coursePaidLink, inscriptionId);
+      await recordAccessStatus(inscriptionId, 'accessWhatsAppStatus', accepted);
+    } catch (error) {
+      logger.error('[WebhookProcessor] Error enviando WhatsApp', error);
+      await recordAccessStatus(inscriptionId, 'accessWhatsAppStatus', false);
+    }
+  }
+  try {
+    const accepted = await hooks.sendAccessEmail(inscription, coursePaidLink, inscriptionId, invoiceUrl);
+    await recordAccessStatus(inscriptionId, 'accessEmailStatus', accepted);
+  } catch (error) {
+    logger.error('[WebhookProcessor] Error enviando el correo de acceso', error);
+    await recordAccessStatus(inscriptionId, 'accessEmailStatus', false);
+  }
+};
+
+const recordAccessStatus = async (inscriptionId: string, channel: 'accessEmailStatus' | 'accessWhatsAppStatus', accepted: boolean | null): Promise<void> => {
+  try {
+    await Inscription.updateOne({ _id: inscriptionId }, { $set: { [channel]: accepted === null ? 'unknown' : accepted ? 'accepted' : 'failed' } });
+  } catch (error) {
+    logger.error(`[WebhookProcessor] No se pudo registrar ${channel} para ${inscriptionId}`, error);
+  }
 };
 
 /** Link a la factura autorizada, o undefined. Un fallo de facturación nunca debe frenar el mail de acceso. */
@@ -273,8 +314,8 @@ const sendWhatsAppAccessMessage = async (
   inscription: any,
   coursePaidLink: string,
   inscriptionId: string
-): Promise<void> => {
-  if (!inscription.celular) return;
+): Promise<boolean> => {
+  if (!inscription.celular) return false;
   try {
     const components = [
       {
@@ -291,8 +332,10 @@ const sendWhatsAppAccessMessage = async (
     if (!whatsappOk) {
       logger.warn(`[WebhookProcessor] WhatsApp template no enviado para ${inscriptionId}`);
     }
+    return whatsappOk;
   } catch (err) {
     logger.error('[WebhookProcessor] Error enviando WhatsApp', err);
+    return false;
   }
 };
 
@@ -315,7 +358,7 @@ const sendCourseAccessEmail = async (
   coursePaidLink: string,
   inscriptionId: string,
   invoiceUrl?: string
-): Promise<void> => {
+): Promise<boolean | null> => {
   const emailSent = await sendEmailWithRetry({
     to: inscription.email,
     subject: `¡Pago confirmado! Accedé a "${inscription.courseTitle}"`,
@@ -327,8 +370,13 @@ const sendCourseAccessEmail = async (
     logger.error(`[WebhookProcessor] Email de acceso NO enviado tras reintentos para ${inscriptionId}`);
   } else if (invoiceUrl) {
     // El mail ya llevó el link: el reintento no debe mandarlo de nuevo.
-    await markInvoiceEmailed(inscriptionId);
+    try {
+      await markInvoiceEmailed(inscriptionId);
+    } catch (error) {
+      logger.error('[WebhookProcessor] No se pudo registrar el envío de la factura', error);
+    }
   }
+  return emailSent && isEmailDeliverySimulated() ? null : emailSent;
 };
 
 /** Efectos del pago aprobado; inyectables para probar el orden y las fallas sin servicios externos. */

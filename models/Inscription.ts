@@ -19,6 +19,8 @@ export interface IInscription extends Document {
   courseTitle: string;
   coursePrice: number;
   paymentStatus: 'pending' | 'paid' | 'partial';
+  accessEmailStatus?: 'pending' | 'accepted' | 'failed' | 'unknown';
+  accessWhatsAppStatus?: 'pending' | 'accepted' | 'failed' | 'unknown' | 'disabled';
   paymentDate?: Date;
   turnoId?: Types.ObjectId;
   depositAmount?: number;
@@ -109,6 +111,8 @@ const InscriptionSchema = new Schema<IInscription>({
     enum: ['pending', 'paid', 'partial'],
     default: 'pending',
   },
+  accessEmailStatus: { type: String, enum: ['pending', 'accepted', 'failed', 'unknown'] },
+  accessWhatsAppStatus: { type: String, enum: ['pending', 'accepted', 'failed', 'unknown', 'disabled'] },
   paymentDate: {
     type: Date,
   },

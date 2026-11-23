@@ -43,3 +43,11 @@ test('fixed mode needs a message', () => {
   // In Gemini mode a stored fixed text is kept but never used.
   assert.equal(instagramModeError({ instagramResponseMode: 'gemini', instagramFixedResponse: '' }), undefined);
 });
+
+test('WhatsApp fixed reply requires phrases and text only when enabled', () => {
+  const base = { title: 'Acceso', content: 'x', order: 1, isActive: true };
+  assert.equal(instructionInputSchema.parse(base).whatsappFixedReplyEnabled, false);
+  assert.equal(instructionInputSchema.safeParse({ ...base, whatsappFixedReplyEnabled: true }).success, false);
+  assert.equal(instructionInputSchema.safeParse({ ...base, whatsappFixedReplyEnabled: true, whatsappKeywords: ['me inscribí'], whatsappFixedResponse: 'Revisá tu correo.' }).success, true);
+  assert.equal(instructionUpdateSchema.safeParse({ whatsappKeywords: ['yo'] }).success, false);
+});
