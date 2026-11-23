@@ -47,5 +47,7 @@ CouponSchema.pre('validate', function () {
 });
 
 CouponSchema.index({ createdAt: -1 });
+// For the public availability question: coupons that are on and not over yet.
+CouponSchema.index({ active: 1, endsAt: 1 });
 
 export default mongoose.model('Coupon', CouponSchema);

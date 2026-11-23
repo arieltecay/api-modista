@@ -55,3 +55,6 @@ export const validateBody = z.object({
   code: z.string().trim().min(1).max(COUPON_CODE_MAX_LENGTH),
   courseId,
 });
+
+/** Only the course uuid or id: the numeric position of the legacy lookup loads every course on each call. */
+export const availabilityQuery = z.object({ courseId: courseId.refine((value) => !/^\d+$/.test(value), 'Identificador de curso inválido') });

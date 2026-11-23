@@ -3,7 +3,7 @@ import test, { after, before, beforeEach, mock } from 'node:test';
 import mongoose from 'mongoose';
 import Coupon from '../../models/Coupon/index.js';
 import Inscription from '../../models/Inscription.js';
-import { startTestDb } from '../../utils/testing/mongoMemoryServer.js';
+import { listIndexKeys, startTestDb } from '../../utils/testing/mongoMemoryServer.js';
 import { logger } from '../logger.js';
 import { claimSeat } from './reservation.js';
 import { confirmCouponUse, findCouponByCode, getCouponStats, getCouponSummary, updateCoupon as updateCouponService } from './index.js';
@@ -231,4 +231,10 @@ test('giving a cap to a coupon that had none turns its live reservations into se
   assert.equal((await Coupon.findById(coupon._id))?.seats.length, 2);
   assert.equal(await claimSeat(coupon._id, new mongoose.Types.ObjectId(), new Date()), true);
   assert.equal(await claimSeat(coupon._id, new mongoose.Types.ObjectId(), new Date()), false);
+});
+
+test('coupons are indexed for the availability question (active and end date)', async () => {
+  const keys = await listIndexKeys(Coupon);
+
+  assert.ok(keys.some((key) => key.active === 1 && key.endsAt === 1), JSON.stringify(keys));
 });

@@ -82,3 +82,14 @@ export const paymentRetryLimiter = rateLimit({
     passOnStoreError: true,
     message: { success: false, message: 'Demasiados intentos, esperá unos minutos' },
 });
+
+// «¿Mostrar el campo de cupón?»: se pregunta al abrir el formulario de un curso; el tope frena el barrido por scripts.
+export const couponAvailabilityLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    store: new MongoRateLimitStore({ prefix: 'coupon-availability' }),
+    passOnStoreError: true,
+    message: { success: false, message: 'Demasiadas solicitudes, esperá unos minutos' },
+});

@@ -5,6 +5,8 @@ import Course from '../../models/Course.js';
 import Inscription from '../../models/Inscription.js';
 import { startTestDb } from '../../utils/testing/mongoMemoryServer.js';
 import { startTestServer, type TestServer } from '../../utils/testing/httpServer.js';
+import { claimSeat } from '../../services/Coupons/reservation.js';
+import mongoose from 'mongoose';
 
 let stopDb: () => Promise<void>;
 let server: TestServer;
@@ -299,6 +301,96 @@ test('a coupon that ended or ran out says so, and no other reason reveals anythi
   }
 });
 
+// ---- does the form show the coupon field? ----
+
+const available = async (courseId: string = COURSE_UUID) => (await server.get(`/api/coupons/availability?courseId=${encodeURIComponent(courseId)}`)).body;
+
+test('the coupon field is offered only while some coupon can be used on the course, and nothing else is revealed', async () => {
+  assert.deepEqual(await available(), { available: false });
+
+  await createCoupon({ code: 'ONE' });
+
+  assert.deepEqual(await available(), { available: true });
+});
+
+test('a coupon for every course makes the field appear on any course', async () => {
+  await createCourse(OTHER_UUID, 'Otro curso', 10000);
+  await createCoupon({ code: 'ALL', courseId: null });
+
+  assert.deepEqual(await available(COURSE_UUID), { available: true });
+  assert.deepEqual(await available(OTHER_UUID), { available: true });
+});
+
+test('the field stays hidden when the only coupons are paused, over, not started, for another course, out of seats or too big for the price', async () => {
+  await createCourse(OTHER_UUID, 'Otro curso', 10000);
+  const unusable: Array<Record<string, unknown>> = [
+    { active: false },
+    { startsAt: new Date(daysFromNow(-30)), endsAt: new Date(daysFromNow(-20)) },
+    { startsAt: new Date(daysFromNow(5)), endsAt: new Date(daysFromNow(15)) },
+    { courseId: OTHER_UUID },
+    { maxUses: 1, usedCount: 1 },
+    { type: 'fixed', value: 30000 },
+  ];
+
+  for (const overrides of unusable) {
+    await Coupon.deleteMany({});
+    await createCoupon({ code: 'NOPE', ...overrides });
+    assert.deepEqual(await available(), { available: false }, JSON.stringify(overrides));
+  }
+});
+
+test('seats held by people still paying count: with every seat held the field hides, and it returns when they end', async () => {
+  const coupon = await createCoupon({ code: 'SEATS', maxUses: 1 });
+  await claimSeat(coupon._id, new mongoose.Types.ObjectId(), new Date());
+  assert.deepEqual(await available(), { available: false });
+
+  await Coupon.updateOne({ _id: coupon._id }, { $set: { 'seats.$[].until': new Date(Date.now() - 1000) } });
+
+  assert.deepEqual(await available(), { available: true });
+});
+
+test('an unknown or free course never shows the field', async () => {
+  await createCoupon({ code: 'ALL', courseId: null });
+  await createCourse(OTHER_UUID, 'Gratis', 0);
+
+  assert.deepEqual(await available('99999999-9999-4999-8999-999999999999'), { available: false });
+  assert.deepEqual(await available(OTHER_UUID), { available: false });
+});
+
+test('one usable coupon is found even behind a hundred that cannot be used', async () => {
+  const until = new Date(Date.now() + 60 * 60 * 1000);
+  const heldSeat = () => [{ inscriptionId: new mongoose.Types.ObjectId(), until }];
+  await Coupon.insertMany(
+    Array.from({ length: 105 }, (_, index) => ({
+      code: `FULL${index}`, type: 'percent', value: 10, courseId: COURSE_UUID, maxUses: 1, seats: heldSeat(),
+      startsAt: new Date(daysFromNow(-1)), endsAt: new Date(daysFromNow(10)),
+    }))
+  );
+  assert.deepEqual(await available(), { available: false });
+
+  await createCoupon({ code: 'USABLE' });
+
+  assert.deepEqual(await available(), { available: true });
+});
+
+test('the legacy numeric course position is not accepted for this question', async () => {
+  for (const courseId of ['1', '2', '007']) {
+    assert.equal((await server.get(`/api/coupons/availability?courseId=${courseId}`)).status, 400, courseId);
+  }
+});
+
+test('the availability question needs a course and nothing odd', async () => {
+  for (const query of ['', 'courseId=', 'courseId[]=a', `courseId=${'x'.repeat(100)}`]) {
+    assert.equal((await server.get(`/api/coupons/availability?${query}`)).status, 400, query);
+  }
+});
+
+test('the availability answer may be cached briefly so opening the form does not hit the database every time', async () => {
+  const response = await server.get(`/api/coupons/availability?courseId=${COURSE_UUID}`);
+
+  assert.match(response.headers.get('cache-control') ?? '', /max-age=\d+/);
+});
+
 test('the public check rejects a malformed body with 400', async () => {
   for (const payload of [{}, { code: '' }, { code: 'A', courseId: '' }, { code: 123, courseId: COURSE_UUID }, { code: 'x'.repeat(100), courseId: COURSE_UUID }]) {
     assert.equal((await server.post('/api/coupons/validate', payload)).status, 400, JSON.stringify(payload));
@@ -327,4 +419,13 @@ test('the public check is rate limited and tells the client to wait', async () =
   const limited = await server.post('/api/coupons/validate', { code: 'TRY', courseId: COURSE_UUID });
   assert.equal(limited.status, 429);
   assert.equal(body(limited).success, false);
+});
+
+test('the availability question is rate limited per client', async () => {
+  const statuses: number[] = [];
+  for (let attempt = 0; attempt < 70; attempt += 1) {
+    statuses.push((await server.get(`/api/coupons/availability?courseId=${COURSE_UUID}`)).status);
+  }
+
+  assert.ok(statuses.includes(429), 'expected a 429 within 70 attempts');
 });

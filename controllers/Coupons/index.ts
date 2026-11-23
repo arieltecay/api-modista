@@ -4,6 +4,7 @@ import {
   createCoupon,
   getCouponDetail,
   getCouponSummary,
+  hasUsableCoupon,
   listCoupons,
   quoteCoupon,
   updateCoupon,
@@ -11,7 +12,7 @@ import {
 import { couponRejectionMessage } from '../../services/Coupons/messages.js';
 import { couponStatus } from '../../services/Coupons/status.js';
 import type { CouponTotals, StoredCoupon } from '../../services/Coupons/types.js';
-import { createBody, listQuery, updateBody, validateBody } from './schemas.js';
+import { availabilityQuery, createBody, listQuery, updateBody, validateBody } from './schemas.js';
 
 const WRITE_FAILURE_STATUS = { not_found: 404, duplicate: 409, invalid: 400, course_not_found: 400, discount_too_high: 400 } as const;
 
@@ -53,6 +54,15 @@ export const couponsController = {
     const quote = await quoteCoupon(parsed.data.code, parsed.data.courseId);
     res.locals.couponValid = quote.valid; // lo lee el limitador: un cupón válido no gasta intentos
     res.status(200).json(quote.valid ? quote : { valid: false, message: couponRejectionMessage(quote.reason) });
+  },
+
+  /** Public: should the checkout of this course show the coupon field? Only yes/no, never a code. */
+  getAvailability: async (req: Request, res: Response): Promise<void> => {
+    const parsed = availabilityQuery.safeParse(req.query);
+    if (!parsed.success) return sendInvalid(res, parsed.error);
+
+    res.set('Cache-Control', 'public, max-age=30');
+    res.status(200).json({ available: await hasUsableCoupon(parsed.data.courseId) });
   },
 
   getSummary: async (_req: Request, res: Response): Promise<void> => {

@@ -14,6 +14,7 @@ import type {
   CouponListPage,
   CouponListQuery,
   CouponQuote,
+  CouponRules,
   CouponRejection,
   CouponStats,
   CouponSummary,
@@ -33,10 +34,21 @@ export const findCouponByCode = async (code: string) =>
   COUPON_CODE_INPUT_PATTERN.test(code.trim()) ? Coupon.findOne({ code: normalizeCode(code) }) : null;
 
 type CouponLookup = NonNullable<Awaited<ReturnType<typeof findCouponByCode>>>;
+/** The rules of a coupon plus its seats, as stored or as read lean. */
+type SeatedCoupon = CouponRules & { seats?: Array<{ inscriptionId: unknown; until?: Date | null }> | null };
 
 type CouponPricing =
   | { valid: true; coupon: CouponLookup; discountAmount: number; finalPrice: number }
   | { valid: false; reason: CouponRejection };
+
+/**
+ * The coupon's rules with the seats held by inscriptions still being paid counted as used: otherwise
+ * "first 10" could be handed out to anyone.
+ */
+const rulesWithHeldSeats = (coupon: SeatedCoupon, now: Date) => ({
+  type: coupon.type, value: coupon.value, courseId: coupon.courseId, startsAt: coupon.startsAt, endsAt: coupon.endsAt,
+  maxUses: coupon.maxUses, active: coupon.active, usedCount: coupon.usedCount + liveSeats(coupon.seats, now),
+});
 
 /** Prices a purchase with a coupon code; used both by the public quote and by the inscription. */
 export const priceWithCoupon = async (
@@ -47,16 +59,28 @@ export const priceWithCoupon = async (
   const coupon = await findCouponByCode(code);
   if (!coupon) return { valid: false, reason: 'not_found' };
 
-  // Seats held by inscriptions still being paid count as used: otherwise "first 10" could be handed out to anyone.
-  const reserved = liveSeats(coupon.seats, now);
-  const evaluation = evaluateCoupon(
-    {
-      type: coupon.type, value: coupon.value, courseId: coupon.courseId, startsAt: coupon.startsAt, endsAt: coupon.endsAt,
-      maxUses: coupon.maxUses, active: coupon.active, usedCount: coupon.usedCount + reserved,
-    },
-    { ...purchase, now }
-  );
+  const evaluation = evaluateCoupon(rulesWithHeldSeats(coupon, now), { ...purchase, now });
   return evaluation.valid ? { ...evaluation, coupon } : evaluation;
+};
+
+/** Coupons that are on, inside their window and under their cap, for one course or for all. */
+const activeCandidates = (courseUuid: string, now: Date) =>
+  Coupon.find({ $and: [statusFilter('active', now), { $or: [{ courseId: courseUuid }, { courseId: null }] }] }).lean().cursor();
+
+/**
+ * Whether the checkout of a course should offer the coupon field: some coupon can be used there right now
+ * (on, in its window, with seats left, and not bigger than the price). Reveals no code. It stops at the first
+ * usable coupon, so any number of unusable ones in front cannot hide it.
+ */
+export const hasUsableCoupon = async (courseIdentifier: string, now: Date = new Date()): Promise<boolean> => {
+  const course = await resolveCourseIdentifier(courseIdentifier);
+  const price = Number(course?.price);
+  if (!course?.uuid || !Number.isFinite(price) || price <= 0) return false;
+
+  for await (const coupon of activeCandidates(course.uuid, now)) {
+    if (evaluateCoupon(rulesWithHeldSeats(coupon, now), { courseId: course.uuid, price, now }).valid) return true;
+  }
+  return false;
 };
 
 /** The public check of the checkout: the final price a code gives for a course, or just "not valid". */
