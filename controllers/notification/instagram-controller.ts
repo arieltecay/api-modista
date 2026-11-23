@@ -7,7 +7,7 @@ import {
 } from '../../types/instagram-official.js';
 import { generateAIResponse } from '../../services/gemini-service.js';
 import { answerEnrollmentMessage } from '../../services/BotEnrollment/index.js';
-import { getInstagramReplyPolicy } from '../../services/BotReplyPolicy/index.js';
+import { fixedReplyOf, getInstagramReplyPolicy } from '../../services/BotReplyPolicy/index.js';
 import { processBotWebhookMessage } from '../../services/BotWebhookEvent/index.js';
 import { commentEventKey, parseCommentChange, processInstagramComment } from '../../services/instagram/instagram-comment-service.js';
 import { sendInstagramMessage } from '../../services/instagram/instagram-official-service.js';
@@ -222,24 +222,25 @@ async function processInstagramMessage(from: string, text: string, messageId: st
   const matchedInstructions = await getInstagramReplyPolicy(text);
   if (matchedInstructions.length === 0) return;
 
+  const replyDm = async (body: string, source: string) => {
+    const sent = await sendInstagramMessage(from, body);
+    if (!sent) throw new Error(`No se pudo entregar la respuesta ${source} por Instagram`);
+    await ConversationMessage.create({ platform: 'instagram', platform_id: from, body, direction: 'outbound', status: 'sent' });
+  };
+
   const canCheckEnrollment = matchedInstructions.some(instruction => instruction.instagramEnrollmentLookup);
   if (canCheckEnrollment) {
     const enrollmentAnswer = await answerEnrollmentMessage('instagram', from, text);
-    if (enrollmentAnswer) {
-      const sent = await sendInstagramMessage(from, enrollmentAnswer);
-      if (!sent) throw new Error('No se pudo entregar la respuesta de inscripción por Instagram');
-      await ConversationMessage.create({ platform: 'instagram', platform_id: from, body: enrollmentAnswer, direction: 'outbound', status: 'sent' });
-      return;
-    }
+    if (enrollmentAnswer) return replyDm(enrollmentAnswer, 'de inscripción');
   }
+
+  // Una regla fija coincidente se envía tal cual y no gasta Gemini.
+  const fixedReply = fixedReplyOf(matchedInstructions);
+  if (fixedReply) return replyDm(fixedReply, 'fija');
 
   // Solo usa la información de las reglas de Instagram que coincidieron.
   try {
-    const aiResponse = await generateAIResponse(text, from, 'instagram', matchedInstructions);
-    const sent = await sendInstagramMessage(from, aiResponse);
-
-    if (!sent) throw new Error('No se pudo entregar la respuesta de Gemini por Instagram');
-    await ConversationMessage.create({ platform: 'instagram', platform_id: from, body: aiResponse, direction: 'outbound', status: 'sent' });
+    await replyDm(await generateAIResponse(text, from, 'instagram', matchedInstructions), 'de Gemini');
   } catch (aiError: any) {
     logger.error('[Instagram] Error al generar respuesta IA:', aiError.message);
     throw aiError;

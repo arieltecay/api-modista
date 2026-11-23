@@ -376,3 +376,99 @@ test('an over-long generated reply is trimmed below the Instagram message limit'
   await comment();
   assert.ok(network.graph[0].message.text.length <= 900);
 });
+
+// ─── Respuesta fija: se envía tal cual, sin Gemini ──────────────────────────
+
+const FIXED = 'Hola 👋\nEl curso de camisa empieza el sábado.';
+const fixedBlock = (overrides: Record<string, unknown> = {}) => addBlock({ title: 'Fija', instagramResponseMode: 'fixed', instagramFixedResponse: FIXED, ...overrides });
+
+test('a fixed DM rule sends its exact text through the usual path and never calls Gemini', async () => {
+  await fixedBlock();
+
+  assert.equal(await receiveDm('m-fixed', 'Info de la camisa'), 200);
+
+  assert.equal(network.gemini.length, 0);
+  assert.deepEqual(network.graph.map(call => call.message.text), [FIXED]);
+  const outbound = await ConversationMessage.findOne({ platform: 'instagram', direction: 'outbound' }).lean();
+  assert.equal(outbound?.body, FIXED);
+  assert.equal(outbound?.status, 'sent');
+});
+
+test('a fixed rule wins over a matching Gemini rule, and several fixed rules send one reply by order', async () => {
+  await addBlock({ title: 'Gemini', order: 0 });
+  await fixedBlock({ order: 7, instagramFixedResponse: 'Respuesta de orden 7' });
+  await fixedBlock({ order: 3, instagramFixedResponse: 'Respuesta de orden 3' });
+
+  await receiveDm('m-fixed-many', 'camisa');
+
+  assert.equal(network.gemini.length, 0);
+  assert.deepEqual(network.graph.map(call => call.message.text), ['Respuesta de orden 3']);
+});
+
+test('a fixed DM reply keeps the retry and idempotency rules: one inbound, one outbound', async () => {
+  await fixedBlock();
+  network.graphFails = true;
+  assert.equal(await receiveDm('m-fixed-retry', 'camisa'), 500);
+  network.graphFails = false;
+  assert.equal(await receiveDm('m-fixed-retry', 'camisa'), 200);
+  assert.equal(await receiveDm('m-fixed-retry', 'camisa'), 200);
+
+  assert.equal(await count({ direction: 'inbound' }), 1);
+  assert.equal(await count({ direction: 'outbound' }), 1);
+  assert.equal(network.gemini.length, 0);
+});
+
+test('enrollment lookup keeps answering before a fixed rule; other questions on the same topic get the fixed text', async () => {
+  await addBlock({ title: 'Inscripción', order: 5, instagramKeywords: ['curso'], instagramEnrollmentLookup: true });
+  await fixedBlock({ order: 1, instagramKeywords: ['curso'] });
+  await Inscription.create({ nombre: 'Ana', apellido: 'Paz', email: 'ana@example.com', celular: '+54 9 381 555 1234', courseId: 'c-1', courseTitle: 'Una camisa', coursePrice: 100, paymentStatus: 'paid' });
+
+  await receiveDm('m-fixed-enroll', 'Mi inscripción al curso: ana@example.com, celular 381 555 1234');
+  assert.match(network.graph[0].message.text, /Una camisa: figura como pagada/);
+
+  await receiveDm('m-fixed-enroll-2', '¿Cuándo empieza el curso?', 'ig-other');
+  assert.equal(network.graph[1].message.text, FIXED);
+  assert.equal(network.gemini.length, 0);
+});
+
+test('a legacy rule without the new fields keeps answering through Gemini', async () => {
+  await BotInstruction.collection.insertOne({ title: 'Viejo', content: 'Contenido viejo', order: 1, isActive: true, instagramAutoReply: true, instagramKeywords: ['camisa'], instagramEnrollmentLookup: false, instagramCommentReply: false });
+  await receiveDm('m-legacy', 'camisa');
+  assert.equal(network.gemini.length, 1);
+  assert.equal(network.graph[0].message.text, 'Respuesta de IA');
+});
+
+test('a Gemini rule that stored a fixed text from before still lets Mila write the reply', async () => {
+  await addBlock({ instagramResponseMode: 'gemini', instagramFixedResponse: 'TEXTO-GUARDADO' });
+  await receiveDm('m-gemini-kept', 'camisa');
+  assert.equal(network.graph[0].message.text, 'Respuesta de IA');
+  assert.doesNotMatch(JSON.stringify(network.gemini), /TEXTO-GUARDADO/);
+});
+
+test('a fixed comment rule sends its exact text as the single private reply, without Gemini', async () => {
+  await commentBlock({ instagramResponseMode: 'fixed', instagramFixedResponse: FIXED });
+
+  assert.equal(await comment(), 200);
+  assert.equal(await comment(), 200);
+
+  assert.equal(network.gemini.length, 0);
+  assert.equal(network.graph.length, 1);
+  assert.deepEqual(network.graph[0].recipient, { comment_id: 'c-1' });
+  assert.equal(network.graph[0].message.text, FIXED);
+  const reply = await ConversationMessage.findOne({ kind: 'private_reply' }).lean();
+  assert.equal(reply?.body, FIXED);
+});
+
+test('fixed comment replies keep the per-person hourly cap', async () => {
+  await commentBlock({ instagramResponseMode: 'fixed', instagramFixedResponse: FIXED });
+  for (let index = 0; index < 5; index += 1) await comment(commentValue({ id: `c-fixed-rate-${index}` }));
+  assert.equal(network.graph.length, 3);
+  assert.equal(network.gemini.length, 0);
+});
+
+test('an unmatched message never sends a fixed reply', async () => {
+  await fixedBlock({ instagramCommentReply: true });
+  await receiveDm('m-fixed-none', 'Hola');
+  await comment(commentValue({ text: 'Qué lindo' }));
+  assert.equal(network.graph.length + network.gemini.length, 0);
+});

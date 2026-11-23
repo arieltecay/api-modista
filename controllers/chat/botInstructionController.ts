@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import BotInstruction from '../../models/BotInstruction.js';
-import { instructionInputSchema, instructionUpdateSchema } from './botInstructionSchema.js';
+import { instagramModeError, instructionInputSchema, instructionUpdateSchema } from './botInstructionSchema.js';
 
 /**
  * Obtener todas las instrucciones del bot ordenadas
@@ -21,6 +21,8 @@ export const createInstruction = async (req: Request, res: Response) => {
   try {
     const parsed = instructionInputSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: 'Instrucción inválida' });
+    const modeError = instagramModeError(parsed.data);
+    if (modeError) return res.status(400).json({ message: modeError });
     const newInstruction = new BotInstruction(parsed.data);
     await newInstruction.save();
     res.status(201).json(newInstruction);
@@ -37,7 +39,12 @@ export const updateInstruction = async (req: Request, res: Response) => {
     const { id } = req.params;
     const parsed = instructionUpdateSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: 'Instrucción inválida' });
-    
+
+    const current = await BotInstruction.findById(id).lean();
+    if (!current) return res.status(404).json({ message: 'Instrucción no encontrada' });
+    const modeError = instagramModeError({ ...current, ...parsed.data });
+    if (modeError) return res.status(400).json({ message: modeError });
+
     const updatedInstruction = await BotInstruction.findByIdAndUpdate(
       id,
       parsed.data,

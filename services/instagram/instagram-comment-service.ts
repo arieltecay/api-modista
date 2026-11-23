@@ -1,7 +1,7 @@
 import type { InstagramCommentValue } from '../../types/instagram-official.js';
 import ConversationMessage from '../../models/ConversationMessage.js';
 import { consumeHourlyAttempt, releaseHourlyAttempt } from '../BotEnrollment/rateLimit.js';
-import { getInstagramReplyPolicy } from '../BotReplyPolicy/index.js';
+import { fixedReplyOf, getInstagramReplyPolicy } from '../BotReplyPolicy/index.js';
 import { generateAIResponse } from '../gemini-service.js';
 import { logger } from '../logger.js';
 import { sendInstagramPrivateReply } from './instagram-private-reply-service.js';
@@ -66,7 +66,9 @@ export const processInstagramComment = async ({ commentId, from, text }: Instagr
   let result: Awaited<ReturnType<typeof sendInstagramPrivateReply>>;
   try {
     // Las instrucciones de inscripción no se usan: un comentario es público y no autentica a la persona.
-    reply = (await generateAIResponse(text, from, 'instagram', matchedInstructions, 'comment')).slice(0, MAX_REPLY_CHARS);
+    // Una regla fija coincidente se envía tal cual y no gasta Gemini.
+    const generated = fixedReplyOf(matchedInstructions) ?? await generateAIResponse(text, from, 'instagram', matchedInstructions, 'comment');
+    reply = generated.slice(0, MAX_REPLY_CHARS);
     result = await sendInstagramPrivateReply(commentId, reply);
   } catch (error) {
     await releaseAllowance();

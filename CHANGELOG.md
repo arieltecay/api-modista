@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Una regla de Instagram puede enviar una respuesta fija, tal cual y sin Gemini, en DMs y comentarios; las reglas existentes siguen con Gemini.
 - Emite la Factura C de ARCA a consumidor final al confirmarse el pago de MercadoPago y la envía por mail con un link; apagada por defecto en producción (`ARCA_PRODUCTION_ENABLED`).
 - Registra en los logs cada factura autorizada, pendiente o rechazada por ARCA (sin datos del cliente).
 - Agrega los endpoints de facturas (público y admin) y un cron diario que completa las pendientes.
