@@ -7,7 +7,7 @@ import {
 } from '../../types/instagram-official.js';
 import { generateAIResponse } from '../../services/gemini-service.js';
 import { answerEnrollmentMessage } from '../../services/BotEnrollment/index.js';
-import { fixedReplyOf, getInstagramReplyPolicy } from '../../services/BotReplyPolicy/index.js';
+import { fixedReplyOf, geminiRulesOf, getInstagramReplyPolicy } from '../../services/BotReplyPolicy/index.js';
 import { processBotWebhookMessage } from '../../services/BotWebhookEvent/index.js';
 import { commentEventKey, parseCommentChange, processInstagramComment } from '../../services/instagram/instagram-comment-service.js';
 import { sendInstagramMessage } from '../../services/instagram/instagram-official-service.js';
@@ -238,9 +238,11 @@ async function processInstagramMessage(from: string, text: string, messageId: st
   const fixedReply = fixedReplyOf(matchedInstructions);
   if (fixedReply) return replyDm(fixedReply, 'fija');
 
-  // Solo usa la información de las reglas de Instagram que coincidieron.
+  // Gemini redacta solo con las reglas configuradas para Gemini; si no hay, el mensaje queda para el equipo.
+  const geminiRules = geminiRulesOf(matchedInstructions);
+  if (geminiRules.length === 0) return;
   try {
-    await replyDm(await generateAIResponse(text, from, 'instagram', matchedInstructions), 'de Gemini');
+    await replyDm(await generateAIResponse(text, from, 'instagram', geminiRules), 'de Gemini');
   } catch (aiError: any) {
     logger.error('[Instagram] Error al generar respuesta IA:', aiError.message);
     throw aiError;

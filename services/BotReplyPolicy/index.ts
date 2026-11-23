@@ -43,3 +43,7 @@ export const getInstagramReplyPolicy = async (text: string, channel: InstagramCh
 /** Texto de la primera regla fija coincidente (ya vienen por orden); sin regla fija, Gemini redacta. */
 export const fixedReplyOf = (instructions: InstagramInstruction[]): string | undefined =>
   instructions.find(rule => rule.instagramResponseMode === 'fixed' && rule.instagramFixedResponse.trim())?.instagramFixedResponse;
+
+/** Reglas con las que Gemini puede redactar: nunca una fija, aunque no tenga texto. */
+export const geminiRulesOf = (instructions: InstagramInstruction[]): InstagramInstruction[] =>
+  instructions.filter(rule => rule.instagramResponseMode === 'gemini');

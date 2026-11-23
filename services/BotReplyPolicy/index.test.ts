@@ -3,7 +3,7 @@ import test, { after, before } from 'node:test';
 import mongoose from 'mongoose';
 import BotInstruction from '../../models/BotInstruction.js';
 import { startTestDb } from '../../utils/testing/mongoMemoryServer.js';
-import { fixedReplyOf, getInstagramReplyPolicy } from './index.js';
+import { fixedReplyOf, geminiRulesOf, getInstagramReplyPolicy } from './index.js';
 
 let stopDb: () => Promise<void>;
 before(async () => { stopDb = await startTestDb(); });
@@ -84,4 +84,13 @@ test('a fixed rule with an empty message never sends an empty reply', async () =
   await BotInstruction.deleteMany({});
   await BotInstruction.collection.insertOne({ title: 'Roto', content: 'x', order: 1, isActive: true, instagramAutoReply: true, instagramKeywords: ['camisa'], instagramResponseMode: 'fixed', instagramFixedResponse: '  ' });
   assert.equal(fixedReplyOf(await getInstagramReplyPolicy('camisa')), undefined);
+});
+
+test('Gemini only gets the rules set to let Mila write, never a fixed one', async () => {
+  await BotInstruction.deleteMany({});
+  const rule = { content: 'x', isActive: true, instagramAutoReply: true, instagramKeywords: ['camisa'] };
+  await BotInstruction.create({ ...rule, title: 'Gemini', order: 2 });
+  await BotInstruction.collection.insertOne({ ...rule, title: 'Fija rota', order: 1, instagramResponseMode: 'fixed', instagramFixedResponse: '' });
+  await BotInstruction.collection.insertOne({ ...rule, title: 'Vieja', order: 3 });
+  assert.deepEqual(geminiRulesOf(await getInstagramReplyPolicy('camisa')).map(rule => rule.title), ['Gemini', 'Vieja']);
 });

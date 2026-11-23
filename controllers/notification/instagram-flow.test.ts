@@ -470,11 +470,59 @@ test('a fixed comment reply with emojis at the limit is sent whole, never cut in
   assert.equal(network.graph[0].message.text, atLimit);
 });
 
-test('a comment on a rule with a fixed reply and enrollment lookup gets the fixed text: comments never look up enrollments', async () => {
-  await commentBlock({ instagramResponseMode: 'fixed', instagramFixedResponse: FIXED, instagramEnrollmentLookup: true });
-  assert.equal(await comment(), 200);
+test('a comment with enrollment data on a fixed + lookup rule gets one private fixed reply and never reveals the enrollment', async () => {
+  await commentBlock({ instagramKeywords: ['curso'], instagramResponseMode: 'fixed', instagramFixedResponse: FIXED, instagramEnrollmentLookup: true });
+  await Inscription.create({ nombre: 'Ana', apellido: 'Paz', email: 'ana@example.com', celular: '+54 9 381 555 1234', courseId: 'c-1', courseTitle: 'Una camisa', coursePrice: 100, paymentStatus: 'paid' });
+  const value = commentValue({ text: 'Mi inscripción al curso: ana@example.com, celular 381 555 1234' });
+
+  assert.equal(await comment(value), 200);
+  assert.equal(await comment(value), 200);
+
+  assert.equal(network.graph.length, 1);
+  assert.deepEqual(network.graph[0].recipient, { comment_id: 'c-1' });
   assert.equal(network.graph[0].message.text, FIXED);
+  assert.doesNotMatch(JSON.stringify(network.graph), /Una camisa|pagada/);
   assert.equal(network.gemini.length, 0);
+});
+
+test('fixed + enrollment: an identified person who is not enrolled gets the safe "not found" answer, nothing else', async () => {
+  await fixedBlock({ instagramKeywords: ['curso'], instagramEnrollmentLookup: true });
+  await receiveDm('m-not-found', 'Mi inscripción al curso: nadie@example.com, celular 381 700 9999');
+  assert.deepEqual(network.graph.map(call => call.message.text), [DEFAULT_ENROLLMENT_TEMPLATES.notFound]);
+  assert.equal(network.gemini.length, 0);
+});
+
+test('several matching rules (fixed + lookup, and Gemini): one reply per message, lookup first, then fixed, never Gemini', async () => {
+  await addBlock({ title: 'Gemini', order: 0, instagramKeywords: ['curso'] });
+  await fixedBlock({ order: 4, instagramKeywords: ['curso'], instagramEnrollmentLookup: true });
+
+  await receiveDm('m-many-1', '¿Qué días es el curso?', 'ig-a');
+  await receiveDm('m-many-2', '¿Quedé anotada en el curso?', 'ig-b');
+
+  assert.deepEqual(network.graph.map(call => call.message.text), [FIXED, DEFAULT_ENROLLMENT_TEMPLATES.askContact]);
+  assert.equal(network.gemini.length, 0);
+});
+
+test('Gemini writes only from Gemini rules: a matching fixed rule without text never reaches the prompt', async () => {
+  await addBlock({ title: 'Gemini', content: 'CONTEXTO-GEMINI', order: 2 });
+  await BotInstruction.collection.insertOne({ title: 'Fija rota', content: 'CONTEXTO-FIJA', order: 1, isActive: true, instagramAutoReply: true, instagramKeywords: ['camisa'], instagramResponseMode: 'fixed', instagramFixedResponse: '' });
+
+  await receiveDm('m-only-gemini-rules', 'camisa');
+
+  assert.equal(network.gemini.length, 1);
+  assert.match(JSON.stringify(network.gemini), /CONTEXTO-GEMINI/);
+  assert.doesNotMatch(JSON.stringify(network.gemini), /CONTEXTO-FIJA/);
+});
+
+test('a message that only matches a fixed rule without text gets no reply and no Gemini call', async () => {
+  await BotInstruction.collection.insertOne({ title: 'Fija rota', content: 'x', order: 1, isActive: true, instagramAutoReply: true, instagramCommentReply: true, instagramKeywords: ['camisa'], instagramResponseMode: 'fixed', instagramFixedResponse: '' });
+
+  assert.equal(await receiveDm('m-broken-fixed', 'camisa'), 200);
+  assert.equal(await comment(), 200);
+
+  assert.equal(network.graph.length, 0);
+  assert.equal(network.gemini.length, 0);
+  assert.equal(await BotLookupAttempt.countDocuments(), 0, 'no hourly comment allowance is spent');
 });
 
 test('a legacy rule without the new fields keeps answering through Gemini', async () => {
