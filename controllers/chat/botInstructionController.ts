@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import BotInstruction from '../../models/BotInstruction.js';
-import { instagramModeError, instructionInputSchema, instructionUpdateSchema } from './botInstructionSchema.js';
+import { instagramModeError, whatsappModeError, instructionInputSchema, instructionUpdateSchema } from './botInstructionSchema.js';
 
 /**
  * Obtener todas las instrucciones del bot ordenadas
@@ -23,6 +23,8 @@ export const createInstruction = async (req: Request, res: Response) => {
     if (!parsed.success) return res.status(400).json({ message: 'Instrucción inválida' });
     const modeError = instagramModeError(parsed.data);
     if (modeError) return res.status(400).json({ message: modeError });
+    const whatsappError = whatsappModeError(parsed.data);
+    if (whatsappError) return res.status(400).json({ message: whatsappError });
     const newInstruction = new BotInstruction(parsed.data);
     await newInstruction.save();
     res.status(201).json(newInstruction);
@@ -44,6 +46,8 @@ export const updateInstruction = async (req: Request, res: Response) => {
     if (!current) return res.status(404).json({ message: 'Instrucción no encontrada' });
     const modeError = instagramModeError({ ...current, ...parsed.data });
     if (modeError) return res.status(400).json({ message: modeError });
+    const whatsappError = whatsappModeError({ ...current, ...parsed.data });
+    if (whatsappError) return res.status(400).json({ message: whatsappError });
 
     const updatedInstruction = await BotInstruction.findByIdAndUpdate(
       id,

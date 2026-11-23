@@ -3,7 +3,7 @@ import test, { after, before } from 'node:test';
 import mongoose from 'mongoose';
 import BotInstruction from '../../models/BotInstruction.js';
 import { startTestDb } from '../../utils/testing/mongoMemoryServer.js';
-import { fixedReplyOf, geminiRulesOf, getInstagramReplyPolicy } from './index.js';
+import { fixedReplyOf, geminiRulesOf, getInstagramReplyPolicy, getWhatsAppFixedReply } from './index.js';
 
 let stopDb: () => Promise<void>;
 before(async () => { stopDb = await startTestDb(); });
@@ -93,4 +93,12 @@ test('Gemini only gets the rules set to let Mila write, never a fixed one', asyn
   await BotInstruction.collection.insertOne({ ...rule, title: 'Fija rota', order: 1, instagramResponseMode: 'fixed', instagramFixedResponse: '' });
   await BotInstruction.collection.insertOne({ ...rule, title: 'Vieja', order: 3 });
   assert.deepEqual(geminiRulesOf(await getInstagramReplyPolicy('camisa')).map(rule => rule.title), ['Gemini', 'Vieja']);
+});
+
+test('WhatsApp fixed reply matches an active phrase before Mila, independently of Instagram', async () => {
+  await BotInstruction.deleteMany({});
+  await BotInstruction.create({ title: 'Acceso', content: 'x', order: 2, whatsappFixedReplyEnabled: true, whatsappKeywords: ['me inscribí', 'confirmar mi acceso'], whatsappFixedResponse: 'Revisá tu correo y este WhatsApp.' });
+  await BotInstruction.create({ title: 'Otra', content: 'x', order: 1, whatsappFixedReplyEnabled: false, whatsappKeywords: ['me inscribí'], whatsappFixedResponse: 'No debe salir' });
+  assert.equal(await getWhatsAppFixedReply('Me inscribi al curso Camisas'), 'Revisá tu correo y este WhatsApp.');
+  assert.equal(await getWhatsAppFixedReply('No recibí nada'), null);
 });

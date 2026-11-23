@@ -47,3 +47,11 @@ export const fixedReplyOf = (instructions: InstagramInstruction[]): string | und
 /** Reglas con las que Gemini puede redactar: nunca una fija, aunque no tenga texto. */
 export const geminiRulesOf = (instructions: InstagramInstruction[]): InstagramInstruction[] =>
   instructions.filter(rule => rule.instagramResponseMode === 'gemini');
+
+/** A matching WhatsApp rule answers verbatim before purchase intent and Gemini. */
+export const getWhatsAppFixedReply = async (text: string): Promise<string | null> => {
+  const rules = await BotInstruction.find({ isActive: true, whatsappFixedReplyEnabled: true })
+    .sort({ order: 1, _id: 1 }).select('whatsappKeywords whatsappFixedResponse').lean();
+  const message = normalize(text);
+  return rules.find(rule => rule.whatsappFixedResponse?.trim() && (rule.whatsappKeywords ?? []).some(keyword => matchesPhrase(message, keyword)))?.whatsappFixedResponse ?? null;
+};

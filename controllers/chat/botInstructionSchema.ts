@@ -24,7 +24,10 @@ export const instructionInputSchema = z.object({
   instagramCommentReply: z.boolean().default(false),
   instagramResponseMode: responseMode.default('gemini'),
   instagramFixedResponse: fixedResponse.optional(),
-});
+  whatsappFixedReplyEnabled: z.boolean().default(false),
+  whatsappKeywords: keywords.default([]),
+  whatsappFixedResponse: fixedResponse.optional(),
+}).refine(rule => !rule.whatsappFixedReplyEnabled || (rule.whatsappKeywords.length > 0 && Boolean(rule.whatsappFixedResponse?.trim())), { message: 'La respuesta fija de WhatsApp necesita frases y mensaje' });
 
 // Sin defaults: una actualización parcial no debe reiniciar lo que omite.
 export const instructionUpdateSchema = z.object({
@@ -35,7 +38,15 @@ export const instructionUpdateSchema = z.object({
   instagramCommentReply: z.boolean(),
   instagramResponseMode: responseMode,
   instagramFixedResponse: fixedResponse,
+  whatsappFixedReplyEnabled: z.boolean(),
+  whatsappKeywords: keywords,
+  whatsappFixedResponse: fixedResponse,
 }).partial();
+
+export const whatsappModeError = (rule: { whatsappFixedReplyEnabled?: boolean; whatsappKeywords?: string[]; whatsappFixedResponse?: string }): string | undefined =>
+  rule.whatsappFixedReplyEnabled && (!rule.whatsappKeywords?.length || !rule.whatsappFixedResponse?.trim())
+    ? 'La respuesta fija de WhatsApp necesita frases y mensaje'
+    : undefined;
 
 interface InstagramModeFields {
   instagramResponseMode?: string;

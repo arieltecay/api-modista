@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { after, before, beforeEach } from 'node:test';
 import Inscription from '../../models/Inscription.js';
+import Course from '../../models/Course.js';
 import { startTestDb } from '../../utils/testing/mongoMemoryServer.js';
 import { buildAccessEmailData, processWebhookPayment, type PaymentHooks } from './webhookProcessor.js';
 
@@ -30,10 +31,11 @@ const createHooks = (
       recorder.invoiceInputs.push(input);
       return invoice();
     },
-    sendWhatsApp: async () => void recorder.calls.push('whatsapp'),
+    sendWhatsApp: async () => { recorder.calls.push('whatsapp'); return true; },
     sendAccessEmail: async (_inscription, _link, _id, invoiceUrl) => {
       recorder.calls.push('email');
       recorder.emailInvoiceUrls.push(invoiceUrl);
+      return true;
     },
   };
   return { hooks, recorder };
@@ -75,6 +77,63 @@ test('a fully paid inscription is invoiced before the access email, which carrie
     mpPaymentId: '555',
   });
   assert.deepEqual(recorder.emailInvoiceUrls, ['https://modista-app.com/factura/tok']);
+  const saved = await Inscription.findById(inscription._id);
+  assert.equal(saved?.accessWhatsAppStatus, 'accepted');
+  assert.equal(saved?.accessEmailStatus, 'accepted');
+});
+
+test('a provider rejection keeps the payment paid but records the channel failure', async () => {
+  const inscription = await createInscription();
+  const { hooks } = createHooks();
+  hooks.sendWhatsApp = async () => false;
+  hooks.sendAccessEmail = async () => true;
+  await processWebhookPayment(payment(String(inscription._id)), hooks);
+  const saved = await Inscription.findById(inscription._id);
+  assert.equal(saved?.paymentStatus, 'paid');
+  assert.equal(saved?.accessWhatsAppStatus, 'failed');
+  assert.equal(saved?.accessEmailStatus, 'accepted');
+});
+
+test('disabling payment-access WhatsApp skips the template and still sends email', async () => {
+  const previous = process.env.PAYMENT_ACCESS_WHATSAPP_ENABLED;
+  process.env.PAYMENT_ACCESS_WHATSAPP_ENABLED = 'false';
+  try {
+    const inscription = await createInscription();
+    const { hooks, recorder } = createHooks();
+    await processWebhookPayment(payment(String(inscription._id)), hooks);
+    const saved = await Inscription.findById(inscription._id);
+    assert.equal(saved?.accessWhatsAppStatus, 'disabled');
+    assert.equal(saved?.accessEmailStatus, 'accepted');
+    assert.deepEqual(recorder.calls, ['capi', 'invoice', 'email']);
+  } finally {
+    if (previous === undefined) delete process.env.PAYMENT_ACCESS_WHATSAPP_ENABLED;
+    else process.env.PAYMENT_ACCESS_WHATSAPP_ENABLED = previous;
+  }
+});
+
+test('an unverified mail outcome stays unknown instead of accepted', async () => {
+  const inscription = await createInscription();
+  const { hooks } = createHooks();
+  hooks.sendAccessEmail = async () => null;
+  await processWebhookPayment(payment(String(inscription._id)), hooks);
+  assert.equal((await Inscription.findById(inscription._id))?.accessEmailStatus, 'unknown');
+});
+
+test('a failed course lookup records both channels as failed without claiming access was sent', async () => {
+  const inscription = await createInscription();
+  const { hooks, recorder } = createHooks();
+  const original = Course.findOne;
+  (Course as { findOne: unknown }).findOne = () => { throw new Error('db unavailable'); };
+  try {
+    await processWebhookPayment(payment(String(inscription._id)), hooks);
+  } finally {
+    (Course as { findOne: unknown }).findOne = original;
+  }
+  const saved = await Inscription.findById(inscription._id);
+  assert.equal(saved?.accessEmailStatus, 'failed');
+  assert.equal(saved?.accessWhatsAppStatus, 'failed');
+  assert.equal(recorder.calls.includes('email'), false);
+  assert.equal(recorder.calls.includes('invoice'), true);
 });
 
 test('if ARCA has not answered yet the access email still goes out, without a link', async () => {

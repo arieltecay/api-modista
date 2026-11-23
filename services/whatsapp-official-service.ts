@@ -4,7 +4,7 @@ import ConversationMessage from '../models/ConversationMessage.js';
 /**
  * WhatsApp Official Service (Meta Cloud API)
  */
-export const sendWhatsAppMessage = async (to: string, message: string): Promise<boolean> => {
+export const sendWhatsAppMessage = async (to: string, message: string, conversationId?: string): Promise<boolean> => {
   const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
   const PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID;
   
@@ -50,7 +50,7 @@ export const sendWhatsAppMessage = async (to: string, message: string): Promise<
     try {
       await ConversationMessage.create({
         platform: 'whatsapp',
-        platform_id: formattedTo,
+        platform_id: conversationId ?? formattedTo,
         body: message,
         direction: 'outbound',
         status: 'sent',
