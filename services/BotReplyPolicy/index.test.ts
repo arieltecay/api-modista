@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
+import mongoose from 'mongoose';
 import BotInstruction from '../../models/BotInstruction.js';
 import { startTestDb } from '../../utils/testing/mongoMemoryServer.js';
 import { fixedReplyOf, getInstagramReplyPolicy } from './index.js';
@@ -68,6 +69,15 @@ test('the fixed reply comes from the matching fixed rule with the lowest order, 
     assert.equal(fixedReplyOf(await getInstagramReplyPolicy('precio de la camisa', channel)), 'Primera respuesta');
   }
   assert.equal(fixedReplyOf(await getInstagramReplyPolicy('solo camisa')), 'Segunda respuesta');
+});
+
+test('fixed rules with the same order are tied by creation id, not by storage order', async () => {
+  await BotInstruction.deleteMany({});
+  const rule = { content: 'x', order: 3, isActive: true, instagramAutoReply: true, instagramKeywords: ['camisa'], instagramResponseMode: 'fixed' };
+  // The newer id is stored first, so only the explicit sort picks the older one.
+  await BotInstruction.collection.insertOne({ ...rule, _id: new mongoose.Types.ObjectId('64b7f0000000000000000002'), title: 'Nueva', instagramFixedResponse: 'Nueva' });
+  await BotInstruction.collection.insertOne({ ...rule, _id: new mongoose.Types.ObjectId('64b7f0000000000000000001'), title: 'Vieja', instagramFixedResponse: 'Vieja' });
+  assert.equal(fixedReplyOf(await getInstagramReplyPolicy('camisa')), 'Vieja');
 });
 
 test('a fixed rule with an empty message never sends an empty reply', async () => {

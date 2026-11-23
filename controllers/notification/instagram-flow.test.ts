@@ -10,6 +10,7 @@ import BotWebhookEvent from '../../models/BotWebhookEvent/index.js';
 import ConversationMessage from '../../models/ConversationMessage.js';
 import Inscription from '../../models/Inscription.js';
 import { logger } from '../../services/logger.js';
+import { DEFAULT_ENROLLMENT_TEMPLATES } from '../../services/BotEnrollment/templates.js';
 import BotLookupAttempt from '../../models/BotLookupAttempt/index.js';
 import { startTestDb } from '../../utils/testing/mongoMemoryServer.js';
 
@@ -369,12 +370,13 @@ test('an over-long generated reply is trimmed below the Instagram message limit'
   await commentBlock();
   mock.restoreAll();
   mock.method(axios, 'post', async (url: string, payload: never) => {
-    if (url.includes('generativelanguage.googleapis.com')) return { data: { candidates: [{ content: { parts: [{ text: 'a'.repeat(3000) }] } }] } };
+    if (url.includes('generativelanguage.googleapis.com')) return { data: { candidates: [{ content: { parts: [{ text: '👋'.repeat(3000) }] } }] } };
     network.graph.push(payload);
     return { data: {} };
   });
   await comment();
-  assert.ok(network.graph[0].message.text.length <= 900);
+  // Trimmed by characters: 900 whole emojis, no half emoji at the end.
+  assert.equal(network.graph[0].message.text, '👋'.repeat(900));
 });
 
 // ─── Respuesta fija: se envía tal cual, sin Gemini ──────────────────────────
@@ -428,6 +430,50 @@ test('enrollment lookup keeps answering before a fixed rule; other questions on 
 
   await receiveDm('m-fixed-enroll-2', '¿Cuándo empieza el curso?', 'ig-other');
   assert.equal(network.graph[1].message.text, FIXED);
+  assert.equal(network.gemini.length, 0);
+});
+
+test('one rule with a fixed reply and enrollment lookup: the lookup answers enrollment questions, the fixed text the rest', async () => {
+  await fixedBlock({ instagramKeywords: ['curso'], instagramEnrollmentLookup: true });
+  await Inscription.create({ nombre: 'Ana', apellido: 'Paz', email: 'ana@example.com', celular: '+54 9 381 555 1234', courseId: 'c-1', courseTitle: 'Una camisa', coursePrice: 100, paymentStatus: 'paid' });
+
+  await receiveDm('m-both-status', 'Mi inscripción al curso: ana@example.com, celular 381 555 1234');
+  await receiveDm('m-both-nodata', '¿Está confirmada mi inscripción al curso?', 'ig-nodata');
+  await receiveDm('m-both-other', '¿Cuánto cuesta el curso?', 'ig-other');
+
+  const texts = network.graph.map(call => call.message.text);
+  assert.match(texts[0], /Una camisa: figura como pagada/);
+  assert.equal(texts[1], DEFAULT_ENROLLMENT_TEMPLATES.askContact);
+  assert.equal(texts[2], FIXED);
+  assert.equal(texts.length, 3);
+  assert.equal(network.gemini.length, 0);
+});
+
+test('fixed + enrollment: a price range is not mistaken for a phone number and gets the fixed text', async () => {
+  await fixedBlock({ instagramKeywords: ['camisa'], instagramEnrollmentLookup: true });
+  await receiveDm('m-price', '¿La camisa cuesta 150.000 - 200.000?');
+  assert.deepEqual(network.graph.map(call => call.message.text), [FIXED]);
+});
+
+test('fixed + enrollment: right after an enrollment question, the same person is still asked for contact data (10-minute context)', async () => {
+  await fixedBlock({ instagramKeywords: ['curso'], instagramEnrollmentLookup: true });
+  await receiveDm('m-same-1', '¿Está confirmada mi inscripción al curso?', 'ig-same');
+  await receiveDm('m-same-2', '¿Cuánto cuesta el curso?', 'ig-same');
+  assert.deepEqual(network.graph.map(call => call.message.text), [DEFAULT_ENROLLMENT_TEMPLATES.askContact, DEFAULT_ENROLLMENT_TEMPLATES.askContact]);
+  assert.equal(network.gemini.length, 0);
+});
+
+test('a fixed comment reply with emojis at the limit is sent whole, never cut inside an emoji', async () => {
+  const atLimit = 'a'.repeat(867) + '👋'.repeat(33); // 900 characters, 999 bytes, 933 UTF-16 units
+  await commentBlock({ instagramResponseMode: 'fixed', instagramFixedResponse: atLimit });
+  await comment();
+  assert.equal(network.graph[0].message.text, atLimit);
+});
+
+test('a comment on a rule with a fixed reply and enrollment lookup gets the fixed text: comments never look up enrollments', async () => {
+  await commentBlock({ instagramResponseMode: 'fixed', instagramFixedResponse: FIXED, instagramEnrollmentLookup: true });
+  assert.equal(await comment(), 200);
+  assert.equal(network.graph[0].message.text, FIXED);
   assert.equal(network.gemini.length, 0);
 });
 

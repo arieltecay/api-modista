@@ -36,11 +36,10 @@ test('a fixed reply must fit in one Instagram message', () => {
   assert.equal(instructionUpdateSchema.safeParse({ instagramResponseMode: 'otro' }).success, false);
 });
 
-test('fixed mode needs a message and cannot be combined with enrollment lookup', () => {
+test('fixed mode needs a message', () => {
   assert.match(instagramModeError({ instagramResponseMode: 'fixed' }) ?? '', /mensaje/);
   assert.match(instagramModeError({ instagramResponseMode: 'fixed', instagramFixedResponse: '   ' }) ?? '', /mensaje/);
-  assert.match(instagramModeError({ instagramResponseMode: 'fixed', instagramFixedResponse: 'Hola', instagramEnrollmentLookup: true }) ?? '', /inscripciones/);
   assert.equal(instagramModeError({ instagramResponseMode: 'fixed', instagramFixedResponse: 'Hola' }), undefined);
   // In Gemini mode a stored fixed text is kept but never used.
-  assert.equal(instagramModeError({ instagramResponseMode: 'gemini', instagramFixedResponse: '', instagramEnrollmentLookup: true }), undefined);
+  assert.equal(instagramModeError({ instagramResponseMode: 'gemini', instagramFixedResponse: '' }), undefined);
 });

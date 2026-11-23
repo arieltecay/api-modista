@@ -29,11 +29,18 @@ test('creating a fixed reply stores the mode and the exact message, apart from t
   assert.equal(stored?.content, 'Contexto para Mila');
 });
 
-test('creating a fixed rule without a message or with enrollment lookup is rejected', async () => {
+test('creating a fixed rule without a message is rejected', async () => {
   assert.equal((await call(createInstruction, { ...base, instagramResponseMode: 'fixed' })).status, 400);
-  assert.equal((await call(createInstruction, { ...base, instagramResponseMode: 'fixed', instagramFixedResponse: '   ' })).status, 400);
-  assert.equal((await call(createInstruction, { ...base, instagramResponseMode: 'fixed', instagramFixedResponse: 'Hola', instagramEnrollmentLookup: true })).status, 400);
+  assert.equal((await call(createInstruction, { ...base, instagramResponseMode: 'fixed', instagramFixedResponse: '   ', instagramEnrollmentLookup: true })).status, 400);
   assert.equal(await BotInstruction.countDocuments(), 0);
+});
+
+test('one rule can send a fixed reply and also look up enrollments', async () => {
+  const { status, payload } = await call(createInstruction, { ...base, instagramResponseMode: 'fixed', instagramFixedResponse: 'Hola', instagramEnrollmentLookup: true });
+  assert.equal(status, 201);
+  const stored = await BotInstruction.findById(payload._id).lean();
+  assert.equal(stored?.instagramResponseMode, 'fixed');
+  assert.equal(stored?.instagramEnrollmentLookup, true);
 });
 
 test('an update is checked against the stored rule, so a partial change cannot leave a contradictory rule', async () => {
@@ -41,8 +48,9 @@ test('an update is checked against the stored rule, so a partial change cannot l
   const id = String(fixed._id);
 
   assert.equal((await call(updateInstruction, { instagramFixedResponse: '  ' }, id)).status, 400);
-  assert.equal((await call(updateInstruction, { instagramEnrollmentLookup: true }, id)).status, 400);
+  assert.equal((await call(updateInstruction, { instagramResponseMode: 'fixed', instagramFixedResponse: '' }, id)).status, 400);
   assert.equal((await BotInstruction.findById(id).lean())?.instagramFixedResponse, 'Hola');
+  assert.equal((await call(updateInstruction, { instagramEnrollmentLookup: true }, id)).status, 200);
 
   const renamed = await call(updateInstruction, { title: 'Precios 2026' }, id);
   assert.equal(renamed.status, 200);

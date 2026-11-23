@@ -40,16 +40,12 @@ export const instructionUpdateSchema = z.object({
 interface InstagramModeFields {
   instagramResponseMode?: string;
   instagramFixedResponse?: string;
-  instagramEnrollmentLookup?: boolean;
 }
 
 /**
- * Combinaciones que el modo fijo no admite. Se evalúa sobre la regla completa (guardada + cambios),
- * porque una actualización parcial puede romperla tocando un solo campo.
+ * El modo fijo necesita texto. Se evalúa sobre la regla completa (guardada + cambios),
+ * porque una actualización parcial puede vaciarlo tocando un solo campo.
+ * Puede convivir con `instagramEnrollmentLookup`: la consulta responde primero las preguntas de inscripción.
  */
-export const instagramModeError = (rule: InstagramModeFields): string | undefined => {
-  if (rule.instagramResponseMode !== 'fixed') return undefined;
-  if (!rule.instagramFixedResponse?.trim()) return 'La respuesta fija necesita un mensaje';
-  if (rule.instagramEnrollmentLookup) return 'La respuesta fija no puede consultar inscripciones';
-  return undefined;
-};
+export const instagramModeError = (rule: InstagramModeFields): string | undefined =>
+  rule.instagramResponseMode === 'fixed' && !rule.instagramFixedResponse?.trim() ? 'La respuesta fija necesita un mensaje' : undefined;

@@ -67,8 +67,9 @@ export const processInstagramComment = async ({ commentId, from, text }: Instagr
   try {
     // Las instrucciones de inscripción no se usan: un comentario es público y no autentica a la persona.
     // Una regla fija coincidente se envía tal cual y no gasta Gemini.
-    const generated = fixedReplyOf(matchedInstructions) ?? await generateAIResponse(text, from, 'instagram', matchedInstructions, 'comment');
-    reply = generated.slice(0, MAX_REPLY_CHARS);
+    // El texto fijo ya está validado y sale entero; lo generado se recorta por caracteres para no partir un emoji.
+    reply = fixedReplyOf(matchedInstructions)
+      ?? [...await generateAIResponse(text, from, 'instagram', matchedInstructions, 'comment')].slice(0, MAX_REPLY_CHARS).join('');
     result = await sendInstagramPrivateReply(commentId, reply);
   } catch (error) {
     await releaseAllowance();

@@ -21,7 +21,8 @@ export const answerEnrollmentMessage = async (platform: Platform, platformId: st
   const recent = await ConversationMessage.find({ platform, platform_id: platformId, direction: 'inbound', kind: { $exists: false }, timestamp: { $gte: new Date(Date.now() - 10 * 60_000) } })
     .sort({ timestamp: -1 }).limit(5).select('body').lean();
   const context = [text, ...recent.map(message => message.body)].join(' ');
-  const hasContactData = platform === 'instagram' && (emailPattern.test(text) || phonePattern.test(text));
+  // Un número solo (p. ej. un rango de precios) no es dato de contacto: hace falta un email, ahora o en los mensajes recientes.
+  const hasContactData = platform === 'instagram' && emailPattern.test(context);
   if (classifyEnrollmentMessage(context) !== 'enrollment' && !hasContactData) return null;
   const email = context.match(emailPattern)?.[0]?.toLowerCase();
   const suppliedPhone = platform === 'whatsapp' ? digits(platformId) : digits(context.replace(emailPattern, ' ').match(phonePattern)?.[0] ?? '');
