@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { after, before, beforeEach } from 'node:test';
+import Coupon from '../../models/Coupon/index.js';
 import Inscription from '../../models/Inscription.js';
 import Course from '../../models/Course.js';
 import { startTestDb } from '../../utils/testing/mongoMemoryServer.js';
@@ -11,7 +12,7 @@ before(async () => {
 });
 after(async () => stopDb());
 beforeEach(async () => {
-  await Inscription.deleteMany({});
+  await Promise.all([Inscription.deleteMany({}), Coupon.deleteMany({})]);
 });
 
 interface Recorder {
@@ -208,4 +209,65 @@ test('the access email escapes what the person typed in the form and carries the
   assert.equal(withInvoice.courseTitle.includes('<i>'), false);
   assert.match(withInvoice.invoiceBlock, /factura\/tok/);
   assert.equal(without.invoiceBlock, '');
+});
+
+// ---- coupons ----
+
+const createCouponInscription = async (price = 16720) => {
+  const coupon = await Coupon.create({
+    code: 'MODISTA20', type: 'percent', value: 20, startsAt: new Date('2026-11-01T00:00:00Z'), endsAt: new Date('2026-11-30T23:59:59Z'),
+  });
+  const inscription = await createInscription({ coursePrice: price, listPrice: 20900, discountAmount: 4180, couponId: coupon._id, couponCode: 'MODISTA20' });
+  return { coupon, inscription };
+};
+
+test('the approved payment of an inscription with coupon counts one use, even if the webhook arrives twice', async () => {
+  const { coupon, inscription } = await createCouponInscription();
+  const { hooks } = createHooks();
+
+  await processWebhookPayment(payment(String(inscription._id), { transaction_amount: 16720 }), hooks);
+  await processWebhookPayment(payment(String(inscription._id), { transaction_amount: 16720 }), hooks);
+
+  assert.equal((await Coupon.findById(coupon._id))?.usedCount, 1);
+});
+
+test('a pending, rejected or partial payment does not count a use', async () => {
+  const { coupon, inscription } = await createCouponInscription();
+  const { hooks } = createHooks();
+
+  await processWebhookPayment(payment(String(inscription._id), { status: 'pending', transaction_amount: 16720 }), hooks);
+  await processWebhookPayment(payment(String(inscription._id), { id: 556, status: 'rejected', transaction_amount: 16720 }), hooks);
+  await processWebhookPayment(payment(String(inscription._id), { id: 557, transaction_amount: 5000 }), hooks);
+
+  assert.equal((await Inscription.findById(inscription._id))?.paymentStatus, 'partial');
+  assert.equal((await Coupon.findById(coupon._id))?.usedCount, 0);
+});
+
+test('the invoice and the access email use the price actually charged', async () => {
+  const { inscription } = await createCouponInscription();
+  const { hooks, recorder } = createHooks();
+
+  await processWebhookPayment(payment(String(inscription._id), { transaction_amount: 16720 }), hooks);
+
+  assert.equal(recorder.invoiceInputs[0].total, 16720);
+  assert.deepEqual(recorder.calls, ['capi', 'invoice', 'whatsapp', 'email']);
+});
+
+test('a failure while counting the coupon never blocks the access email', async () => {
+  const { inscription } = await createCouponInscription();
+  const { hooks, recorder } = createHooks();
+  const original = Coupon.findOneAndUpdate.bind(Coupon);
+  (Coupon as { findOneAndUpdate: unknown }).findOneAndUpdate = () => ({
+    lean: async () => {
+      throw new Error('db down');
+    },
+  });
+
+  try {
+    await processWebhookPayment(payment(String(inscription._id), { transaction_amount: 16720 }), hooks);
+  } finally {
+    (Coupon as { findOneAndUpdate: unknown }).findOneAndUpdate = original;
+  }
+
+  assert.deepEqual(recorder.calls, ['capi', 'invoice', 'whatsapp', 'email']);
 });

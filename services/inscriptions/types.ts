@@ -14,6 +14,8 @@ interface ValidationSuccess {
   trustedCourseTitle: string;
   trustedCoursePrice: number;
   normalizedEmail: string;
+  /** Set when an unpaid inscription of this email exists and the coupon typed lets it be repriced instead of refused. */
+  existingInscriptionId?: unknown;
 }
 
 /**
@@ -31,6 +33,8 @@ export interface InscriptionBody {
   courseTitle: string;
   coursePrice: number;
   turnoId?: string;
+  /** Typed by the client; only the server decides whether it applies and what it takes off. */
+  couponCode?: string;
   sourceType?: 'app' | 'landing';
   landingPageId?: string;
   marketingSource?: string;

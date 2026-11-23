@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import Inscription from '../../models/Inscription.js';
 import { mpPreference, isMercadoPagoConfigured } from '../../services/payments/mpClient.js';
 import { logError, logger } from '../../services/logger.js';
+import { mercadoPagoExpiration, restoreReservation } from '../../services/Coupons/reservation.js';
 
 interface CreatePreferenceBody {
   inscriptionId: string;
@@ -58,6 +59,14 @@ export const createPreference = async (
       return;
     }
 
+    // Con cupón: el pago solo vale mientras dure la reserva del cupo; si venció, el cupón se revalida.
+    const now = new Date();
+    const reservation = await restoreReservation(inscription, now);
+    if (inscription.couponId && !reservation.ok) {
+      res.status(409).json({ error: 'El cupón ya no está disponible', message: 'El cupón ya no está disponible', code: 'coupon_unavailable' });
+      return;
+    }
+
     const frontendUrl = getFrontendUrl();
     const notificationUrl = getNotificationUrl();
 
@@ -84,6 +93,7 @@ export const createPreference = async (
         inscription_id: inscriptionId,
         course_title: inscription.courseTitle,
       },
+      ...(inscription.couponId && reservation.ok ? mercadoPagoExpiration(now, reservation.until) : {}),
     };
 
     const response = await mpPreference.create({ body: preferenceBody });

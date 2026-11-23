@@ -1,4 +1,5 @@
 import { rateLimit } from 'express-rate-limit';
+import { MongoRateLimitStore } from './mongoRateLimitStore.js';
 
 /**
  * Rate limiters para endpoints públicos de escritura.
@@ -17,6 +18,9 @@ import { rateLimit } from 'express-rate-limit';
 export const inscriptionLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 10,
+    // Contadores en Mongo: en serverless cada instancia tiene su propia memoria y el tope real sería mayor.
+    store: new MongoRateLimitStore({ prefix: 'inscriptions' }),
+    passOnStoreError: true,
     standardHeaders: true,
     legacyHeaders: false,
     message: {
@@ -52,4 +56,40 @@ export const invoiceViewLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, message: 'Demasiadas solicitudes' },
+});
+
+// Verificación pública de cupones: solo cuentan los intentos fallidos (un cupón válido no gasta intentos);
+// el tope frena la enumeración de códigos. Contadores en Mongo para que valga en todas las instancias.
+export const couponValidateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    store: new MongoRateLimitStore({ prefix: 'coupon-validate' }),
+    passOnStoreError: true,
+    skipSuccessfulRequests: true,
+    requestWasSuccessful: (_req, res) => res.locals.couponValid === true,
+    message: { success: false, message: 'Demasiados intentos, esperá unos minutos' },
+});
+
+// Reintento de pago: cada llamada puede renovar la reserva de un cupón y crea una preferencia en MercadoPago.
+export const paymentRetryLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    store: new MongoRateLimitStore({ prefix: 'payment-retry' }),
+    passOnStoreError: true,
+    message: { success: false, message: 'Demasiados intentos, esperá unos minutos' },
+});
+
+// «¿Mostrar el campo de cupón?»: se pregunta al abrir el formulario de un curso; el tope frena el barrido por scripts.
+export const couponAvailabilityLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    store: new MongoRateLimitStore({ prefix: 'coupon-availability' }),
+    passOnStoreError: true,
+    message: { success: false, message: 'Demasiadas solicitudes, esperá unos minutos' },
 });

@@ -7,6 +7,7 @@ import { GetInscriptionsQuery, ExportInscriptionsQuery } from './types.js';
 import mongoose from 'mongoose';
 import ExcelJS from 'exceljs';
 import { sendEmail } from '../../services/emailServices.js';
+import { releaseSeat } from '../../services/Coupons/reservation.js';
 
 /**
  * @desc    Obtener inscripciones exclusivas de un taller presencial
@@ -472,6 +473,9 @@ export const deleteWorkshopInscription = async (req: Request<{ inscriptionId: st
     await session.commitTransaction();
     session.endSession();
 
+    // El lugar que la inscripción tenía en su cupón de descuento también se libera.
+    if (inscription.couponId) await releaseSeat(inscription.couponId, inscription._id);
+
     res.status(200).json({ message: 'Inscripción eliminada y cupo liberado correctamente.' });
 
   } catch (error) {
@@ -556,7 +560,8 @@ export const updateInscriptionPersonalData = async (
       if (!course) {
         course = await Course.findOne({ uuid: inscription.courseId });
       }
-      if (course?.mpPaymentLink) {
+      // Con cupón el link estático del curso cobraría el precio de lista: no se usa.
+      if (course?.mpPaymentLink && !inscription.couponId) {
         effectiveLink = course.mpPaymentLink;
       }
     }

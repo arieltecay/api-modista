@@ -32,6 +32,12 @@ export interface IInscription extends Document {
   // MercadoPago
   mpPreferenceId?: string;
   paymentSource?: 'webhook' | 'manual' | 'link_static';
+  couponId?: Types.ObjectId;
+  couponCode?: string;
+  listPrice?: number;
+  discountAmount?: number;
+  couponConfirmedAt?: Date;
+  couponReservedAt?: Date;
   marketingSource?: string;
   utmParams?: Record<string, any>;
   sessionId?: string;
@@ -222,7 +228,16 @@ const InscriptionSchema = new Schema<IInscription>({
     type: String,
     enum: ['webhook', 'manual', 'link_static'],
     default: null,
-  }
+  },
+  // Cupón de descuento: `coursePrice` queda como precio final; `listPrice` es el de lista.
+  couponId: { type: Schema.Types.ObjectId, ref: 'Coupon', index: true },
+  couponCode: { type: String },
+  listPrice: { type: Number },
+  discountAmount: { type: Number },
+  // Se setea una sola vez al confirmar el uso (pago aprobado); es el candado de idempotencia.
+  couponConfirmedAt: { type: Date },
+  // Desde cuándo el cupón reserva un lugar (60 min); se renueva al reintentar el pago.
+  couponReservedAt: { type: Date },
 }, {
   // Habilitar campos virtuales para que se incluyan en las respuestas JSON
   toJSON: { virtuals: true },

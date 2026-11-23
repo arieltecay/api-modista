@@ -3,6 +3,7 @@ import { createPreference } from '../../controllers/payment/paymentController.js
 import { handleWebhook } from '../../controllers/payment/webhookController.js';
 import { getPaymentStatus } from '../../controllers/payment/paymentStatus.js';
 import { verifyWebhookSignature } from '../../middleware/webhookSignature.js';
+import { paymentRetryLimiter } from '../../middleware/rateLimiters.js';
 
 const router: Router = express.Router();
 
@@ -23,6 +24,6 @@ router.post(
 router.get('/status/:inscriptionId', getPaymentStatus);
 
 // Crear preference para una inscripción existente
-router.post('/create-preference', createPreference);
+router.post('/create-preference', paymentRetryLimiter, createPreference);
 
 export default router;

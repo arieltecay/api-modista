@@ -7,6 +7,7 @@ import { getGeoLocationFromIp } from '../geolocation/index.js';
 import { sendWhatsAppTemplate } from '../whatsapp-official-service.js';
 import { sendEmail, isEmailDeliverySimulated } from '../emailServices.js';
 import { escapeHtml } from '../fsTemplate.js';
+import { tryConfirmCouponUse } from '../Coupons/index.js';
 import { issueInvoiceForPayment } from '../invoicing/index.js';
 import { invoiceEmailBlock } from '../invoicing/emailBlock.js';
 import { markInvoiceEmailed } from '../invoicing/notify.js';
@@ -167,6 +168,9 @@ export const processWebhookPayment = async (
   }
 
   await inscription.save();
+
+  // El uso del cupón se cuenta al quedar pagada (idempotente: un webhook repetido no lo suma de nuevo).
+  if (inscription.paymentStatus === 'paid') await tryConfirmCouponUse(inscription._id.toString());
 
   // 7. Side-effects solo en transición a 'paid' (no en webhook duplicado ni en pagos extra)
   if (inscription.paymentStatus === 'paid' && !wasAlreadyPaid) {

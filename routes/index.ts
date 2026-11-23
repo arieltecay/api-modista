@@ -27,6 +27,7 @@ import acquisitionRoutes from './Acquisition/index.js';
 import acquisitionReportsRoutes from './admin/acquisition.js';
 import invoicesRoutes from './invoices/index.js';
 import invoicesCronRoutes from './invoices/cron.js';
+import couponsRoutes from './Coupons/index.js';
 
 // Rate limiter para endpoints públicos (lectura)
 const publicLimiter = rateLimit({
@@ -63,6 +64,7 @@ router.use('/notifications', notificationRoutes);
 router.use('/notification', notificationRoutes);
 router.use('/payment', paymentRoutes);
 router.use('/invoices', invoicesRoutes);
+router.use('/coupons', couponsRoutes);
 router.use('/email', emailRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/analytics', analyticsRoutes);
