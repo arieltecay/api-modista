@@ -148,8 +148,8 @@ const resolveConflict = async (
     if (stored && isOurs(spec, voucher, stored)) {
       const authorized = await authorize(spec, voucher, stored, deps);
       if (authorized) return { authorized, next: authorized };
-    } else if (stored && spec.credits && !stored.credits) {
-      // Same number, but ARCA does not say what it credits: it could be ours.
+    } else if (stored && spec.credits && !creditsAnother(spec, stored)) {
+      // It credits our invoice with other data, or ARCA does not say what it credits: it could be ours.
       adoptStored(spec, voucher, stored);
     }
   }

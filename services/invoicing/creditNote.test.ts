@@ -310,3 +310,18 @@ test('the email template has no placeholder left unfilled', async () => {
   assert.equal(html.includes('{{'), false);
   assert.ok(html.includes('https://x.test/factura/1'));
 });
+
+test('a stored note that credits our invoice but has another date is never replaced by a second one', async () => {
+  const { arca, deps, invoice, send, request } = await scenario();
+  arca.state.loseAnswerOnce = true;
+  await issueCreditNote(request, { deps: deps(), send });
+  const stored = arca.storedCreditNotes.get(1);
+  if (stored) stored.issueDate = '2026-11-20';
+
+  await retryCreditNote(String(invoice._id), { deps: deps(lateCommit(arca.client)), send });
+
+  const note = await CreditNote.findOne({ invoiceId: invoice._id });
+  assert.equal(note?.status, 'failed');
+  assert.match(note?.lastError ?? '', /Conciliación manual/);
+  assert.equal(arca.storedCreditNotes.size, 1);
+});
