@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { mpPayment, isMercadoPagoConfigured } from '../../services/payments/mpClient.js';
 import { processWebhookPayment } from '../../services/payments/webhookProcessor.js';
+import { describeMercadoPagoError } from '../../services/payments/mp-error.js';
 import { logger } from '../../services/logger.js';
 
 /**
@@ -15,7 +16,16 @@ import { logger } from '../../services/logger.js';
  * - Soporta webhook v1 (?topic=payment&id=) y v2 (?type=payment&data.id=).
  *   Solo actuamos en type=payment (ignora merchant_order, test, etc).
  */
-export const handleWebhook = async (req: Request, res: Response): Promise<void> => {
+type PaymentPayload = Parameters<typeof processWebhookPayment>[0];
+
+interface WebhookDependencies {
+  isConfigured: () => boolean;
+  getPayment: (id: number) => Promise<PaymentPayload>;
+  processPayment: (payment: PaymentPayload) => Promise<void>;
+}
+
+export const createWebhookHandler = ({ isConfigured, getPayment, processPayment }: WebhookDependencies) => async (req: Request, res: Response): Promise<void> => {
+  let stage: 'validation' | 'payment_lookup' | 'payment_processing' = 'validation';
   try {
     const query = req.query as Record<string, string | undefined>;
     const topic = query.topic;
@@ -36,7 +46,7 @@ export const handleWebhook = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    if (!isMercadoPagoConfigured()) {
+    if (!isConfigured()) {
       logger.error('[Webhook] MERCADO_PAGO_ACCESS_TOKEN no configurado, no se puede consultar el pago');
       // 503: transitorio (config), MP reintenta → el pago no se pierde
       res.status(503).json({ received: false, error: 'MP not configured' });
@@ -51,14 +61,20 @@ export const handleWebhook = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    const mpPaymentData = await mpPayment.get({ id: paymentId });
-    await processWebhookPayment(mpPaymentData as any);
+    stage = 'payment_lookup';
+    const mpPaymentData = await getPayment(paymentId);
+    stage = 'payment_processing';
+    await processPayment(mpPaymentData);
+    logger.info('[Webhook] Notificación atendida', { paymentId: dataId, paymentStatus: mpPaymentData.status });
 
     res.status(200).json({ received: true });
   } catch (error) {
+    const details = describeMercadoPagoError(error);
     logger.error('[Webhook] Error procesando notificación', {
-      error: error instanceof Error ? error.message : String(error),
-      query: req.query,
+      ...(stage === 'payment_lookup' ? details : { errorMessage: details.errorMessage }),
+      stage,
+      paymentId: req.query['data.id'] || req.query.id,
+      topic: req.query.type || req.query.topic,
     });
     // 500 transitorio: MP reintenta → recupera el pago sin intervención manual.
     // La idempotencia del procesador absorbe el procesamiento repetido.
@@ -67,3 +83,9 @@ export const handleWebhook = async (req: Request, res: Response): Promise<void> 
     }
   }
 };
+
+export const handleWebhook = createWebhookHandler({
+  isConfigured: isMercadoPagoConfigured,
+  getPayment: (id) => mpPayment.get({ id }) as Promise<PaymentPayload>,
+  processPayment: processWebhookPayment,
+});
