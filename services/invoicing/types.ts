@@ -36,12 +36,23 @@ export interface ArcaHttpRequest {
   body: string;
 }
 
-/** Factura C to a final consumer, for a service paid in full on `issueDate`. */
+/** The two C vouchers we issue; ARCA numbers each kind apart. */
+export type VoucherKind = 'invoice' | 'credit_note';
+
+/** The invoice a credit note cancels. */
+export interface CreditedInvoice {
+  pointOfSale: number;
+  number: number;
+  issueDate: Date;
+}
+
+/** C voucher to a final consumer, for a service paid in full on `issueDate`. With `credits` it is a credit note. */
 export interface CaeRequest {
   /** Invoice number to request (last authorized + 1). */
   number: number;
   total: number;
   issueDate: Date;
+  credits?: CreditedInvoice;
 }
 
 export interface CaeResult {
@@ -56,6 +67,8 @@ export interface ArcaInvoiceRecord extends CaeResult {
   total: number;
   /** Issue date as YYYY-MM-DD. */
   issueDate: string;
+  /** Only in credit notes: the invoice ARCA has associated to it. */
+  credits?: { pointOfSale: number; number: number };
 }
 
 /** Emitter data printed on the invoice; copied into each invoice so later edits never change old ones. */
@@ -88,9 +101,9 @@ export interface IssueInvoiceDeps {
 
 /** The ARCA operations issuing needs; `ArcaClient` satisfies it. */
 export interface ArcaClientPort {
-  lastAuthorized: () => Promise<number>;
+  lastAuthorized: (kind?: VoucherKind) => Promise<number>;
   requestCae: (request: CaeRequest) => Promise<CaeResult>;
-  consult: (number: number) => Promise<ArcaInvoiceRecord | null>;
+  consult: (number: number, kind?: VoucherKind) => Promise<ArcaInvoiceRecord | null>;
 }
 
 export interface IssueInvoiceResult {
@@ -135,4 +148,43 @@ export interface FiscalQrInput {
   total: number;
   issueDate: Date;
   cae: string;
+  /** Defaults to an invoice. */
+  kind?: VoucherKind;
 }
+
+/** The fields issuing needs; `Invoice` and `CreditNote` documents both have them. */
+export interface VoucherFields {
+  status: 'pending' | 'authorized' | 'failed';
+  environment: 'homologation' | 'production';
+  pointOfSale: number;
+  issuedAt: Date;
+  total: number;
+  attempts: number;
+  number?: number | null;
+  cae?: string | null;
+  caeExpiresAt?: string | null;
+  fiscalQrUrl?: string | null;
+  lastError?: string | null;
+  lockedUntil?: Date | null;
+}
+
+export interface VoucherResult {
+  id: string;
+  status: VoucherFields['status'];
+  /** True only when this very call obtained the CAE. */
+  issued: boolean;
+}
+
+export interface CreditNoteInput {
+  invoiceId: string;
+  /** Internal, never shown to the receiver. */
+  reason: string;
+  /** Admin user id. */
+  createdBy: string;
+}
+
+/** Outcome of issuing or retrying the credit note of an invoice. */
+export type CreditNoteOutcome =
+  | { kind: 'done'; result: { status: VoucherFields['status']; issued: boolean } }
+  | { kind: 'not_found' }
+  | { kind: 'not_allowed'; reason: string };

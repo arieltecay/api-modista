@@ -17,6 +17,9 @@ export const createInvoicesRouter = (services: InvoicesServices = adminInvoicesS
   router.get('/:id', controller.getInvoice);
   router.post('/:id/retry', controller.retryInvoice);
   router.post('/:id/resend', controller.resendInvoice);
+  router.post('/:id/credit-note', controller.issueCreditNote);
+  router.post('/:id/credit-note/retry', controller.retryCreditNote);
+  router.post('/:id/credit-note/resend', controller.resendCreditNote);
 
   return router;
 };

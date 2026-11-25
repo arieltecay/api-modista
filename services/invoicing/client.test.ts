@@ -197,3 +197,39 @@ test('a real refusal keeps the stored ticket', async () => {
 
   assert.equal(store.cleared, 0);
 });
+
+test('asks for a Nota de Crédito C associated to its invoice, with its own numbering', async () => {
+  const ticket = { token: 'T', sign: 'S', expiresAt: new Date('2026-11-22T06:00:00Z') };
+  const { client, requests } = harness(
+    ticket,
+    routeByAction({ FECompUltimoAutorizado: lastResponse(0), FECAESolicitar: approved })
+  );
+  await client.lastAuthorized('credit_note');
+  await client.requestCae({
+    number: 38,
+    total: 20900,
+    issueDate: NOW,
+    credits: { pointOfSale: 2, number: 6, issueDate: new Date('2026-11-20T18:00:00Z') },
+  });
+
+  assert.match(requests[0].body, /<CbteTipo>13<\/CbteTipo>/);
+  assert.match(requests[1].body, /<FeCabReq>.*<CbteTipo>13<\/CbteTipo><\/FeCabReq>/);
+  assert.match(
+    requests[1].body,
+    /<\/CondicionIVAReceptorId><CbtesAsoc><CbteAsoc><Tipo>11<\/Tipo><PtoVta>2<\/PtoVta><Nro>6<\/Nro><Cuit>27346513670<\/Cuit><CbteFch>20261120<\/CbteFch><\/CbteAsoc><\/CbtesAsoc>/
+  );
+});
+
+test('reads the invoice a stored credit note is associated to', async () => {
+  const ticket = { token: 'T', sign: 'S', expiresAt: new Date('2026-11-22T06:00:00Z') };
+  const found = soap(
+    '<FECompConsultarResponse xmlns="http://ar.gov.afip.dif.FEV1/"><FECompConsultarResult><ResultGet>' +
+      '<CbteDesde>1</CbteDesde><CbteFch>20261121</CbteFch><ImpTotal>20900</ImpTotal><CodAutorizacion>8</CodAutorizacion><FchVto>20261201</FchVto>' +
+      '<CbtesAsoc><CbteAsoc><Tipo>11</Tipo><PtoVta>2</PtoVta><Nro>6</Nro></CbteAsoc></CbtesAsoc>' +
+      '</ResultGet></FECompConsultarResult></FECompConsultarResponse>'
+  );
+  const { client, requests } = harness(ticket, routeByAction({ FECompConsultar: found }));
+
+  assert.deepEqual((await client.consult(1, 'credit_note'))?.credits, { pointOfSale: 2, number: 6 });
+  assert.match(requests[0].body, /<CbteTipo>13<\/CbteTipo>/);
+});

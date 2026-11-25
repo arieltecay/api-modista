@@ -1,11 +1,11 @@
 import { argentinaDay, fromArcaDate, toArcaDate } from './dates.js';
 import { ArcaRejectedError, ArcaUnavailableError } from './errors.js';
 import { asList, asNode, soapBody, soapEnvelope, text } from './soap.js';
-import type { ArcaConfig, ArcaInvoiceRecord, ArcaTicket, CaeRequest, CaeResult } from './types.js';
+import type { ArcaConfig, ArcaInvoiceRecord, ArcaTicket, CaeRequest, CaeResult, CreditedInvoice, VoucherKind } from './types.js';
+import { VOUCHER_CODES } from './voucherTypes.js';
 
 const NAMESPACE = 'http://ar.gov.afip.dif.FEV1/';
 export const WSFE_ACTION_PREFIX = NAMESPACE;
-const FACTURA_C = 11;
 const SERVICES_CONCEPT = 2;
 const FINAL_CONSUMER_DOCUMENT = 99;
 const FINAL_CONSUMER_IVA_CONDITION = 5;
@@ -23,32 +23,39 @@ const auth = (config: ArcaConfig, ticket: ArcaTicket): string =>
 const call = (operation: string, content: string): string =>
   soapEnvelope(`<${operation} xmlns="${NAMESPACE}">${content}</${operation}>`);
 
-export const buildLastAuthorizedSoap = (config: ArcaConfig, ticket: ArcaTicket): string =>
+export const buildLastAuthorizedSoap = (config: ArcaConfig, ticket: ArcaTicket, kind: VoucherKind = 'invoice'): string =>
   call(
     'FECompUltimoAutorizado',
-    `${auth(config, ticket)}<PtoVta>${config.pointOfSale}</PtoVta><CbteTipo>${FACTURA_C}</CbteTipo>`
+    `${auth(config, ticket)}<PtoVta>${config.pointOfSale}</PtoVta><CbteTipo>${VOUCHER_CODES[kind]}</CbteTipo>`
   );
 
-export const buildConsultSoap = (config: ArcaConfig, ticket: ArcaTicket, number: number): string =>
+export const buildConsultSoap = (config: ArcaConfig, ticket: ArcaTicket, number: number, kind: VoucherKind = 'invoice'): string =>
   call(
     'FECompConsultar',
-    `${auth(config, ticket)}<FeCompConsReq><CbteTipo>${FACTURA_C}</CbteTipo><CbteNro>${number}</CbteNro><PtoVta>${config.pointOfSale}</PtoVta></FeCompConsReq>`
+    `${auth(config, ticket)}<FeCompConsReq><CbteTipo>${VOUCHER_CODES[kind]}</CbteTipo><CbteNro>${number}</CbteNro><PtoVta>${config.pointOfSale}</PtoVta></FeCompConsReq>`
   );
 
-/** Factura C for a service paid and delivered on the issue date, to a final consumer. */
+/** Associated voucher block, mandatory in credit notes (ARCA 10197). */
+const associated = (config: ArcaConfig, invoice: CreditedInvoice): string =>
+  `<CbtesAsoc><CbteAsoc><Tipo>${VOUCHER_CODES.invoice}</Tipo><PtoVta>${invoice.pointOfSale}</PtoVta><Nro>${invoice.number}</Nro>` +
+  `<Cuit>${config.cuit}</Cuit><CbteFch>${toArcaDate(argentinaDay(invoice.issueDate))}</CbteFch></CbteAsoc></CbtesAsoc>`;
+
+/** C voucher for a service paid and delivered on the issue date, to a final consumer. */
 export const buildCaeSoap = (config: ArcaConfig, ticket: ArcaTicket, request: CaeRequest): string => {
   const day = toArcaDate(argentinaDay(request.issueDate));
   const total = money(request.total);
+  const kind: VoucherKind = request.credits ? 'credit_note' : 'invoice';
   const detail =
     `<Concepto>${SERVICES_CONCEPT}</Concepto><DocTipo>${FINAL_CONSUMER_DOCUMENT}</DocTipo><DocNro>0</DocNro>` +
     `<CbteDesde>${request.number}</CbteDesde><CbteHasta>${request.number}</CbteHasta><CbteFch>${day}</CbteFch>` +
     `<ImpTotal>${total}</ImpTotal><ImpTotConc>0.00</ImpTotConc><ImpNeto>${total}</ImpNeto><ImpOpEx>0.00</ImpOpEx>` +
     `<ImpTrib>0.00</ImpTrib><ImpIVA>0.00</ImpIVA><FchServDesde>${day}</FchServDesde><FchServHasta>${day}</FchServHasta>` +
     `<FchVtoPago>${day}</FchVtoPago><MonId>PES</MonId><MonCotiz>1</MonCotiz>` +
-    `<CondicionIVAReceptorId>${FINAL_CONSUMER_IVA_CONDITION}</CondicionIVAReceptorId>`;
+    `<CondicionIVAReceptorId>${FINAL_CONSUMER_IVA_CONDITION}</CondicionIVAReceptorId>` +
+    (request.credits ? associated(config, request.credits) : '');
   return call(
     'FECAESolicitar',
-    `${auth(config, ticket)}<FeCAEReq><FeCabReq><CantReg>1</CantReg><PtoVta>${config.pointOfSale}</PtoVta><CbteTipo>${FACTURA_C}</CbteTipo></FeCabReq>` +
+    `${auth(config, ticket)}<FeCAEReq><FeCabReq><CantReg>1</CantReg><PtoVta>${config.pointOfSale}</PtoVta><CbteTipo>${VOUCHER_CODES[kind]}</CbteTipo></FeCabReq>` +
       `<FeDetReq><FECAEDetRequest>${detail}</FECAEDetRequest></FeDetReq></FeCAEReq>`
   );
 };
@@ -97,12 +104,16 @@ export const parseConsult = (xml: string): ArcaInvoiceRecord | null => {
   const cae = text(found.CodAutorizacion);
 
   if (cae) {
+    const [credited] = asList(asNode(found.CbtesAsoc).CbteAsoc);
+    const association = { pointOfSale: Number(text(credited?.PtoVta)), number: Number(text(credited?.Nro)) };
+    const hasAssociation = Number.isInteger(association.pointOfSale) && Number.isInteger(association.number);
     return {
       number: Number(text(found.CbteDesde)),
       cae,
       caeExpiresAt: fromArcaDate(text(found.FchVto) ?? ''),
       total: Number(text(found.ImpTotal)),
       issueDate: fromArcaDate(text(found.CbteFch) ?? ''),
+      ...(hasAssociation ? { credits: association } : {}),
     };
   }
   const list = problems(result);
