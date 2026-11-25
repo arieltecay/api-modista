@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- La confirmación de inscripción incluye un enlace de reintento si Mercado Pago no generó checkout, y los logs muestran el estado del correo.
 - El webhook de Mercado Pago registra el resultado o la etapa y detalle seguro del fallo; elimina el log redundante de firma válida para vigilar pagos con menos ruido.
 - Pago confirmado: registra la aceptación del acceso por correo y WhatsApp; el envío por WhatsApp puede apagarse sin afectar el mail ni las respuestas del bot.
 - Agrega la cuponera: cupones por % o monto fijo para un curso (o todos) con vigencia y tope de usos; el servidor fija el precio final, reserva el lugar 60 min y cuenta el uso al pago aprobado; un endpoint dice si el formulario debe mostrar el campo de cupón.

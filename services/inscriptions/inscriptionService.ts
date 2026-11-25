@@ -10,6 +10,7 @@ import { META_MARKETING_CONSENT_VERSION } from '../../utils/metaMarketingConsent
 import { claimSeat, mercadoPagoExpiration, newReservationEnd } from '../Coupons/reservation.js';
 import { couponNotValidError, priceInscription } from './couponPricing.js';
 import { publicInscriptionView, repriceExistingInscription } from './repricing.js';
+import { confirmationPaymentLink } from './confirmationPaymentLink.js';
 
 const getFrontendUrl = (): string => {
   if (process.env.FRONTEND_URL) return process.env.FRONTEND_URL.replace(/\/+$/, '');
@@ -221,14 +222,23 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
     logger.warn('[createInscription] MP no configurado, usando course.mpPaymentLink como fallback');
   }
 
+  if (coursePrice > 0 && !mpInitPoint && !activePaymentLink) {
+    logger.warn('[createInscription] Checkout unavailable; retry link provided', { inscriptionId, courseId: inscription.courseId });
+  }
+
   // Enviar email de confirmacion con link de pago.
   // Prioridad: preference dinamica > fallback estatico del curso.
   const sendConfirmationEmail = async () => {
     try {
-      const effectiveLink = sandboxInitPoint || mpInitPoint || activePaymentLink;
-      const trackedPaymentLink = effectiveLink
-        ? `${effectiveLink}${effectiveLink.includes('?') ? '&' : '?'}utm_source=email&utm_medium=email&utm_campaign=payment_reminder`
-        : '';
+      const trackedPaymentLink = confirmationPaymentLink({
+        coursePrice,
+        inscriptionId,
+        frontendUrl: getFrontendUrl(),
+        isDevelopment: process.env.NODE_ENV !== 'production',
+        mpInitPoint,
+        sandboxInitPoint,
+        activePaymentLink,
+      });
 
       await sendEmail({
         to: inscription.email,
@@ -242,22 +252,35 @@ export const createInscription = async (body: InscriptionBody): Promise<CreateIn
           year: new Date().getFullYear().toString(),
         },
       });
+      logger.info('[createInscription] Confirmation email sent', { inscriptionId });
     } catch (err) {
       logger.error('[createInscription] Error sending confirmation email:', err);
     }
   };
 
+  let emailSettled = false;
   const emailPromise = sendConfirmationEmail().catch((err) => {
     logger.error('[createInscription] Error sending confirmation email:', err);
+  }).finally(() => {
+    emailSettled = true;
   });
 
-  // Serverless-safe: esperamos a que los side-effects terminen ANTES de responder
-  // (Vercel congela la función tras la respuesta), con un cap de 4s para no
-  // degradar la UX si Meta o SMTP están lentos.
+  // Esperamos los side-effects hasta 4s para no degradar la UX. Si SMTP sigue
+  // pendiente al responder, el log deja visible que ese correo no está garantizado.
   await Promise.race([
     Promise.allSettled([capiPromise, emailPromise]),
     sleep(4000),
   ]);
+  if (!emailSettled) {
+    logger.warn('[createInscription] Confirmation email still pending at response cutoff', { inscriptionId });
+  }
+  logger.info('[createInscription] Checkout response', {
+    inscriptionId,
+    courseId: inscription.courseId,
+    hasDynamicPreference: Boolean(mpInitPoint),
+    hasStaticPaymentLink: Boolean(activePaymentLink),
+    emailSettled,
+  });
 
   return {
     success: true,
