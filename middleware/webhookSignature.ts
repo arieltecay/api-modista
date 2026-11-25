@@ -40,8 +40,9 @@ export const verifyWebhookSignature = (req: Request, res: Response, next: NextFu
     logger.warn('[Webhook] Faltan headers x-signature o x-request-id', {
       url: req.originalUrl,
       method: req.method,
-      headers: req.headers,
-      query: req.query,
+      dataId: req.query['data.id'] || req.query.id,
+      hasSignature: Boolean(xSignature),
+      hasRequestId: Boolean(xRequestId),
       ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
     });
     res.status(401).json({ error: 'Missing signature headers' });
@@ -89,6 +90,6 @@ export const verifyWebhookSignature = (req: Request, res: Response, next: NextFu
     return;
   }
 
-  logger.info('[Webhook] Firma válida', { dataId, xRequestId, topic: req.query.topic || req.query.type });
+  logger.debug('[Webhook] Firma válida', { dataId, xRequestId, topic: req.query.topic || req.query.type });
   next();
 };
