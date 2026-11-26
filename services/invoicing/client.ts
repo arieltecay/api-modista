@@ -10,7 +10,7 @@ import {
   parseConsult,
   parseLastAuthorized,
 } from './wsfe.js';
-import type { ArcaConfig, ArcaInvoiceRecord, ArcaTicket, ArcaTicketStore, ArcaTransport, CaeRequest, CaeResult } from './types.js';
+import type { ArcaConfig, ArcaInvoiceRecord, ArcaTicket, ArcaTicketStore, ArcaTransport, CaeRequest, CaeResult, VoucherKind } from './types.js';
 
 const ENDPOINTS = {
   homologation: {
@@ -34,11 +34,11 @@ interface ArcaClientDeps {
 }
 
 export interface ArcaClient {
-  /** Last Factura C number ARCA authorized for the configured point of sale. */
-  lastAuthorized: () => Promise<number>;
+  /** Last number ARCA authorized for that kind (an invoice by default) at the configured point of sale. */
+  lastAuthorized: (kind?: VoucherKind) => Promise<number>;
   requestCae: (request: CaeRequest) => Promise<CaeResult>;
-  /** Invoice stored under `number`, or null if ARCA has none (used to reconcile a lost response). */
-  consult: (number: number) => Promise<ArcaInvoiceRecord | null>;
+  /** Voucher stored under `number`, or null if ARCA has none (used to reconcile a lost response). */
+  consult: (number: number, kind?: VoucherKind) => Promise<ArcaInvoiceRecord | null>;
 }
 
 export const createArcaClient = ({ config, transport, ticketStore, now = () => new Date() }: ArcaClientDeps): ArcaClient => {
@@ -79,9 +79,9 @@ export const createArcaClient = ({ config, transport, ticketStore, now = () => n
   };
 
   return {
-    lastAuthorized: () =>
-      callWsfe('FECompUltimoAutorizado', (ticket) => buildLastAuthorizedSoap(config, ticket), parseLastAuthorized),
+    lastAuthorized: (kind) =>
+      callWsfe('FECompUltimoAutorizado', (ticket) => buildLastAuthorizedSoap(config, ticket, kind), parseLastAuthorized),
     requestCae: (request) => callWsfe('FECAESolicitar', (ticket) => buildCaeSoap(config, ticket, request), parseCae),
-    consult: (number) => callWsfe('FECompConsultar', (ticket) => buildConsultSoap(config, ticket, number), parseConsult),
+    consult: (number, kind) => callWsfe('FECompConsultar', (ticket) => buildConsultSoap(config, ticket, number, kind), parseConsult),
   };
 };

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { after, before, beforeEach } from 'node:test';
 import mongoose from 'mongoose';
+import CreditNote from '../../models/CreditNote/index.js';
 import Invoice from '../../models/Invoice/index.js';
 import { startTestDb } from '../../utils/testing/mongoMemoryServer.js';
 import { startTestServer, type TestServer } from '../../utils/testing/httpServer.js';
@@ -10,7 +11,8 @@ let stopDb: () => Promise<void>;
 let server: TestServer;
 let adminHeaders: Record<string, string>;
 let userHeaders: Record<string, string>;
-const calls = { retry: [] as string[], resend: [] as string[] };
+const calls = { retry: [] as string[], resend: [] as string[], creditNote: [] as Array<Parameters<InvoicesServices['issueCreditNote']>[0]> };
+let creditNoteOutcome: Awaited<ReturnType<InvoicesServices['issueCreditNote']>> = { kind: 'done', result: { status: 'authorized', issued: true } };
 let retryOutcome: Awaited<ReturnType<InvoicesServices['retry']>>;
 let resendOk = true;
 
@@ -21,6 +23,18 @@ const services: InvoicesServices = {
   },
   resend: async (id) => {
     calls.resend.push(id);
+    return resendOk;
+  },
+  issueCreditNote: async (request) => {
+    calls.creditNote.push(request);
+    return creditNoteOutcome;
+  },
+  retryCreditNote: async (id) => {
+    calls.retry.push(`note:${id}`);
+    return creditNoteOutcome;
+  },
+  resendCreditNote: async (id) => {
+    calls.resend.push(`note:${id}`);
     return resendOk;
   },
 };
@@ -47,6 +61,8 @@ beforeEach(async () => {
   calls.retry.length = 0;
   calls.resend.length = 0;
   resendOk = true;
+  calls.creditNote.length = 0;
+  creditNoteOutcome = { kind: 'done', result: { status: 'authorized', issued: true } };
   retryOutcome = { kind: 'not_found' };
 });
 
@@ -215,4 +231,97 @@ test('resend refuses an invoice that is not authorized yet and reports a failed 
   resendOk = false;
   assert.equal((await server.post(`/api/invoices/${authorized._id}/resend`, {}, adminHeaders)).status, 502);
   assert.equal((await server.post(`/api/invoices/${new mongoose.Types.ObjectId()}/resend`, {}, adminHeaders)).status, 404);
+});
+
+// ---- credit notes ----
+
+const createNote = async (overrides: Record<string, unknown> = {}) => {
+  const invoice = await createInvoice();
+  sequence += 1;
+  const { receiver, emitter, lines, total, environment, pointOfSale } = invoice.toObject();
+  const note = await CreditNote.create({
+    invoiceId: invoice._id,
+    creditedInvoice: { pointOfSale, number: invoice.number, issueDate: invoice.issuedAt },
+    reason: 'Motivo interno',
+    createdBy: 'u1',
+    status: 'authorized',
+    environment, pointOfSale, total, lines, receiver, emitter,
+    number: sequence,
+    cae: '1',
+    caeExpiresAt: '2026-12-02',
+    issuedAt: new Date('2026-11-22T18:00:00Z'),
+    fiscalQrUrl: 'https://www.afip.gob.ar/fe/qr/?p=abc',
+    publicToken: sequence.toString(16).padStart(64, 'b'),
+    ...overrides,
+  });
+  return { invoice, note };
+};
+
+test('only an admin can issue, retry or resend a credit note', async () => {
+  const id = new mongoose.Types.ObjectId().toString();
+  for (const path of ['credit-note', 'credit-note/retry', 'credit-note/resend']) {
+    assert.equal((await server.post(`/api/invoices/${id}/${path}`, { reason: 'Devolución' })).status, 401, path);
+    assert.equal((await server.post(`/api/invoices/${id}/${path}`, { reason: 'Devolución' }, userHeaders)).status, 403, path);
+  }
+  assert.equal(calls.creditNote.length, 0);
+});
+
+test('a credit note needs a reason and records who asked for it', async () => {
+  const url = '/api/invoices/abc/credit-note';
+  for (const reason of [undefined, '', '  a ', 'x'.repeat(301)]) {
+    assert.equal((await server.post(url, { reason }, adminHeaders)).status, 400);
+  }
+  assert.equal(calls.creditNote.length, 0);
+
+  assert.equal((await server.post(url, { reason: ' Devolución ' }, adminHeaders)).status, 200);
+  assert.deepEqual(calls.creditNote, [{ invoiceId: 'abc', reason: 'Devolución', createdBy: 'u1' }]);
+  calls.creditNote.length = 0;
+});
+
+test('maps each credit note outcome to its status', async () => {
+  const cases = [
+    [{ kind: 'not_found' }, 404],
+    [{ kind: 'not_allowed', reason: 'no' }, 409],
+    [{ kind: 'disabled', reason: 'off' }, 503],
+  ] as const;
+  for (const [outcome, status] of cases) {
+    creditNoteOutcome = outcome;
+    assert.equal((await server.post('/api/invoices/abc/credit-note', { reason: 'Devolución' }, adminHeaders)).status, status);
+    assert.equal((await server.post('/api/invoices/abc/credit-note/retry', {}, adminHeaders)).status, status);
+  }
+});
+
+test('the admin list carries the credit note, and the public page never its reason', async () => {
+  const { invoice, note } = await createNote();
+
+  const list = body(await server.get('/api/invoices', adminHeaders));
+  const item = list.items.find((row: { id: string }) => row.id === String(invoice._id));
+  assert.equal(item.creditNote.status, 'authorized');
+  assert.equal(item.creditNote.publicUrl, `https://modista-app.com/factura/${note.publicToken}`);
+
+  const page = await server.get(`/api/invoices/public/${note.publicToken}`);
+  assert.equal(page.status, 200);
+  assert.deepEqual(body(page).creditedInvoice, { pointOfSale: 1, number: invoice.number });
+  assert.equal(JSON.stringify(page.body).includes('Motivo interno'), false);
+  assert.equal(JSON.stringify(page.body).includes('beatriz@example.com'), false);
+});
+
+test('a credit note ARCA has not authorized has no public page nor email', async () => {
+  const { invoice, note } = await createNote({ status: 'pending' });
+
+  assert.equal((await server.get(`/api/invoices/public/${note.publicToken}`)).status, 404);
+  assert.equal((await server.post(`/api/invoices/${invoice._id}/credit-note/resend`, {}, adminHeaders)).status, 409);
+});
+
+test('retry and resend act on the credit note of that invoice', async () => {
+  const { invoice } = await createNote();
+  const url = `/api/invoices/${invoice._id}/credit-note`;
+
+  assert.equal((await server.post(`${url}/retry`, {}, adminHeaders)).status, 200);
+  assert.equal((await server.post(`${url}/resend`, {}, adminHeaders)).status, 200);
+  assert.deepEqual([calls.retry, calls.resend], [[`note:${invoice._id}`], [`note:${invoice._id}`]]);
+
+  resendOk = false;
+  assert.equal((await server.post(`${url}/resend`, {}, adminHeaders)).status, 502);
+  assert.equal((await server.post(`/api/invoices/${new mongoose.Types.ObjectId()}/credit-note/resend`, {}, adminHeaders)).status, 404);
 });

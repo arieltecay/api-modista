@@ -353,3 +353,28 @@ test('logs an error with the ARCA code when ARCA refuses the invoice', async () 
   assert.match(output, /rechazada/);
   assert.match(output, /10015/);
 });
+
+test('two equal invoices racing for one number end with one ARCA invoice each', async () => {
+  const { client, stored } = createFakeArca();
+  const second = input();
+  let raced = false;
+  const racing: ArcaClientPort = {
+    ...client,
+    requestCae: async (request) => {
+      const result = await client.requestCae(request);
+      if (!raced) {
+        raced = true;
+        // The other one reserved the same number and gets a 10016 before this one stores its CAE.
+        await issueInvoiceForInscription(second, deps({ ...client, lastAuthorized: async () => (stored.size > 1 ? stored.size : request.number - 1) }));
+      }
+      return result;
+    },
+  };
+
+  const first = await issueInvoiceForInscription(input(), deps(racing));
+
+  assert.equal(first.status, 'authorized');
+  const numbers = (await Invoice.find().lean()).map((invoice) => invoice.number).sort();
+  assert.deepEqual(numbers, [1, 2]);
+  assert.equal(stored.size, 2);
+});

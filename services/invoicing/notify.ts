@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import CreditNote from '../../models/CreditNote/index.js';
 import Invoice from '../../models/Invoice/index.js';
 import { sendEmail } from '../emailServices.js';
 import { escapeHtml } from '../fsTemplate.js';
@@ -47,4 +48,34 @@ export const markInvoiceEmailed = async (inscriptionId: string): Promise<void> =
       error: error instanceof Error ? error.message : String(error),
     });
   }
+};
+
+/** Emails the credit note link to its receiver and records when. False when it was not sent. */
+export const sendCreditNoteEmail = async (creditNoteId: string, send: EmailSender = sendEmail): Promise<boolean> => {
+  const note = await CreditNote.findById(creditNoteId).lean();
+  if (!note || note.status !== 'authorized' || !note.receiver?.email) return false;
+
+  const courseTitle = note.lines[0]?.description ?? 'tu curso';
+  try {
+    await send({
+      to: note.receiver.email,
+      subject: `Nota de crédito de "${courseTitle}"`,
+      templateName: 'creditNoteReady',
+      data: {
+        name: escapeHtml(note.receiver.name ?? ''),
+        courseTitle: escapeHtml(courseTitle),
+        creditNoteUrl: escapeHtml(buildInvoiceUrl(note.publicToken)),
+        year: new Date().getFullYear().toString(),
+      },
+    });
+  } catch (error) {
+    logger.error('[Invoicing] No se pudo enviar el mail de la nota de crédito', {
+      creditNoteId,
+      // Not the message: SMTP refusals quote the receiver's address.
+      code: error instanceof Error && 'code' in error ? error.code : undefined,
+    });
+    return false;
+  }
+  await CreditNote.updateOne({ _id: note._id }, { $set: { emailSentAt: new Date() } });
+  return true;
 };

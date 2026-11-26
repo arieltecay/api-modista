@@ -126,11 +126,13 @@ app.use((err, req, res, next) => {
         ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
         userAgent: req.headers['user-agent'],
         method: req.method,
-        url: req.originalUrl,
+        // El token de una factura pública es su llave: nunca a los logs.
+        url: req.originalUrl.replace(/[a-f0-9]{64}/g, '[token]'),
         query: req.query,
         // Evitamos loguear bodies extremadamente pesados o sensibles si fuera necesario, 
         // pero para debugging de 4xx/5xx es vital.
-        body: req.method !== 'GET' ? req.body : undefined,
+        // El motivo de una nota de crédito es texto libre interno: no se loguea.
+        body: req.method !== 'GET' && !req.originalUrl.includes('/credit-note') ? req.body : undefined,
         stack: err.stack
     };
 
