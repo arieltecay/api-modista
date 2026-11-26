@@ -3,7 +3,7 @@ import mongoose, { isValidObjectId } from 'mongoose';
 import Inscription from '../../models/Inscription.js';
 import Turno from '../../models/Turno.js';
 import Course from '../../models/Course.js';
-import { logError } from '../../services/logger.js';
+import { logError, logger } from '../../services/logger.js';
 import { sendDepositEmail } from '../../services/emailServices.js';
 import { sendWhatsAppTemplate } from '../../services/whatsapp-official-service.js';
 import ExcelJS from 'exceljs';
@@ -18,6 +18,7 @@ import { isHoneypotTriggered, respondFakeSuccess } from './honeypot.js';
 import { getClientIpAddress } from '../../utils/clientIpAddress.js';
 import { META_MARKETING_CONSENT_VERSION, isMetaMarketingConsentGranted } from '../../utils/metaMarketingConsent.js';
 import { hasCurrentMetaMarketingConsent } from '../../services/privacy/marketingConsent.js';
+import { enrollmentMarketingConsent } from '../../services/inscriptions/enrollmentConsent.js';
 
 // --- Helpers ---
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -32,6 +33,7 @@ const getHeaderString = (header: string | string[] | undefined): string | undefi
 // @route   POST /api/inscriptions
 // @access  Public
 export const createInscription = async (req: Request<{}, {}, CreateInscriptionBody>, res: Response) => {
+  let stage = 'consent';
   try {
     if (isHoneypotTriggered(req.body)) {
       return respondFakeSuccess(res);
@@ -39,16 +41,19 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
 
     const consentVersion = getHeaderString(req.headers['x-meta-consent-version']);
     const consentSessionId = req.body.sessionId || getHeaderString(req.headers['x-session-id']);
-    const metaMarketingConsent = isMetaMarketingConsentGranted(
+    const consentRequested = isMetaMarketingConsentGranted(
       req.headers['x-meta-consent'],
       consentVersion,
-    ) && await hasCurrentMetaMarketingConsent(consentSessionId, consentVersion);
+    );
+    const metaMarketingConsent = await enrollmentMarketingConsent(consentRequested, () =>
+      hasCurrentMetaMarketingConsent(consentSessionId, consentVersion));
     const clientIpAddress = metaMarketingConsent ? getClientIpAddress(req) : undefined;
     const clientUserAgent = metaMarketingConsent ? req.headers['user-agent'] || '' : undefined;
     const eventSourceUrl = metaMarketingConsent
       ? req.body.eventSourceUrl || getHeaderString(req.headers['referer']) || getHeaderString(req.headers['referrer']) || ''
       : undefined;
 
+    stage = 'create';
     const result = await createInscriptionService({
       ...req.body,
       metaMarketingConsent,
@@ -67,6 +72,9 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
   } catch (error: any) {
     const statusCode = error.statusCode || 500;
     const message = error.message || 'Error del servidor';
+    logger.warn('[createInscription] Enrollment request rejected', {
+      endpoint: 'course', stage, statusCode, errorName: error instanceof Error ? error.name : 'UnknownError',
+    });
     
     if (statusCode === 409) {
       return res.status(409).json({ success: false, message });
@@ -80,6 +88,7 @@ export const createInscription = async (req: Request<{}, {}, CreateInscriptionBo
 // @route   POST /api/inscriptions/landing
 // @access  Public
 export const createLandingInscription = async (req: Request<{}, {}, CreateLandingInscriptionBody>, res: Response) => {
+  let stage = 'consent';
   try {
     if (isHoneypotTriggered(req.body)) {
       return respondFakeSuccess(res);
@@ -88,16 +97,19 @@ export const createLandingInscription = async (req: Request<{}, {}, CreateLandin
     const { fullName, ...rest } = req.body;
     const consentVersion = getHeaderString(req.headers['x-meta-consent-version']);
     const consentSessionId = req.body.sessionId || getHeaderString(req.headers['x-session-id']);
-    const metaMarketingConsent = isMetaMarketingConsentGranted(
+    const consentRequested = isMetaMarketingConsentGranted(
       req.headers['x-meta-consent'],
       consentVersion,
-    ) && await hasCurrentMetaMarketingConsent(consentSessionId, consentVersion);
+    );
+    const metaMarketingConsent = await enrollmentMarketingConsent(consentRequested, () =>
+      hasCurrentMetaMarketingConsent(consentSessionId, consentVersion));
     const clientIpAddress = metaMarketingConsent ? getClientIpAddress(req) : undefined;
     const clientUserAgent = metaMarketingConsent ? req.headers['user-agent'] || '' : undefined;
     const eventSourceUrl = metaMarketingConsent
       ? req.body.eventSourceUrl || getHeaderString(req.headers['referer']) || getHeaderString(req.headers['referrer']) || ''
       : undefined;
     
+    stage = 'payload';
     // Split inteligente del nombre
     const nameParts = fullName.trim().split(/\s+/);
     const nombre = nameParts[0] || 'Sin Nombre';
@@ -121,11 +133,15 @@ export const createLandingInscription = async (req: Request<{}, {}, CreateLandin
       eventSourceUrl
     };
 
+    stage = 'create';
     const result = await createInscriptionService(inscriptionData);
     res.status(201).json(result);
   } catch (error: any) {
     const statusCode = error.statusCode || 500;
     const message = error.message || 'Error del servidor';
+    logger.warn('[createInscription] Enrollment request rejected', {
+      endpoint: 'landing', stage, statusCode, errorName: error instanceof Error ? error.name : 'UnknownError',
+    });
     
     if (statusCode === 409) {
       return res.status(409).json({ success: false, message });
