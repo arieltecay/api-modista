@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+- La verificación opcional de consentimiento publicitario ya no bloquea la inscripción si falla, y los rechazos se registran por etapa sin datos personales.
+- La confirmación de inscripción incluye un enlace de reintento si Mercado Pago no generó checkout, y los logs muestran el estado del correo.
 - El webhook de Mercado Pago registra el resultado o la etapa y detalle seguro del fallo; elimina el log redundante de firma válida para vigilar pagos con menos ruido.
 - Nota de Crédito C por el total de una factura autorizada, desde el admin: la emite en ARCA y la envía por mail (no devuelve el dinero).
 - Pago confirmado: registra la aceptación del acceso por correo y WhatsApp; el envío por WhatsApp puede apagarse sin afectar el mail ni las respuestas del bot.
